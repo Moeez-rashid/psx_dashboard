@@ -515,9 +515,10 @@ function fmtVol(n: number): string {
   if (n >= 1_000)     return `${Math.round(n / 1_000)}K`;
   return `${Math.round(n)}`;
 }
-/** Display string for the Vol chip: "70K (0.4x avg)" using today's actual volume */
-function volLabel(tech: StockTechLocal): string {
-  const vol = tech.todayVolume ?? (tech.avgVolume20d ? Math.round(tech.volumeRatio * tech.avgVolume20d) : null);
+/** Display string for the Vol chip.
+ *  Priority: live market-watch volume → EOD todayVolume → ratio-only fallback */
+function volLabel(tech: StockTechLocal, liveVolume?: number): string {
+  const vol = liveVolume ?? tech.todayVolume ?? null;
   return vol ? `${fmtVol(vol)} (${tech.volumeRatio.toFixed(1)}x avg)` : `${tech.volumeRatio.toFixed(1)}x avg`;
 }
 function techCatalysts(t: StockTechLocal): string[] {
@@ -998,7 +999,7 @@ export default function Dashboard() {
         // Technicals — check all sources
         const tech = holdingTech[ticker] ?? watchTech[ticker] ?? scanResult?.technicalData?.find(t => t.symbol === ticker);
         if (tech) {
-          const parts = [`RSI ${tech.rsi.toFixed(0)}`, `EMA20 ${tech.ema20.toFixed(2)}`, `Vol ${volLabel(tech)}`, `Score ${tech.compositeScore}/100 [${tech.technicalSignal}]`];
+          const parts = [`RSI ${tech.rsi.toFixed(0)}`, `EMA20 ${tech.ema20.toFixed(2)}`, `Vol ${volLabel(tech, prices[ticker]?.volume)}`, `Score ${tech.compositeScore}/100 [${tech.technicalSignal}]`];
           lines.push(`   Technicals: ${parts.join(" | ")}`);
         }
 
@@ -1699,7 +1700,7 @@ export default function Dashboard() {
                           ["RSI", sigTech.rsi.toFixed(0), sigTech.rsi < 30 ? C.greenText : sigTech.rsi > 70 ? C.redText : C.muted],
                           ...(!isMobile ? [["EMA20", sigTech.ema20.toFixed(2), C.muted] as [string,string,string]] : []),
                           ...(!isMobile ? [["EMA50", sigTech.ema50.toFixed(2), C.muted] as [string,string,string]] : []),
-                          ["Vol", volLabel(sigTech), sigTech.volumeRatio >= 1.5 ? C.greenText : C.muted],
+                          ["Vol", volLabel(sigTech, prices[sig.ticker]?.volume), sigTech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${sigTech.compositeScore}/100`, sigTech.compositeScore >= 60 ? C.greenText : sigTech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
                           <div key={lbl} style={{ background: "#111", borderRadius: 4, padding: "3px 7px", display: "flex", gap: 4, alignItems: "center" }}>
@@ -1876,7 +1877,7 @@ export default function Dashboard() {
                           ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? C.greenText : tech.rsi > 70 ? C.redText : C.muted],
                           ...(!isMobile ? [["EMA20", tech.ema20.toFixed(2), C.muted] as [string,string,string]] : []),
                           ...(!isMobile ? [["EMA50", tech.ema50.toFixed(2), C.muted] as [string,string,string]] : []),
-                          ["Vol", volLabel(tech), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
+                          ["Vol", volLabel(tech, prices[h.ticker]?.volume), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${tech.compositeScore}/100`, tech.compositeScore >= 60 ? C.greenText : tech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
                           <div key={lbl} style={{ background: "#111", borderRadius: 4, padding: "3px 7px", display: "flex", gap: 4, alignItems: "center" }}>
@@ -2107,7 +2108,7 @@ export default function Dashboard() {
                           ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? C.greenText : tech.rsi > 70 ? C.redText : C.muted],
                           ...(!isMobile ? [["EMA20", tech.ema20.toFixed(2), C.muted] as [string,string,string]] : []),
                           ...(!isMobile ? [["EMA50", tech.ema50.toFixed(2), C.muted] as [string,string,string]] : []),
-                          ["Vol", volLabel(tech), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
+                          ["Vol", volLabel(tech, prices[w.ticker]?.volume), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${tech.compositeScore}/100`, tech.compositeScore >= 60 ? C.greenText : tech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
                           <div key={lbl} style={{ background: "#111", borderRadius: 4, padding: "3px 7px", display: "flex", gap: 4, alignItems: "center" }}>
