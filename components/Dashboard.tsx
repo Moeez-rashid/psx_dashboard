@@ -1671,7 +1671,7 @@ export default function Dashboard() {
 
                   <ConfBar pct={sig.confidence} signal={sig.signal} />
 
-                  {(sig.catalysts?.length > 0 || sig.risks?.length > 0) && (
+                  {!isMobile && (sig.catalysts?.length > 0 || sig.risks?.length > 0) && (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
                       {sig.catalysts?.length > 0 && (
                         <div>
