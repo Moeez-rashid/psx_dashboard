@@ -495,7 +495,22 @@ function SignalDetailModal({ data, onClose }: { data: SignalDetail; onClose: () 
 interface StockTechLocal {
   symbol: string; compositeScore: number; technicalSignal: string;
   rsi: number; ema20: number; ema50: number; currentPrice: number;
-  volumeRatio: number; crossoverSignal: string; priceVsEma20: string; priceVsEma50?: string; reasons: string[];
+  volumeRatio: number; avgVolume20d?: number;
+  crossoverSignal: string; priceVsEma20: string; priceVsEma50?: string; reasons: string[];
+}
+/** Format a raw share-volume number to human-readable: 1234567 → "1.2M", 45000 → "45K" */
+function fmtVol(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `${Math.round(n / 1_000)}K`;
+  return `${Math.round(n)}`;
+}
+/** Display string for the Vol chip: "1.2M (0.4x avg)" when data available */
+function volLabel(tech: StockTechLocal): string {
+  if (tech.avgVolume20d && tech.avgVolume20d > 0) {
+    const todayVol = Math.round(tech.volumeRatio * tech.avgVolume20d);
+    return `${fmtVol(todayVol)} (${tech.volumeRatio.toFixed(1)}x avg)`;
+  }
+  return `${tech.volumeRatio.toFixed(1)}x avg`;
 }
 function techCatalysts(t: StockTechLocal): string[] {
   const out: string[] = [];
@@ -967,7 +982,7 @@ export default function Dashboard() {
         // Technicals — check all sources
         const tech = holdingTech[ticker] ?? watchTech[ticker] ?? scanResult?.technicalData?.find(t => t.symbol === ticker);
         if (tech) {
-          const parts = [`RSI ${tech.rsi.toFixed(0)}`, `EMA20 ${tech.ema20.toFixed(2)}`, `Vol ${tech.volumeRatio.toFixed(1)}x avg`, `Score ${tech.compositeScore}/100 [${tech.technicalSignal}]`];
+          const parts = [`RSI ${tech.rsi.toFixed(0)}`, `EMA20 ${tech.ema20.toFixed(2)}`, `Vol ${volLabel(tech)}`, `Score ${tech.compositeScore}/100 [${tech.technicalSignal}]`];
           lines.push(`   Technicals: ${parts.join(" | ")}`);
         }
 
@@ -1418,7 +1433,7 @@ export default function Dashboard() {
             style={{ ...btnSt, fontSize: 10, padding: "4px 10px", borderColor: exportCopied ? C.green + "60" : C.blue + "60", color: exportCopied ? C.greenText : C.blueText }}
             title="Copy a full snapshot of your scan results, holdings and watchlist — paste into Claude chat for AI analysis"
           >
-            {exportCopied ? "✓ Copied!" : "⎘ Export for Claude"}
+            {exportCopied ? "✓ Copied!" : "⎘ Export"}
           </button>
           <button
             onClick={() => setShowMetricsGuide(true)}
@@ -1666,7 +1681,7 @@ export default function Dashboard() {
                           ["RSI", sigTech.rsi.toFixed(0), sigTech.rsi < 30 ? C.greenText : sigTech.rsi > 70 ? C.redText : C.muted],
                           ["EMA20", sigTech.ema20.toFixed(2), C.muted],
                           ["EMA50", sigTech.ema50.toFixed(2), C.muted],
-                          ["Vol", `${sigTech.volumeRatio.toFixed(1)}x avg`, sigTech.volumeRatio >= 1.5 ? C.greenText : C.muted],
+                          ["Vol", volLabel(sigTech), sigTech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${sigTech.compositeScore}/100`, sigTech.compositeScore >= 60 ? C.greenText : sigTech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
                           <div key={lbl} style={{ background: "#111", borderRadius: 4, padding: "3px 7px", display: "flex", gap: 4, alignItems: "center" }}>
@@ -1834,7 +1849,7 @@ export default function Dashboard() {
                           ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? C.greenText : tech.rsi > 70 ? C.redText : C.muted],
                           ["EMA20", tech.ema20.toFixed(2), C.muted],
                           ["EMA50", tech.ema50.toFixed(2), C.muted],
-                          ["Vol", `${tech.volumeRatio.toFixed(1)}x avg`, tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
+                          ["Vol", volLabel(tech), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${tech.compositeScore}/100`, tech.compositeScore >= 60 ? C.greenText : tech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
                           <div key={lbl} style={{ background: "#111", borderRadius: 4, padding: "3px 7px", display: "flex", gap: 4, alignItems: "center" }}>
@@ -2056,7 +2071,7 @@ export default function Dashboard() {
                           ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? C.greenText : tech.rsi > 70 ? C.redText : C.muted],
                           ["EMA20", tech.ema20.toFixed(2), C.muted],
                           ["EMA50", tech.ema50.toFixed(2), C.muted],
-                          ["Vol", `${tech.volumeRatio.toFixed(1)}x avg`, tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
+                          ["Vol", volLabel(tech), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${tech.compositeScore}/100`, tech.compositeScore >= 60 ? C.greenText : tech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
                           <div key={lbl} style={{ background: "#111", borderRadius: 4, padding: "3px 7px", display: "flex", gap: 4, alignItems: "center" }}>
