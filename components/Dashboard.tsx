@@ -1,10 +1,12 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 
-/** Tracks window width and re-renders on resize */
+/** Tracks window width and re-renders on resize.
+ *  Always starts at 1280 to match SSR, then updates on client mount to avoid hydration mismatch. */
 function useWindowWidth() {
-  const [width, setWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  const [width, setWidth] = useState(1280);
   useEffect(() => {
+    setWidth(window.innerWidth);
     const onResize = () => setWidth(window.innerWidth);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -894,8 +896,11 @@ export default function Dashboard() {
   const isMobile = useWindowWidth() < 640;
   // Tracks which cards have fundamentals expanded on mobile
   const [showFunds, setShowFunds] = useState<Set<string>>(new Set());
-  const toggleFunds = (ticker: string) =>
+  const toggleFunds = (ticker: string) => {
     setShowFunds(prev => { const n = new Set(prev); n.has(ticker) ? n.delete(ticker) : n.add(ticker); return n; });
+    // Fetch fundamentals on demand if not yet loaded
+    if (!askAnalystData[ticker]) fetchAskAnalystBatch([ticker]);
+  };
 
   // Export for Claude
   const [exportCopied, setExportCopied] = useState(false);
@@ -1718,7 +1723,7 @@ export default function Dashboard() {
                       <button onClick={() => toggleFunds(sig.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px" }}>
                         {showFunds.has(sig.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
                       </button>
-                      {showFunds.has(sig.ticker) && <FundamentalsRow f={askAnalystData[sig.ticker]} />}
+                      {showFunds.has(sig.ticker) && (askAnalystData[sig.ticker] ? <FundamentalsRow f={askAnalystData[sig.ticker]} /> : <span style={{ fontSize: 9, color: C.dim }}>Loading…</span>)}
                     </div>
                   ) : (
                     <FundamentalsRow f={askAnalystData[sig.ticker]} />
@@ -1898,7 +1903,7 @@ export default function Dashboard() {
                       <button onClick={() => toggleFunds(h.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px" }}>
                         {showFunds.has(h.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
                       </button>
-                      {showFunds.has(h.ticker) && <FundamentalsRow f={askAnalystData[h.ticker]} />}
+                      {showFunds.has(h.ticker) && (askAnalystData[h.ticker] ? <FundamentalsRow f={askAnalystData[h.ticker]} /> : <span style={{ fontSize: 9, color: C.dim }}>Loading…</span>)}
                     </div>
                   ) : (
                     <FundamentalsRow f={askAnalystData[h.ticker]} />
