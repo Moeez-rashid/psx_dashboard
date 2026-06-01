@@ -880,8 +880,8 @@ export default function Dashboard() {
   const [watchTech, setWatchTech] = useState<Record<string, StockTech>>({});
   const [holdingTech, setHoldingTech] = useState<Record<string, StockTech>>({});
   const [loadingWatchTech, setLoadingWatchTech] = useState(false);
-  // AskAnalyst fundamentals (PE, PBV, div yield, 52W range, periodic returns)
-  const [askAnalystData, setAskAnalystData] = useState<Record<string, AskAnalystFundamentals>>({});
+  // AskAnalyst fundamentals — null means "attempted but no data available"
+  const [askAnalystData, setAskAnalystData] = useState<Record<string, AskAnalystFundamentals | null>>({});
 
   // Sort states
   const [sortOpps, setSortOpps] = useState<"confidence" | "name">("confidence");
@@ -899,8 +899,8 @@ export default function Dashboard() {
   const [showFunds, setShowFunds] = useState<Set<string>>(new Set());
   const toggleFunds = (ticker: string) => {
     setShowFunds(prev => { const n = new Set(prev); n.has(ticker) ? n.delete(ticker) : n.add(ticker); return n; });
-    // Fetch fundamentals on demand if not yet loaded
-    if (!askAnalystData[ticker]) fetchAskAnalystBatch([ticker]);
+    // undefined = never fetched; trigger a fetch. null = already tried, don't retry.
+    if (askAnalystData[ticker] === undefined) fetchAskAnalystBatch([ticker]);
   };
 
   // Export for Claude
@@ -1284,20 +1284,29 @@ export default function Dashboard() {
   // ── Fetch AskAnalyst fundamentals for one or many tickers ─────────────────
   const fetchAskAnalystBatch = async (tickers: string[]) => {
     if (!tickers.length) return;
-    const fresh = tickers.filter(t => !askAnalystData[t]);
-    if (!fresh.length) return; // all already loaded
+    // undefined = not yet attempted; null = attempted, no data. Only retry undefined.
+    const fresh = tickers.filter(t => askAnalystData[t] === undefined);
+    if (!fresh.length) return;
+    const markFailed = () => setAskAnalystData(prev => {
+      const u: Record<string, null> = {};
+      fresh.forEach(t => { u[t] = null; });
+      return { ...prev, ...u };
+    });
     try {
       const res = await fetch(`/api/askanalyst?symbol=${fresh.join(",")}`);
-      if (!res.ok) return;
+      if (!res.ok) { markFailed(); return; }
       const data = await res.json();
       if (fresh.length === 1) {
-        // Single-ticker response is the object itself
-        setAskAnalystData(prev => ({ ...prev, [fresh[0]]: data }));
+        setAskAnalystData(prev => ({ ...prev, [fresh[0]]: data ?? null }));
       } else {
-        // Batch response is { TICKER: {...}, ... }
-        setAskAnalystData(prev => ({ ...prev, ...data }));
+        // Batch: { TICKER: {...}, ... } — mark any missing tickers as null
+        setAskAnalystData(prev => {
+          const u: Record<string, AskAnalystFundamentals | null> = {};
+          fresh.forEach(t => { u[t] = (data && data[t]) ? data[t] : null; });
+          return { ...prev, ...u };
+        });
       }
-    } catch { /* ignore */ }
+    } catch { markFailed(); }
   };
 
   // ── Fetch technicals for all watchlist tickers ───────────────────────────
@@ -1450,13 +1459,14 @@ export default function Dashboard() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10 }}>
           {!isMobile && <PKTClock />}
-          <button onClick={fetchPrices} style={btnSt} title="Refresh prices">↻</button>
+          {/* Refresh / Export / Settings — all same size on mobile */}
+          <button onClick={fetchPrices} style={{ ...btnSt, fontSize: isMobile ? 16 : 13, padding: isMobile ? "5px 10px" : undefined, lineHeight: 1 }} title="Refresh prices">↻</button>
           <button
             onClick={exportForClaude}
-            style={{ ...btnSt, fontSize: 10, padding: "4px 10px", borderColor: exportCopied ? C.green + "60" : C.blue + "60", color: exportCopied ? C.greenText : C.blueText }}
+            style={{ ...btnSt, fontSize: isMobile ? 16 : 10, padding: isMobile ? "5px 10px" : "4px 10px", lineHeight: 1, borderColor: exportCopied ? C.green + "60" : C.blue + "60", color: exportCopied ? C.greenText : C.blueText }}
             title="Copy full snapshot for Claude"
           >
-            <span style={{ fontSize: isMobile ? 14 : 11 }}>{exportCopied ? "✓" : "⎘"}</span>
+            {exportCopied ? "✓" : "⎘"}
             {!isMobile && <span style={{ marginLeft: 3 }}>{exportCopied ? " Copied!" : " Export"}</span>}
           </button>
           {!isMobile && (
@@ -1468,7 +1478,7 @@ export default function Dashboard() {
               ? Guide
             </button>
           )}
-          <button onClick={() => setShowSettings(true)} style={{ ...btnSt, color: hasKey ? C.greenText : C.amberText, borderColor: hasKey ? C.green + "60" : C.amber + "60" }}>
+          <button onClick={() => setShowSettings(true)} style={{ ...btnSt, fontSize: isMobile ? 16 : undefined, padding: isMobile ? "5px 10px" : undefined, lineHeight: 1, color: hasKey ? C.greenText : C.amberText, borderColor: hasKey ? C.green + "60" : C.amber + "60" }}>
             ⚙{!isMobile && ` ${hasKey ? settings.provider : "Set API Key"}`}
           </button>
         </div>
@@ -1758,8 +1768,8 @@ export default function Dashboard() {
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {([
                           ["RSI", sigTech.rsi.toFixed(0), sigTech.rsi < 30 ? C.greenText : sigTech.rsi > 70 ? C.redText : C.muted],
-                          ...(!isMobile ? [["EMA20", sigTech.ema20.toFixed(2), C.muted] as [string,string,string]] : []),
-                          ...(!isMobile ? [["EMA50", sigTech.ema50.toFixed(2), C.muted] as [string,string,string]] : []),
+                          ["EMA20", sigTech.ema20.toFixed(2), C.muted],
+                          ["EMA50", sigTech.ema50.toFixed(2), C.muted],
                           ["Vol", volLabel(sigTech, prices[sig.ticker]?.volume), sigTech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${sigTech.compositeScore}/100`, sigTech.compositeScore >= 60 ? C.greenText : sigTech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
@@ -1784,7 +1794,11 @@ export default function Dashboard() {
                           : <button onClick={() => quickAddWatch(sig.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px", borderColor: C.blue + "50", color: C.blueText }}>+ Watchlist</button>
                         }
                       </div>
-                      {showFunds.has(sig.ticker) && (askAnalystData[sig.ticker] ? <FundamentalsRow f={askAnalystData[sig.ticker]} /> : <span style={{ fontSize: 9, color: C.dim }}>Loading…</span>)}
+                      {showFunds.has(sig.ticker) && (
+        askAnalystData[sig.ticker] === undefined ? <span style={{ fontSize: 9, color: C.dim }}>Loading…</span>
+        : askAnalystData[sig.ticker] === null ? <span style={{ fontSize: 9, color: C.dim }}>No data available</span>
+        : <FundamentalsRow f={askAnalystData[sig.ticker]!} />
+      )}
                     </div>
                   ) : (
                     <>
@@ -1938,8 +1952,8 @@ export default function Dashboard() {
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {([
                           ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? C.greenText : tech.rsi > 70 ? C.redText : C.muted],
-                          ...(!isMobile ? [["EMA20", tech.ema20.toFixed(2), C.muted] as [string,string,string]] : []),
-                          ...(!isMobile ? [["EMA50", tech.ema50.toFixed(2), C.muted] as [string,string,string]] : []),
+                          ["EMA20", tech.ema20.toFixed(2), C.muted],
+                          ["EMA50", tech.ema50.toFixed(2), C.muted],
                           ["Vol", volLabel(tech, prices[h.ticker]?.volume), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${tech.compositeScore}/100`, tech.compositeScore >= 60 ? C.greenText : tech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
@@ -1961,7 +1975,11 @@ export default function Dashboard() {
                       <button onClick={() => toggleFunds(h.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px" }}>
                         {showFunds.has(h.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
                       </button>
-                      {showFunds.has(h.ticker) && (askAnalystData[h.ticker] ? <FundamentalsRow f={askAnalystData[h.ticker]} /> : <span style={{ fontSize: 9, color: C.dim }}>Loading…</span>)}
+                      {showFunds.has(h.ticker) && (
+        askAnalystData[h.ticker] === undefined ? <span style={{ fontSize: 9, color: C.dim }}>Loading…</span>
+        : askAnalystData[h.ticker] === null ? <span style={{ fontSize: 9, color: C.dim }}>No data available</span>
+        : <FundamentalsRow f={askAnalystData[h.ticker]!} />
+      )}
                     </div>
                   ) : (
                     <FundamentalsRow f={askAnalystData[h.ticker]} />
@@ -2169,8 +2187,8 @@ export default function Dashboard() {
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {([
                           ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? C.greenText : tech.rsi > 70 ? C.redText : C.muted],
-                          ...(!isMobile ? [["EMA20", tech.ema20.toFixed(2), C.muted] as [string,string,string]] : []),
-                          ...(!isMobile ? [["EMA50", tech.ema50.toFixed(2), C.muted] as [string,string,string]] : []),
+                          ["EMA20", tech.ema20.toFixed(2), C.muted],
+                          ["EMA50", tech.ema50.toFixed(2), C.muted],
                           ["Vol", volLabel(tech, prices[w.ticker]?.volume), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${tech.compositeScore}/100`, tech.compositeScore >= 60 ? C.greenText : tech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
@@ -2189,7 +2207,11 @@ export default function Dashboard() {
                       <button onClick={() => toggleFunds(w.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px" }}>
                         {showFunds.has(w.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
                       </button>
-                      {showFunds.has(w.ticker) && <FundamentalsRow f={askAnalystData[w.ticker]} />}
+                      {showFunds.has(w.ticker) && (
+                        askAnalystData[w.ticker] === undefined ? <span style={{ fontSize: 9, color: C.dim }}>Loading…</span>
+                        : askAnalystData[w.ticker] === null ? <span style={{ fontSize: 9, color: C.dim }}>No data available</span>
+                        : <FundamentalsRow f={askAnalystData[w.ticker]!} />
+                      )}}
                     </div>
                   ) : (
                     <FundamentalsRow f={askAnalystData[w.ticker]} />
