@@ -21,6 +21,7 @@ export interface TechnicalScore {
   ema50: number;
   currentPrice: number;
   volumeRatio: number;       // today vol / 20d avg vol
+  todayVolume: number;       // actual volume for the most recent session
   avgVolume20d: number;
   crossoverSignal: "bullish" | "bearish" | "neutral";
   priceVsEma20: "above" | "below";
@@ -214,6 +215,7 @@ export function scoreStock(
     ema50: parseFloat(ema50.toFixed(2)),
     currentPrice: parseFloat(currentPrice.toFixed(2)),
     volumeRatio,
+    todayVolume: Math.round(todayVolume),
     avgVolume20d: Math.round(avgVolume20d),
     crossoverSignal,
     priceVsEma20,

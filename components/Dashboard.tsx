@@ -1,5 +1,16 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+
+/** Tracks window width and re-renders on resize */
+function useWindowWidth() {
+  const [width, setWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
+}
 import Settings, { loadSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
 import type { StockQuote } from "@/lib/psx";
@@ -495,22 +506,19 @@ function SignalDetailModal({ data, onClose }: { data: SignalDetail; onClose: () 
 interface StockTechLocal {
   symbol: string; compositeScore: number; technicalSignal: string;
   rsi: number; ema20: number; ema50: number; currentPrice: number;
-  volumeRatio: number; avgVolume20d?: number;
+  volumeRatio: number; todayVolume?: number; avgVolume20d?: number;
   crossoverSignal: string; priceVsEma20: string; priceVsEma50?: string; reasons: string[];
 }
-/** Format a raw share-volume number to human-readable: 1234567 → "1.2M", 45000 → "45K" */
+/** Format a raw share-volume number: 1234567 → "1.2M", 70435 → "70K" */
 function fmtVol(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000)     return `${Math.round(n / 1_000)}K`;
   return `${Math.round(n)}`;
 }
-/** Display string for the Vol chip: "1.2M (0.4x avg)" when data available */
+/** Display string for the Vol chip: "70K (0.4x avg)" using today's actual volume */
 function volLabel(tech: StockTechLocal): string {
-  if (tech.avgVolume20d && tech.avgVolume20d > 0) {
-    const todayVol = Math.round(tech.volumeRatio * tech.avgVolume20d);
-    return `${fmtVol(todayVol)} (${tech.volumeRatio.toFixed(1)}x avg)`;
-  }
-  return `${tech.volumeRatio.toFixed(1)}x avg`;
+  const vol = tech.todayVolume ?? (tech.avgVolume20d ? Math.round(tech.volumeRatio * tech.avgVolume20d) : null);
+  return vol ? `${fmtVol(vol)} (${tech.volumeRatio.toFixed(1)}x avg)` : `${tech.volumeRatio.toFixed(1)}x avg`;
 }
 function techCatalysts(t: StockTechLocal): string[] {
   const out: string[] = [];
@@ -612,9 +620,10 @@ function donutSlicePath(cx: number, cy: number, r: number, ir: number, startDeg:
   return `M ${s1.x.toFixed(2)} ${s1.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${e1.x.toFixed(2)} ${e1.y.toFixed(2)} L ${s2.x.toFixed(2)} ${s2.y.toFixed(2)} A ${ir} ${ir} 0 ${large} 0 ${e2.x.toFixed(2)} ${e2.y.toFixed(2)} Z`;
 }
 
-function HoldingsOverview({ holdings, prices }: {
+function HoldingsOverview({ holdings, prices, isMobile = false }: {
   holdings: Holding[];
   prices: Record<string, StockQuote>;
+  isMobile?: boolean;
 }) {
   if (holdings.length === 0) return null;
 
@@ -660,10 +669,10 @@ function HoldingsOverview({ holdings, prices }: {
 
   return (
     <div style={{ background: "#111", borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
-      <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 12 : 18, alignItems: isMobile ? "stretch" : "flex-start" }}>
 
         {/* ── LEFT: Compact donut only ── */}
-        <div style={{ flexShrink: 0 }}>
+        <div style={{ flexShrink: 0, display: "flex", justifyContent: isMobile ? "center" : "flex-start" }}>
           <svg width={100} height={100}>
             {slices.map((s, i) => (
               <path key={i} d={s.path} fill={s.color} />
@@ -879,6 +888,13 @@ export default function Dashboard() {
   const [showSettings, setShowSettings] = useState(false);
   const [showMetricsGuide, setShowMetricsGuide] = useState(false);
   const [signalDetail, setSignalDetail] = useState<SignalDetail | null>(null);
+
+  // Responsive
+  const isMobile = useWindowWidth() < 640;
+  // Tracks which cards have fundamentals expanded on mobile
+  const [showFunds, setShowFunds] = useState<Set<string>>(new Set());
+  const toggleFunds = (ticker: string) =>
+    setShowFunds(prev => { const n = new Set(prev); n.has(ticker) ? n.delete(ticker) : n.add(ticker); return n; });
 
   // Export for Claude
   const [exportCopied, setExportCopied] = useState(false);
@@ -1422,28 +1438,30 @@ export default function Dashboard() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: `0.5px solid ${C.border}`, position: "sticky", top: 0, background: C.bg, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.3 }}>PSX Scanner</span>
-          {serverOnline === false && <span style={{ fontSize: 10, color: C.redText, background: C.redDim, padding: "2px 7px", borderRadius: 10 }}>PSX offline</span>}
-          {loadingPrices && <span style={{ fontSize: 10, color: C.muted }}>refreshing prices…</span>}
+          {serverOnline === false && <span style={{ fontSize: 10, color: C.redText, background: C.redDim, padding: "2px 7px", borderRadius: 10 }}>offline</span>}
+          {loadingPrices && !isMobile && <span style={{ fontSize: 10, color: C.muted }}>refreshing…</span>}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <PKTClock />
-          <button onClick={fetchPrices} style={btnSt}>↻</button>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10 }}>
+          {!isMobile && <PKTClock />}
+          <button onClick={fetchPrices} style={btnSt} title="Refresh prices">↻</button>
           <button
             onClick={exportForClaude}
             style={{ ...btnSt, fontSize: 10, padding: "4px 10px", borderColor: exportCopied ? C.green + "60" : C.blue + "60", color: exportCopied ? C.greenText : C.blueText }}
-            title="Copy a full snapshot of your scan results, holdings and watchlist — paste into Claude chat for AI analysis"
+            title="Copy full snapshot for Claude"
           >
-            {exportCopied ? "✓ Copied!" : "⎘ Export"}
+            {exportCopied ? "✓" : "⎘"}{!isMobile && (exportCopied ? " Copied!" : " Export")}
           </button>
-          <button
-            onClick={() => setShowMetricsGuide(true)}
-            style={{ ...btnSt, fontSize: 10, padding: "4px 10px", borderColor: C.purple + "60", color: C.purpleText }}
-            title="Metrics guide — what each indicator means and what values are good"
-          >
-            ? Guide
-          </button>
+          {!isMobile && (
+            <button
+              onClick={() => setShowMetricsGuide(true)}
+              style={{ ...btnSt, fontSize: 10, padding: "4px 10px", borderColor: C.purple + "60", color: C.purpleText }}
+              title="Metrics guide"
+            >
+              ? Guide
+            </button>
+          )}
           <button onClick={() => setShowSettings(true)} style={{ ...btnSt, color: hasKey ? C.greenText : C.amberText, borderColor: hasKey ? C.green + "60" : C.amber + "60" }}>
-            ⚙ {hasKey ? settings.provider : "Set API Key"}
+            ⚙{!isMobile && ` ${hasKey ? settings.provider : "Set API Key"}`}
           </button>
         </div>
       </div>
@@ -1457,7 +1475,7 @@ export default function Dashboard() {
             borderBottom: tab === t ? `2px solid ${C.green}` : "2px solid transparent",
             textTransform: "capitalize", letterSpacing: 0.3,
           }}>
-            {t === "opportunities" ? "Buy Opportunities" : t === "holdings" ? "My Holdings" : "Watchlist"}
+            {t === "opportunities" ? (isMobile ? "Opps" : "Buy Opportunities") : t === "holdings" ? (isMobile ? "Holdings" : "My Holdings") : "Watchlist"}
             {t === "opportunities" && scanResult && (
               <span style={{ marginLeft: 6, fontSize: 9, background: C.greenDim, color: C.greenText, padding: "1px 5px", borderRadius: 8 }}>
                 {scanResult.signals.length}
@@ -1679,8 +1697,8 @@ export default function Dashboard() {
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {([
                           ["RSI", sigTech.rsi.toFixed(0), sigTech.rsi < 30 ? C.greenText : sigTech.rsi > 70 ? C.redText : C.muted],
-                          ["EMA20", sigTech.ema20.toFixed(2), C.muted],
-                          ["EMA50", sigTech.ema50.toFixed(2), C.muted],
+                          ...(!isMobile ? [["EMA20", sigTech.ema20.toFixed(2), C.muted] as [string,string,string]] : []),
+                          ...(!isMobile ? [["EMA50", sigTech.ema50.toFixed(2), C.muted] as [string,string,string]] : []),
                           ["Vol", volLabel(sigTech), sigTech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${sigTech.compositeScore}/100`, sigTech.compositeScore >= 60 ? C.greenText : sigTech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
@@ -1693,8 +1711,17 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {/* Fundamentals row (AskAnalyst) */}
-                  <FundamentalsRow f={askAnalystData[sig.ticker]} />
+                  {/* Fundamentals row (AskAnalyst) — toggled on mobile */}
+                  {isMobile ? (
+                    <div style={{ marginTop: 8 }}>
+                      <button onClick={() => toggleFunds(sig.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px" }}>
+                        {showFunds.has(sig.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
+                      </button>
+                      {showFunds.has(sig.ticker) && <FundamentalsRow f={askAnalystData[sig.ticker]} />}
+                    </div>
+                  ) : (
+                    <FundamentalsRow f={askAnalystData[sig.ticker]} />
+                  )}
 
                   {/* Add to watchlist */}
                   <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
@@ -1723,7 +1750,7 @@ export default function Dashboard() {
           <div>
             {/* Holdings overview: donut + portfolio table */}
             {holdings.length > 0 && (
-              <HoldingsOverview holdings={holdings} prices={prices} />
+              <HoldingsOverview holdings={holdings} prices={prices} isMobile={isMobile} />
             )}
             <div style={{ ...s_label, marginBottom: 10 }}>My Holdings</div>
             {holdings.map(h => {
@@ -1790,7 +1817,7 @@ export default function Dashboard() {
                           <span style={{ fontSize: 8, color: C.dim }}>Shares</span>
                           <input
                             style={{ ...inputSt, width: 80 }}
-                            type="text" inputMode="numeric"
+                            type="text" inputMode="decimal"
                             value={editingHolding!.shares}
                             onChange={e => setEditingHolding(prev => prev ? { ...prev, shares: e.target.value.replace(/[^0-9.]/g, "") } : null)}
                           />
@@ -1799,7 +1826,7 @@ export default function Dashboard() {
                           <span style={{ fontSize: 8, color: C.dim }}>Avg Price (PKR)</span>
                           <input
                             style={{ ...inputSt, width: 90 }}
-                            type="text" inputMode="numeric"
+                            type="text" inputMode="decimal"
                             value={editingHolding!.avg}
                             onChange={e => setEditingHolding(prev => prev ? { ...prev, avg: e.target.value.replace(/[^0-9.]/g, "") } : null)}
                           />
@@ -1847,8 +1874,8 @@ export default function Dashboard() {
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {([
                           ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? C.greenText : tech.rsi > 70 ? C.redText : C.muted],
-                          ["EMA20", tech.ema20.toFixed(2), C.muted],
-                          ["EMA50", tech.ema50.toFixed(2), C.muted],
+                          ...(!isMobile ? [["EMA20", tech.ema20.toFixed(2), C.muted] as [string,string,string]] : []),
+                          ...(!isMobile ? [["EMA50", tech.ema50.toFixed(2), C.muted] as [string,string,string]] : []),
                           ["Vol", volLabel(tech), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${tech.compositeScore}/100`, tech.compositeScore >= 60 ? C.greenText : tech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
@@ -1864,8 +1891,17 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {/* Fundamentals row (AskAnalyst) */}
-                  <FundamentalsRow f={askAnalystData[h.ticker]} />
+                  {/* Fundamentals row — toggled on mobile */}
+                  {isMobile ? (
+                    <div style={{ marginTop: 8 }}>
+                      <button onClick={() => toggleFunds(h.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px" }}>
+                        {showFunds.has(h.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
+                      </button>
+                      {showFunds.has(h.ticker) && <FundamentalsRow f={askAnalystData[h.ticker]} />}
+                    </div>
+                  ) : (
+                    <FundamentalsRow f={askAnalystData[h.ticker]} />
+                  )}
 
                   {/* AI suggestion */}
                   {(() => {
@@ -1903,8 +1939,8 @@ export default function Dashboard() {
             )}
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
               <input style={{ ...inputSt, width: 60 }} placeholder="Ticker" value={newHolding.ticker} onChange={e => setNewHolding(p => ({ ...p, ticker: e.target.value.toUpperCase() }))} onKeyDown={e => e.key === "Enter" && addHolding()} />
-              <input style={{ ...inputSt, width: 70 }} placeholder="Shares" type="text" inputMode="numeric" value={newHolding.shares} onChange={e => setNewHolding(p => ({ ...p, shares: e.target.value.replace(/[^0-9.]/g, "") }))} />
-              <input style={{ ...inputSt, width: 70 }} placeholder="Avg PKR" type="text" inputMode="numeric" value={newHolding.avg} onChange={e => setNewHolding(p => ({ ...p, avg: e.target.value.replace(/[^0-9.]/g, "") }))} />
+              <input style={{ ...inputSt, width: 70 }} placeholder="Shares" type="text" inputMode="decimal" value={newHolding.shares} onChange={e => setNewHolding(p => ({ ...p, shares: e.target.value.replace(/[^0-9.]/g, "") }))} />
+              <input style={{ ...inputSt, width: 70 }} placeholder="Avg PKR" type="text" inputMode="decimal" value={newHolding.avg} onChange={e => setNewHolding(p => ({ ...p, avg: e.target.value.replace(/[^0-9.]/g, "") }))} />
               <button onClick={addHolding} disabled={addingHolding} style={{ ...btnSt, opacity: addingHolding ? 0.5 : 1 }}>
                 {addingHolding ? "…" : "Add"}
               </button>
@@ -2069,8 +2105,8 @@ export default function Dashboard() {
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {([
                           ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? C.greenText : tech.rsi > 70 ? C.redText : C.muted],
-                          ["EMA20", tech.ema20.toFixed(2), C.muted],
-                          ["EMA50", tech.ema50.toFixed(2), C.muted],
+                          ...(!isMobile ? [["EMA20", tech.ema20.toFixed(2), C.muted] as [string,string,string]] : []),
+                          ...(!isMobile ? [["EMA50", tech.ema50.toFixed(2), C.muted] as [string,string,string]] : []),
                           ["Vol", volLabel(tech), tech.volumeRatio >= 1.5 ? C.greenText : C.muted],
                           ["Score", `${tech.compositeScore}/100`, tech.compositeScore >= 60 ? C.greenText : tech.compositeScore >= 40 ? C.amberText : C.redText],
                         ] as [string, string, string][]).map(([lbl, val, col]) => (
@@ -2083,8 +2119,17 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {/* ── Fundamentals row (AskAnalyst) ── */}
-                  <FundamentalsRow f={askAnalystData[w.ticker]} />
+                  {/* ── Fundamentals row — toggled on mobile ── */}
+                  {isMobile ? (
+                    <div style={{ marginTop: 8 }}>
+                      <button onClick={() => toggleFunds(w.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px" }}>
+                        {showFunds.has(w.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
+                      </button>
+                      {showFunds.has(w.ticker) && <FundamentalsRow f={askAnalystData[w.ticker]} />}
+                    </div>
+                  ) : (
+                    <FundamentalsRow f={askAnalystData[w.ticker]} />
+                  )}
 
                   {/* ── Prompt when nothing loaded yet ── */}
                   {!tech && !activeSig && (
