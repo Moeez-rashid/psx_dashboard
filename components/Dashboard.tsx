@@ -867,6 +867,7 @@ export default function Dashboard() {
     newsFromCache: boolean;      // true = AI reused cached analysis (news unchanged)
   } | null>(null);
   const [expandNewsPanel, setExpandNewsPanel] = useState(false);
+  const [showNewsModal, setShowNewsModal] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [scanPhase, setScanPhase] = useState("");
@@ -1455,7 +1456,8 @@ export default function Dashboard() {
             style={{ ...btnSt, fontSize: 10, padding: "4px 10px", borderColor: exportCopied ? C.green + "60" : C.blue + "60", color: exportCopied ? C.greenText : C.blueText }}
             title="Copy full snapshot for Claude"
           >
-            {exportCopied ? "✓" : "⎘"}{!isMobile && (exportCopied ? " Copied!" : " Export")}
+            <span style={{ fontSize: isMobile ? 14 : 11 }}>{exportCopied ? "✓" : "⎘"}</span>
+            {!isMobile && <span style={{ marginLeft: 3 }}>{exportCopied ? " Copied!" : " Export"}</span>}
           </button>
           {!isMobile && (
             <button
@@ -1523,66 +1525,118 @@ export default function Dashboard() {
 
             {/* News context panel — hidden while scanning to avoid overlap with loader */}
             {scanResult?.newsAnalysis && !scanning && (
+              <>
+              {/* News modal (mobile "read more") */}
+              {showNewsModal && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 200, display: "flex", alignItems: "flex-end" }}
+                  onClick={() => setShowNewsModal(false)}>
+                  <div style={{ background: "#151515", width: "100%", maxHeight: "80vh", overflowY: "auto", borderRadius: "14px 14px 0 0", padding: 20 }}
+                    onClick={e => e.stopPropagation()}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>Macro Context · Today</span>
+                      <button onClick={() => setShowNewsModal(false)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: "0 4px" }}>×</button>
+                    </div>
+                    <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.7, margin: "0 0 12px" }}>{scanResult.newsAnalysis.summary}</p>
+                    {scanResult.newsAnalysis.affectedSectors.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        {scanResult.newsAnalysis.affectedSectors.map((sec, i) => (
+                          <div key={i} style={{ fontSize: 10, color: sec.impact === "POSITIVE" ? C.greenText : sec.impact === "NEGATIVE" ? C.redText : C.muted, marginBottom: 4 }}>
+                            {sec.impact === "POSITIVE" ? "▲" : sec.impact === "NEGATIVE" ? "▼" : "–"} {sec.sectorName}: {sec.reason}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {scanResult.newsAnalysis.globalFactors.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+                        {scanResult.newsAnalysis.globalFactors.map((f, i) => (
+                          <span key={i} style={{ fontSize: 9, color: C.blueText, background: C.blueDim, padding: "2px 7px", borderRadius: 10 }}>{f}</span>
+                        ))}
+                      </div>
+                    )}
+                    {(scanResult.newsAnalysis.detailedNarrative ?? buildExpandedNarrative(scanResult.newsAnalysis)) && (
+                      <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.8, margin: "0 0 10px", paddingTop: 10, borderTop: `0.5px solid ${C.border}` }}>
+                        {scanResult.newsAnalysis.detailedNarrative ?? buildExpandedNarrative(scanResult.newsAnalysis)}
+                      </p>
+                    )}
+                    {scanResult.newsSources.length > 0 && (
+                      <div style={{ fontSize: 9, color: C.dim, marginTop: 4 }}>Sources: {scanResult.newsSources.join(" · ")}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div style={{ ...cardStyle, marginBottom: 14 }}>
                 {/* Header */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <span style={s_label}>Macro Context · Today</span>
                   {scanResult.newsFromCache && (
-                    <span style={{ fontSize: 8, color: C.dim, background: C.border2, padding: "1px 6px", borderRadius: 8 }}>
-                      ✓ cached
-                    </span>
+                    <span style={{ fontSize: 8, color: C.dim, background: C.border2, padding: "1px 6px", borderRadius: 8 }}>✓ cached</span>
                   )}
                 </div>
 
-                {/* AI summary */}
-                <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, margin: "0 0 8px" }}>
-                  {scanResult.newsAnalysis.summary}
-                </p>
-
-                {/* Sector impact list */}
-                {scanResult.newsAnalysis.affectedSectors.length > 0 && (
-                  <div style={{ marginBottom: 8 }}>
-                    {scanResult.newsAnalysis.affectedSectors.map((sec, i) => (
-                      <div key={i} style={{ fontSize: 10, color: sec.impact === "POSITIVE" ? C.greenText : sec.impact === "NEGATIVE" ? C.redText : C.muted, marginBottom: 2 }}>
-                        {sec.impact === "POSITIVE" ? "▲" : sec.impact === "NEGATIVE" ? "▼" : "–"} {sec.sectorName}: {sec.reason}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Global factor chips */}
-                {scanResult.newsAnalysis.globalFactors.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
-                    {scanResult.newsAnalysis.globalFactors.map((f, i) => (
-                      <span key={i} style={{ fontSize: 9, color: C.blueText, background: C.blueDim, padding: "2px 7px", borderRadius: 10 }}>{f}</span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Expanded narrative */}
-                {expandNewsPanel && (
-                  <div style={{ marginTop: 8, paddingTop: 10, borderTop: `0.5px solid ${C.border}` }}>
-                    <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.8, margin: "0 0 10px" }}>
-                      {scanResult.newsAnalysis.detailedNarrative ?? buildExpandedNarrative(scanResult.newsAnalysis)}
+                {isMobile ? (
+                  /* Mobile: show truncated summary + "Read more" popup */
+                  <>
+                    <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, margin: "0 0 6px" }}>
+                      {scanResult.newsAnalysis.summary.length > 120
+                        ? scanResult.newsAnalysis.summary.slice(0, 120) + "…"
+                        : scanResult.newsAnalysis.summary}
                     </p>
-                    {scanResult.newsSources.length > 0 && (
-                      <div style={{ fontSize: 9, color: C.dim }}>
-                        Sources: {scanResult.newsSources.join(" · ")}
+                    {/* Sector pills — compact on mobile */}
+                    {scanResult.newsAnalysis.affectedSectors.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                        {scanResult.newsAnalysis.affectedSectors.map((sec, i) => (
+                          <span key={i} style={{ fontSize: 9, color: sec.impact === "POSITIVE" ? C.greenText : sec.impact === "NEGATIVE" ? C.redText : C.muted, background: C.border2, padding: "1px 6px", borderRadius: 8 }}>
+                            {sec.impact === "POSITIVE" ? "▲" : sec.impact === "NEGATIVE" ? "▼" : "–"} {sec.sectorName}
+                          </span>
+                        ))}
                       </div>
                     )}
-                  </div>
+                    <button onClick={() => setShowNewsModal(true)} style={{ ...btnSt, fontSize: 9, padding: "2px 9px" }}>
+                      ▼ Read more
+                    </button>
+                  </>
+                ) : (
+                  /* Desktop: full expandable panel */
+                  <>
+                    <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, margin: "0 0 8px" }}>
+                      {scanResult.newsAnalysis.summary}
+                    </p>
+                    {scanResult.newsAnalysis.affectedSectors.length > 0 && (
+                      <div style={{ marginBottom: 8 }}>
+                        {scanResult.newsAnalysis.affectedSectors.map((sec, i) => (
+                          <div key={i} style={{ fontSize: 10, color: sec.impact === "POSITIVE" ? C.greenText : sec.impact === "NEGATIVE" ? C.redText : C.muted, marginBottom: 2 }}>
+                            {sec.impact === "POSITIVE" ? "▲" : sec.impact === "NEGATIVE" ? "▼" : "–"} {sec.sectorName}: {sec.reason}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {scanResult.newsAnalysis.globalFactors.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
+                        {scanResult.newsAnalysis.globalFactors.map((f, i) => (
+                          <span key={i} style={{ fontSize: 9, color: C.blueText, background: C.blueDim, padding: "2px 7px", borderRadius: 10 }}>{f}</span>
+                        ))}
+                      </div>
+                    )}
+                    {expandNewsPanel && (
+                      <div style={{ marginTop: 8, paddingTop: 10, borderTop: `0.5px solid ${C.border}` }}>
+                        <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.8, margin: "0 0 10px" }}>
+                          {scanResult.newsAnalysis.detailedNarrative ?? buildExpandedNarrative(scanResult.newsAnalysis)}
+                        </p>
+                        {scanResult.newsSources.length > 0 && (
+                          <div style={{ fontSize: 9, color: C.dim }}>Sources: {scanResult.newsSources.join(" · ")}</div>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                      <button onClick={() => setExpandNewsPanel(v => !v)} style={{ ...btnSt, fontSize: 9, padding: "2px 9px" }}>
+                        {expandNewsPanel ? "▲ Less" : "▼ Read more"}
+                      </button>
+                    </div>
+                  </>
                 )}
-
-                {/* Expand / Collapse button — bottom right */}
-                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-                  <button
-                    onClick={() => setExpandNewsPanel(v => !v)}
-                    style={{ ...btnSt, fontSize: 9, padding: "2px 9px" }}
-                  >
-                    {expandNewsPanel ? "▲ Less" : "▼ Read more"}
-                  </button>
-                </div>
               </div>
+              </>
             )}
 
             {/* Empty state */}
@@ -1638,30 +1692,31 @@ export default function Dashboard() {
               const displayPrice = liveQuote?.currentPrice ?? sigTech?.currentPrice;
               const displayChange = liveQuote?.changePercent;
               return (
-                <div key={sig.ticker} style={{ ...cardStyle }}>
+                <div key={sig.ticker} style={{ ...cardStyle, padding: isMobile ? "10px 12px" : undefined }}>
                   {/* Header */}
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 }}>
                     <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                        <span style={{ fontSize: 15, fontWeight: 600 }}>{sig.ticker}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: isMobile ? 13 : 15, fontWeight: 600 }}>{sig.ticker}</span>
                         <Pill signal={sig.signal} onClick={() => setSignalDetail({ ticker: sig.ticker, signal: sig.signal, confidence: sig.confidence, reason: sig.reason, newsHeadline: sig.newsHeadline, catalysts: sig.catalysts, risks: sig.risks, suggestedEntry: sig.suggestedEntry, tech: sigTech, fundamentals: askAnalystData[sig.ticker], currentPrice: displayPrice, changePercent: displayChange })} />
-                        <span style={{ fontSize: 10, color: C.dim }}>#{i + 1}</span>
+                        {!isMobile && <span style={{ fontSize: 10, color: C.dim }}>#{i + 1}</span>}
                       </div>
-                      <div style={{ fontSize: 11, color: C.muted }}>{sig.reason}</div>
+                      <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.4 }}>{sig.reason}</div>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    {/* Price + change + entry — compact in top-right */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0, marginLeft: 8 }}>
                       {displayPrice && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontSize: 13, fontWeight: 500 }}>PKR {displayPrice.toFixed(2)}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ fontSize: isMobile ? 11 : 13, fontWeight: 500 }}>PKR {displayPrice.toFixed(2)}</span>
                           {displayChange !== undefined && (
-                            <span style={{ fontSize: 10, color: displayChange >= 0 ? C.greenText : C.redText }}>
+                            <span style={{ fontSize: 9, color: displayChange >= 0 ? C.greenText : C.redText }}>
                               {displayChange >= 0 ? "+" : ""}{displayChange.toFixed(2)}%
                             </span>
                           )}
                         </div>
                       )}
                       {sig.suggestedEntry && (
-                        <span style={{ fontSize: 10, color: C.amberText, background: C.amberDim, padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>
+                        <span style={{ fontSize: 9, color: C.amberText, background: C.amberDim, padding: "1px 6px", borderRadius: 5, whiteSpace: "nowrap" }}>
                           Entry: {sig.suggestedEntry}
                         </span>
                       )}
@@ -1717,28 +1772,31 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {/* Fundamentals row (AskAnalyst) — toggled on mobile */}
+                  {/* Bottom row: Fundamentals toggle + Add to Watchlist side by side on mobile */}
                   {isMobile ? (
                     <div style={{ marginTop: 8 }}>
-                      <button onClick={() => toggleFunds(sig.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px" }}>
-                        {showFunds.has(sig.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
-                      </button>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                        <button onClick={() => toggleFunds(sig.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px" }}>
+                          {showFunds.has(sig.ticker) ? "▲ Hide" : "▼ Fundamentals"}
+                        </button>
+                        {watching.find(w => w.ticker === sig.ticker)
+                          ? <span style={{ fontSize: 9, color: C.greenText }}>✓ Watchlisted</span>
+                          : <button onClick={() => quickAddWatch(sig.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 9px", borderColor: C.blue + "50", color: C.blueText }}>+ Watchlist</button>
+                        }
+                      </div>
                       {showFunds.has(sig.ticker) && (askAnalystData[sig.ticker] ? <FundamentalsRow f={askAnalystData[sig.ticker]} /> : <span style={{ fontSize: 9, color: C.dim }}>Loading…</span>)}
                     </div>
                   ) : (
-                    <FundamentalsRow f={askAnalystData[sig.ticker]} />
+                    <>
+                      <FundamentalsRow f={askAnalystData[sig.ticker]} />
+                      <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
+                        {watching.find(w => w.ticker === sig.ticker)
+                          ? <span style={{ fontSize: 9, color: C.greenText }}>✓ In Watchlist</span>
+                          : <button onClick={() => quickAddWatch(sig.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 10px", borderColor: C.blue + "50", color: C.blueText }}>+ Add to Watchlist</button>
+                        }
+                      </div>
+                    </>
                   )}
-
-                  {/* Add to watchlist */}
-                  <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
-                    {watching.find(w => w.ticker === sig.ticker) ? (
-                      <span style={{ fontSize: 9, color: C.greenText }}>✓ In Watchlist</span>
-                    ) : (
-                      <button onClick={() => quickAddWatch(sig.ticker)} style={{ ...btnSt, fontSize: 9, padding: "3px 10px", borderColor: C.blue + "50", color: C.blueText }}>
-                        + Add to Watchlist
-                      </button>
-                    )}
-                  </div>
                 </div>
               );
             })}
@@ -1857,7 +1915,7 @@ export default function Dashboard() {
                     </div>
                   ) : (
                   /* P&L grid */
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: isMobile ? 4 : 6 }}>
                     {[
                       ["Shares", h.shares.toLocaleString()],
                       ["Avg cost", `PKR ${h.avgPrice.toFixed(2)}`],
@@ -1866,9 +1924,9 @@ export default function Dashboard() {
                       ["P&L", pnl !== null ? `${pnl >= 0 ? "+" : ""}PKR ${Math.round(pnl).toLocaleString()}` : "—"],
                       ["P&L %", pnlPct !== null ? `${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%` : "—"],
                     ].map(([label, val], i) => (
-                      <div key={i} style={{ background: "#111", borderRadius: 5, padding: "5px 7px" }}>
-                        <div style={{ fontSize: 9, color: C.dim, marginBottom: 2 }}>{label}</div>
-                        <div style={{ fontSize: 12, fontWeight: 500, color: label.includes("P&L") && pnl !== null ? (pnl >= 0 ? C.greenText : C.redText) : C.text }}>{val}</div>
+                      <div key={i} style={{ background: "#111", borderRadius: 4, padding: isMobile ? "3px 5px" : "5px 7px" }}>
+                        <div style={{ fontSize: 8, color: C.dim, marginBottom: 1 }}>{label}</div>
+                        <div style={{ fontSize: isMobile ? 10 : 12, fontWeight: 500, color: label.includes("P&L") && pnl !== null ? (pnl >= 0 ? C.greenText : C.redText) : C.text }}>{val}</div>
                       </div>
                     ))}
                   </div>
@@ -1891,7 +1949,7 @@ export default function Dashboard() {
                           </div>
                         ))}
                       </div>
-                      {tech.reasons?.[0] && (
+                      {!isMobile && tech.reasons?.[0] && (
                         <div style={{ fontSize: 9, color: C.muted, marginTop: 5 }}>▲ {tech.reasons[0]}</div>
                       )}
                     </div>
@@ -1909,8 +1967,8 @@ export default function Dashboard() {
                     <FundamentalsRow f={askAnalystData[h.ticker]} />
                   )}
 
-                  {/* AI suggestion */}
-                  {(() => {
+                  {/* AI suggestion — hidden on mobile (tap the signal pill instead) */}
+                  {!isMobile && (() => {
                     const s = getHoldingSuggestion(h.ticker, pnlPct);
                     if (!s) return (
                       <div style={{ marginTop: 8, fontSize: 9, color: C.dim, fontStyle: "italic" }}>
@@ -2082,7 +2140,7 @@ export default function Dashboard() {
                       {displayConfPct !== null && (
                         <ConfBar pct={displayConfPct} signal={displaySignal ?? undefined} label={confLabel} />
                       )}
-                      {(displayCats.length > 0 || displayRisks.length > 0) && (
+                      {!isMobile && (displayCats.length > 0 || displayRisks.length > 0) && (
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
                           {displayCats.length > 0 && (
                             <div>
