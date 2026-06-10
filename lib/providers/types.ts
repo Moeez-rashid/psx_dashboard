@@ -32,7 +32,7 @@ export interface ProviderConfig {
 }
 
 export const DEFAULT_MODELS: Record<string, string> = {
-  claude: "claude-sonnet-4-5",
+  claude: "claude-sonnet-4-6",
   gemini: "gemini-2.0-flash-lite",
   openai: "gpt-4o-mini",
   groq: "llama-3.3-70b-versatile",

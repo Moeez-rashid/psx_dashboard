@@ -1,26 +1,120 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* Surfaces */
+  --color-surface: #09090b;
+  --color-card: #121215;
+  --color-raised: #1a1a20;
+  --color-inset: #0d0d10;
+  --color-line: #1e1e25;
+  --color-line-2: #2b2b34;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Ink */
+  --color-ink: #ececf1;
+  --color-ink-2: #9d9dab;
+  --color-ink-3: #5f5f6c;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Semantic */
+  --color-up: #2ea15c;
+  --color-up-2: #4ade80;
+  --color-up-dim: #0f2418;
+  --color-down: #dc4d44;
+  --color-down-2: #f87171;
+  --color-down-dim: #2a1414;
+  --color-gold: #c8922a;
+  --color-gold-2: #fbbf24;
+  --color-gold-dim: #271f0d;
+  --color-sky: #3b82c4;
+  --color-sky-2: #7cc0ff;
+  --color-sky-dim: #0e1d2d;
+  --color-violet: #7c5cd6;
+  --color-violet-2: #b69ef5;
+  --color-violet-dim: #1c1331;
+
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "Cascadia Code", monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
+
+::selection {
+  background: color-mix(in srgb, var(--color-up) 35%, transparent);
+}
+
+@layer components {
+  .card {
+    @apply bg-card border border-line rounded-xl p-4 transition-colors;
+  }
+  .card-hover {
+    @apply hover:border-line-2;
+  }
+  .btn, .btn-accent, .btn-sky, .btn-danger, .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg
+           border bg-transparent cursor-pointer select-none transition-colors
+           disabled:opacity-40 disabled:cursor-default;
+  }
+  .btn {
+    @apply border-line-2 text-ink-2 hover:bg-raised hover:text-ink disabled:hover:bg-transparent;
+  }
+  .btn-accent {
+    @apply border-up/60 text-up-2 hover:bg-up-dim;
+  }
+  .btn-sky {
+    @apply border-sky/60 text-sky-2 hover:bg-sky-dim;
+  }
+  .btn-danger {
+    @apply border-down/60 text-down-2 hover:bg-down-dim;
+  }
+  .btn-ghost {
+    @apply border-transparent text-ink-2 hover:bg-raised hover:text-ink;
+  }
+  .label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 bg-inset border border-line rounded-md px-2 py-1;
+  }
+  .input {
+    @apply bg-inset text-ink text-sm rounded-lg border border-line-2 px-3 py-1.5 outline-none
+           placeholder:text-ink-3 focus:border-up/50 transition-colors w-full;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Subtle scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-2) transparent;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.45; }
+}
+.skeleton {
+  animation: shimmer 1.4s ease-in-out infinite;
+  background: var(--color-raised);
+  border-radius: 6px;
+}
+
+/* Toast + modal motion */
+@keyframes slide-up {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-slide-up { animation: slide-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.animate-fade-in { animation: fade-in 0.18s ease-out; }

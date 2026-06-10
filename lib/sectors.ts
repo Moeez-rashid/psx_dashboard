@@ -1,0 +1,47 @@
+/** PSX sector code → readable name (client-safe, no server deps).
+ *  Verified against live dps.psx.com.pk market-watch constituents. */
+export const SECTOR_CODE_TO_NAME: Record<string, string> = {
+  "0801": "Automobile Assembler",
+  "0802": "Auto Parts & Accessories",
+  "0803": "Cable & Electrical Goods",
+  "0804": "Cement",
+  "0805": "Chemicals",
+  "0806": "Close-End Mutual Funds",
+  "0807": "Commercial Banks",
+  "0808": "Engineering",
+  "0809": "Fertilizer",
+  "0810": "Food & Personal Care",
+  "0811": "Glass & Ceramics",
+  "0812": "Insurance",
+  "0813": "Inv. Banks / Securities",
+  "0814": "Jute",
+  "0815": "Leasing",
+  "0816": "Leather & Tanneries",
+  "0817": "Miscellaneous",
+  "0818": "Miscellaneous",
+  "0819": "Modaraba",
+  "0820": "Oil & Gas Exploration",
+  "0821": "Oil & Gas Marketing",
+  "0822": "Paper & Packaging",
+  "0823": "Pharmaceuticals",
+  "0824": "Power Generation",
+  "0825": "Refinery",
+  "0826": "Sugar & Allied",
+  "0827": "Synthetic & Rayon",
+  "0828": "Technology & Comms",
+  "0829": "Textile Composite",
+  "0830": "Textile Spinning",
+  "0831": "Textile Weaving",
+  "0832": "Tobacco",
+  "0833": "Transport",
+  "0834": "Vanaspati & Allied",
+  "0835": "Woollen",
+  "0836": "REIT",
+  "0837": "Exchange Traded Funds",
+  "0838": "Real Estate / Property",
+  "0839": "Apparel",
+};
+
+export function resolveSectorName(raw: string): string {
+  return SECTOR_CODE_TO_NAME[raw?.trim()] ?? raw;
+}
