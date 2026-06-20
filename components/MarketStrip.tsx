@@ -30,8 +30,9 @@ function MoverRow({ m, onAdd, added }: { m: Mover; onAdd: (t: string) => void; a
       >
         {added ? "✓" : "+"}
       </button>
-      <span className="text-xs font-semibold text-ink w-14 truncate">{m.symbol}</span>
+      <span className="text-xs font-semibold text-ink truncate">{m.symbol}</span>
       <span className="text-[10px] text-ink-3 truncate flex-1 hidden lg:block">{resolveSectorName(m.sector)}</span>
+      <span className="flex-1 lg:hidden" />
       <span className="text-[11px] text-ink-2 num">{m.price.toFixed(2)}</span>
       <span className={`text-[11px] num w-14 text-right ${m.changePercent >= 0 ? "text-up-2" : "text-down-2"}`}>
         {m.changePercent >= 0 ? "+" : ""}{m.changePercent.toFixed(2)}%
@@ -40,6 +41,22 @@ function MoverRow({ m, onAdd, added }: { m: Mover; onAdd: (t: string) => void; a
   );
 }
 
+function MoverList({ movers, onAdd, watching }: {
+  movers: Mover[] | undefined;
+  onAdd: (t: string) => void;
+  watching: Set<string>;
+}) {
+  if (!movers) return <>{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-5 my-1" />)}</>;
+  return <>{movers.slice(0, 5).map(m => <MoverRow key={m.symbol} m={m} onAdd={onAdd} added={watching.has(m.symbol)} />)}</>;
+}
+
+const PANELS = [
+  { id: "gainers", label: "Gainers", title: "Top gainers" },
+  { id: "losers", label: "Losers", title: "Top losers" },
+  { id: "active", label: "Active", title: "Most active" },
+] as const;
+type PanelId = typeof PANELS[number]["id"];
+
 /** Live market overview — works with zero setup, no AI key required. */
 export default function MarketStrip({ onAddWatch, watchingTickers }: {
   onAddWatch: (ticker: string) => void;
@@ -47,6 +64,7 @@ export default function MarketStrip({ onAddWatch, watchingTickers }: {
 }) {
   const [data, setData] = useState<MarketData | null>(null);
   const [failed, setFailed] = useState(false);
+  const [panel, setPanel] = useState<PanelId>("gainers");
 
   useEffect(() => {
     let alive = true;
@@ -63,12 +81,14 @@ export default function MarketStrip({ onAddWatch, watchingTickers }: {
 
   const b = data?.breadth;
   const advPct = b && b.total > 0 ? (b.advancing / b.total) * 100 : 50;
+  const listFor = (id: PanelId) =>
+    id === "gainers" ? data?.gainers : id === "losers" ? data?.losers : data?.mostActive;
 
   return (
-    <section className="mb-5">
+    <section className="mb-4 sm:mb-5">
       {/* Breadth bar */}
-      <div className="flex items-center gap-3 mb-3">
-        <span className="label">Market breadth</span>
+      <div className="flex items-center gap-3 mb-2.5 sm:mb-3">
+        <span className="label">Breadth</span>
         {b ? (
           <>
             <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-line-2 flex">
@@ -83,23 +103,33 @@ export default function MarketStrip({ onAddWatch, watchingTickers }: {
         )}
       </div>
 
-      {/* Movers */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {([
-          ["Top gainers", data?.gainers],
-          ["Top losers", data?.losers],
-          ["Most active", data?.mostActive],
-        ] as const).map(([title, movers]) => (
-          <div key={title} className="card py-3">
-            <div className="label mb-1.5">{title}</div>
-            {movers
-              ? movers.slice(0, 5).map(m => (
-                  <MoverRow key={m.symbol} m={m} onAdd={onAddWatch} added={watchingTickers.has(m.symbol)} />
-                ))
-              : [...Array(5)].map((_, i) => <Skeleton key={i} className="h-5 my-1" />)}
-            {title === "Most active" && movers && movers[0] && (
+      {/* Mobile: one compact card with segmented switcher */}
+      <div className="sm:hidden card py-2.5 px-3">
+        <div className="flex gap-1 mb-1.5 bg-inset rounded-lg p-0.5">
+          {PANELS.map(p => (
+            <button
+              key={p.id}
+              onClick={() => setPanel(p.id)}
+              className={`flex-1 text-[10px] font-semibold py-1.5 rounded-md transition-colors cursor-pointer
+                ${panel === p.id ? "bg-raised text-ink" : "text-ink-3"}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <MoverList movers={listFor(panel)} onAdd={onAddWatch} watching={watchingTickers} />
+        <div className="text-[9px] text-ink-3 mt-1">tap ＋ to watchlist</div>
+      </div>
+
+      {/* Desktop: three columns */}
+      <div className="hidden sm:grid grid-cols-3 gap-3">
+        {PANELS.map(p => (
+          <div key={p.id} className="card py-3">
+            <div className="label mb-1.5">{p.title}</div>
+            <MoverList movers={listFor(p.id)} onAdd={onAddWatch} watching={watchingTickers} />
+            {p.id === "active" && data?.mostActive?.[0] && (
               <div className="text-[9px] text-ink-3 mt-1.5">
-                Top turnover {fmtVol(movers[0].volume)} shares · tap ＋ to watchlist
+                Top turnover {fmtVol(data.mostActive[0].volume)} shares · tap ＋ to watchlist
               </div>
             )}
           </div>

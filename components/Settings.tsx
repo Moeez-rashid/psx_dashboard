@@ -50,7 +50,7 @@ export function loadSettings(): UserSettings {
   return defaultSettings();
 }
 
-function defaultSettings(): UserSettings {
+export function defaultSettings(): UserSettings {
   return { provider: "groq", apiKey: "", model: DEFAULT_MODELS.groq, scanTime: "09:00" };
 }
 

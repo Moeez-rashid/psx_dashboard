@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import Settings, { loadSettings, type UserSettings } from "./Settings";
+import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
 import type { StockQuote } from "@/lib/psx";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
@@ -76,15 +76,13 @@ function SectorImpact({ sec }: { sec: NewsAnalysis["affectedSectors"][0] }) {
 
 // ─── Main Dashboard ─────────────────────────────────────────────────────────
 export default function Dashboard() {
-  // Persistence
-  const [holdings, setHoldings] = useState<Holding[]>(() => {
-    try { return JSON.parse(localStorage.getItem("psx_holdings") ?? "null") ?? DEFAULT_HOLDINGS; } catch { return DEFAULT_HOLDINGS; }
-  });
-  const [watching, setWatching] = useState<WatchItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem("psx_watch") ?? "null") ?? []; } catch { return []; }
-  });
-  useEffect(() => { localStorage.setItem("psx_holdings", JSON.stringify(holdings)); }, [holdings]);
-  useEffect(() => { localStorage.setItem("psx_watch", JSON.stringify(watching)); }, [watching]);
+  // Persistence — state starts empty and loads from localStorage after mount,
+  // so the server-rendered HTML always matches the first client render (no hydration mismatch).
+  const [holdings, setHoldings] = useState<Holding[]>(DEFAULT_HOLDINGS);
+  const [watching, setWatching] = useState<WatchItem[]>([]);
+  const storageLoadedRef = useRef(false);
+  useEffect(() => { if (storageLoadedRef.current) localStorage.setItem("psx_holdings", JSON.stringify(holdings)); }, [holdings]);
+  useEffect(() => { if (storageLoadedRef.current) localStorage.setItem("psx_watch", JSON.stringify(watching)); }, [watching]);
 
   // Prices
   const [prices, setPrices] = useState<Record<string, StockQuote>>({});
@@ -129,8 +127,8 @@ export default function Dashboard() {
   const [sortOpps, setSortOpps] = useState<"confidence" | "name">("confidence");
   const [sortWatch, setSortWatch] = useState<"confidence" | "name">("confidence");
 
-  // Settings + modals
-  const [settings, setSettings] = useState<UserSettings>(() => loadSettings());
+  // Settings + modals — also loaded post-mount (see persistence note above)
+  const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showMetricsGuide, setShowMetricsGuide] = useState(false);
   const [signalDetail, setSignalDetail] = useState<SignalDetail | null>(null);
@@ -440,12 +438,16 @@ export default function Dashboard() {
     fetchAskAnalystBatch(scanResult.signals.map(s => s.ticker));
   }, [scanResult?.timestamp]); // eslint-disable-line
 
-  // First mount: fundamentals for all saved tickers
+  // First mount: restore saved holdings/watchlist/settings, then prime fundamentals
   useEffect(() => {
-    const all = [...new Set([
-      ...watching.map(w => w.ticker),
-      ...holdings.map(h => h.ticker),
-    ])];
+    let h: Holding[] = [], w: WatchItem[] = [];
+    try { h = JSON.parse(localStorage.getItem("psx_holdings") ?? "null") ?? DEFAULT_HOLDINGS; } catch {}
+    try { w = JSON.parse(localStorage.getItem("psx_watch") ?? "null") ?? []; } catch {}
+    if (h.length) setHoldings(h);
+    if (w.length) setWatching(w);
+    setSettings(loadSettings());
+    storageLoadedRef.current = true;
+    const all = [...new Set([...w.map(x => x.ticker), ...h.map(x => x.ticker)])];
     if (all.length > 0) fetchAskAnalystBatch(all);
   }, []); // eslint-disable-line — intentional one-time load
 
@@ -759,11 +761,13 @@ export default function Dashboard() {
             {/* Scanner controls */}
             <div className="flex gap-2 mb-4 flex-wrap items-center">
               <button onClick={runFullScan} disabled={scanning} className="btn-accent font-semibold px-4 py-2">
-                {scanning ? "⟳ Scanning…" : "↗ Full Scan · KMI-30 + News"}
+                {scanning ? "⟳ Scanning…" : scanResult ? "↻ Re-run Full Scan" : "↗ Full Scan · KMI-30 + News"}
               </button>
-              <button onClick={runNewsRefresh} disabled={scanning} className="btn py-2">
-                Refresh news only
-              </button>
+              {scanResult?.newsAnalysis && (
+                <button onClick={runNewsRefresh} disabled={scanning} className="btn py-2" title="Re-analyse today's news without re-scoring every stock">
+                  Refresh news only
+                </button>
+              )}
               {scanResult && (
                 <span className="text-[10px] text-ink-3">
                   Last scan {new Date(scanResult.timestamp).toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" })} PKT
