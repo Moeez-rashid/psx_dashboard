@@ -19,9 +19,9 @@ const PROVIDER_LABELS = {
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
   groq: [
-    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (recommended · free)" },
-    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B (faster · free)" },
-    { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B (free)" },
+    { value: "openai/gpt-oss-120b", label: "GPT-OSS 120B (recommended · free)" },
+    { value: "openai/gpt-oss-20b", label: "GPT-OSS 20B (faster · free)" },
+    { value: "qwen/qwen3.6-27b", label: "Qwen3 27B (free)" },
   ],
   claude: [
     { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (recommended)" },

@@ -1,6 +1,6 @@
 /**
  * Groq provider — OpenAI-compatible API, completely free tier.
- * Models: Llama 3.3 70B, Llama 3.1 8B, Mixtral 8x7B
+ * Models: GPT-OSS 120B, GPT-OSS 20B, Qwen3 27B (Llama 3.x retired by Groq 2026-06-17)
  * Free limits: 14,400 requests/day, 30 req/min — more than enough.
  * Get a key at: https://console.groq.com/keys
  */
@@ -38,7 +38,7 @@ export async function getNewsAnalysis(
   const client = new OpenAI({ apiKey: config.apiKey, baseURL: GROQ_BASE });
 
   const resp = await client.chat.completions.create({
-    model: config.model ?? "llama-3.3-70b-versatile",
+    model: config.model ?? "openai/gpt-oss-120b",
     max_tokens: 1500,
     response_format: { type: "json_object" },
     messages: [
@@ -86,7 +86,7 @@ export async function getStockSignals(
   const client = new OpenAI({ apiKey: config.apiKey, baseURL: GROQ_BASE });
 
   const resp = await client.chat.completions.create({
-    model: config.model ?? "llama-3.3-70b-versatile",
+    model: config.model ?? "openai/gpt-oss-120b",
     max_tokens: 2000,
     response_format: { type: "json_object" },
     messages: [
