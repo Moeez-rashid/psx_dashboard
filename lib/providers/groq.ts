@@ -69,13 +69,18 @@ Rules: max 5 sectors, impact must be POSITIVE/NEGATIVE/NEUTRAL, sectorCode from:
   });
 
   const text = resp.choices[0]?.message?.content ?? "";
-  return (
-    extractJSON<NewsAnalysis>(text) ?? {
-      summary: "Unable to analyze news via Groq.",
-      affectedSectors: [],
-      globalFactors: [],
-    }
-  );
+  const parsed = extractJSON<NewsAnalysis>(text);
+  // Normalize: gpt-oss can return valid JSON that omits array fields. A plain
+  // `?? default` only catches a fully failed parse, not a partial object — so
+  // guarantee the arrays here, or buildNewsContext's .map() crashes the scan.
+  const sectors = parsed?.affectedSectors;
+  const factors = parsed?.globalFactors;
+  return {
+    summary: parsed?.summary ?? "Unable to analyze news via Groq.",
+    detailedNarrative: parsed?.detailedNarrative,
+    affectedSectors: Array.isArray(sectors) ? sectors : [],
+    globalFactors: Array.isArray(factors) ? factors : [],
+  };
 }
 
 export async function getStockSignals(

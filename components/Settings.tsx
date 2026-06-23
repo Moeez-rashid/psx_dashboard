@@ -11,7 +11,7 @@ export interface UserSettings {
 }
 
 const PROVIDER_LABELS = {
-  groq:   { name: "Groq · Free (Llama 3.3)", placeholder: "gsk_...", keyUrl: "https://console.groq.com/keys" },
+  groq:   { name: "Groq · Free (GPT-OSS)", placeholder: "gsk_...", keyUrl: "https://console.groq.com/keys" },
   gemini: { name: "Gemini (Google)", placeholder: "AIza...", keyUrl: "https://aistudio.google.com/apikey" },
   claude: { name: "Claude (Anthropic)", placeholder: "sk-ant-api03-...", keyUrl: "https://console.anthropic.com/settings/keys" },
   openai: { name: "ChatGPT (OpenAI)", placeholder: "sk-proj-...", keyUrl: "https://platform.openai.com/api-keys" },

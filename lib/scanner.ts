@@ -228,10 +228,10 @@ function buildStockContext(
 
 /** Build news context string for Pass 2. */
 function buildNewsContext(news: NewsAnalysis): string {
-  const sectors = news.affectedSectors
+  const sectors = (news.affectedSectors ?? [])
     .map((s) => `  • ${s.sectorName} [${s.impact}]: ${s.reason}`)
     .join("\n");
-  const factors = news.globalFactors.map((f) => `  • ${f}`).join("\n");
+  const factors = (news.globalFactors ?? []).map((f) => `  • ${f}`).join("\n");
   return [
     `Summary: ${news.summary}`,
     `\nAffected sectors:\n${sectors || "  • None identified"}`,
