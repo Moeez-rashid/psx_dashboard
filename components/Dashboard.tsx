@@ -6,14 +6,14 @@ import type { StockQuote } from "@/lib/psx";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { isPKTOpen, pktNow } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
-import { Pill, ConfBar, PriceTag, Sparkline, Modal, ModalHeader, ErrorBanner, ConfirmDelete, Skeleton } from "./ui/primitives";
+import { Modal, ModalHeader, ErrorBanner, ConfirmDelete, Skeleton } from "./ui/primitives";
 import { toast, Toaster } from "./ui/Toast";
 import TickerInput from "./ui/TickerInput";
 import MarketStrip from "./MarketStrip";
 import MetricsGuide from "./MetricsGuide";
-import SignalDetailModal, { type SignalDetail } from "./SignalDetailModal";
+import { StockRow, StockDetailBody, MiniBar, type SignalDetail } from "./StockRow";
 import HoldingsOverview, { type Holding } from "./HoldingsOverview";
-import { TechChips, CatalystsRisks, FundamentalsRow, FundamentalsState, techCatalysts, techRisks, volLabel, type StockTech } from "./StockBits";
+import { techCatalysts, techRisks, volLabel, type StockTech } from "./StockBits";
 
 // ─── Local types ────────────────────────────────────────────────────────────
 interface WatchItem { ticker: string; name: string; }
@@ -131,17 +131,21 @@ export default function Dashboard() {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showMetricsGuide, setShowMetricsGuide] = useState(false);
-  const [signalDetail, setSignalDetail] = useState<SignalDetail | null>(null);
-
-  // Mobile fundamentals toggles
-  const [showFunds, setShowFunds] = useState<Set<string>>(new Set());
-  const toggleFunds = (ticker: string) => {
-    setShowFunds(prev => {
+  // Inline row expansion — keys are prefixed per tab ("opp:MEBL", "hold:MEBL", "watch:MEBL")
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleRow = (key: string, ticker: string) => {
+    setExpanded(prev => {
       const n = new Set(prev);
-      if (n.has(ticker)) n.delete(ticker); else n.add(ticker);
+      if (n.has(key)) n.delete(key); else n.add(key);
       return n;
     });
     if (askAnalystData[ticker] === undefined) fetchAskAnalystBatch([ticker]);
+  };
+
+  // Resolve a display sector for a ticker (for the collapsed row subtitle).
+  const sectorOf = (ticker: string): string | undefined => {
+    const raw = prices[ticker]?.sector ?? askAnalystData[ticker]?.sector ?? "";
+    return raw ? resolveSectorName(raw) : undefined;
   };
 
   // UI state
@@ -603,12 +607,14 @@ export default function Dashboard() {
         const fund = askAnalystData[ticker];
         if (fund) {
           const fp: string[] = [];
-          if (fund.pe !== null) fp.push(`PE ${fund.pe.toFixed(1)}x`);
+          const lp = live?.currentPrice;
+          const pe = fund.pe ?? (fund.eps && fund.eps > 0 && lp ? lp / fund.eps : null);
+          if (pe !== null && pe > 0) fp.push(`PE ${pe.toFixed(1)}x`);
           if (fund.pbv !== null) fp.push(`PBV ${fund.pbv.toFixed(1)}x`);
+          if (fund.roe !== null) fp.push(`ROE ${fund.roe.toFixed(0)}%`);
+          if (fund.debtToEquity !== null) fp.push(`D/E ${fund.debtToEquity.toFixed(2)}`);
           if (fund.dividendYield !== null && fund.dividendYield > 0) fp.push(`Div ${fund.dividendYield.toFixed(1)}%`);
-          if (fund.totalReturn1Y !== null) fp.push(`1Y ${fund.totalReturn1Y >= 0 ? "+" : ""}${fund.totalReturn1Y.toFixed(1)}%`);
-          if (fund.marketCap !== null) fp.push(`MCap ${fund.marketCap >= 1000 ? `${(fund.marketCap / 1000).toFixed(0)}B` : `${Math.round(fund.marketCap)}M`}`);
-          if (fp.length) lines.push(`   Fundamentals: ${fp.join(" | ")}`);
+          if (fp.length) lines.push(`   Fundamentals${fund.fiscalYear ? ` (FY${fund.fiscalYear})` : ""}: ${fp.join(" | ")}`);
         }
       });
     }
@@ -896,79 +902,40 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Signal cards */}
-            <div className="space-y-3">
-              {scanResult && sortedOpps(scanResult.signals).map((sig, i) => {
+            {/* Signal rows — collapsed by default, expand inline */}
+            <div className="space-y-2">
+              {scanResult && sortedOpps(scanResult.signals).map((sig) => {
                 const sigTech = scanResult.technicalData?.find(t => t.symbol === sig.ticker);
                 const liveQuote = prices[sig.ticker];
                 const displayPrice = liveQuote?.currentPrice ?? sigTech?.currentPrice;
                 const displayChange = liveQuote?.changePercent;
+                const key = `opp:${sig.ticker}`;
                 const detail: SignalDetail = {
                   ticker: sig.ticker, signal: sig.signal, confidence: sig.confidence, reason: sig.reason,
                   newsHeadline: sig.newsHeadline, catalysts: sig.catalysts, risks: sig.risks,
-                  suggestedEntry: sig.suggestedEntry, tech: sigTech, fundamentals: askAnalystData[sig.ticker] ?? undefined,
+                  suggestedEntry: sig.suggestedEntry, tech: sigTech, fundamentals: askAnalystData[sig.ticker],
                   currentPrice: displayPrice, changePercent: displayChange, spark: sparks[sig.ticker],
                 };
                 return (
-                  <article key={sig.ticker} className="card card-hover">
-                    <div className="flex items-start justify-between gap-3 mb-1">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="text-[10px] text-ink-3 num">#{i + 1}</span>
-                          <button onClick={() => setSignalDetail(detail)} className="text-[15px] font-bold tracking-tight cursor-pointer hover:text-up-2 transition-colors">
-                            {sig.ticker}
-                          </button>
-                          <Pill signal={sig.signal} onClick={() => setSignalDetail(detail)} />
-                        </div>
-                        <div className="text-[11px] text-ink-2 leading-snug">{sig.reason}</div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="flex items-center gap-2.5">
-                          <Sparkline data={sparks[sig.ticker]} />
-                          <PriceTag price={displayPrice} changePercent={displayChange} />
-                        </div>
-                        {sig.suggestedEntry && (
-                          <span className="text-[10px] text-gold-2 bg-gold-dim px-2 py-0.5 rounded-md whitespace-nowrap">
-                            Entry: {sig.suggestedEntry}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {sig.newsHeadline && sig.newsHeadline !== "No recent news" && (
-                      <div className="text-[11px] text-ink-3 italic mb-1.5">📰 {sig.newsHeadline}</div>
-                    )}
-
-                    <ConfBar pct={sig.confidence} signal={sig.signal} />
-                    <CatalystsRisks catalysts={sig.catalysts ?? []} risks={sig.risks ?? []} />
-
-                    {sigTech && (
-                      <div className="mt-3 pt-3 border-t border-line">
-                        <TechChips tech={sigTech} liveVolume={prices[sig.ticker]?.volume} />
-                      </div>
-                    )}
-
-                    {/* Fundamentals: toggle on mobile, inline on desktop */}
-                    <div className="sm:hidden mt-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <button onClick={() => toggleFunds(sig.ticker)} className="btn text-[10px] px-2.5 py-1">
-                          {showFunds.has(sig.ticker) ? "▲ Hide" : "▼ Fundamentals"}
-                        </button>
-                        {watchingSet.has(sig.ticker)
-                          ? <span className="text-[10px] text-up-2">✓ Watchlisted</span>
-                          : <button onClick={() => quickAddWatch(sig.ticker)} className="btn-sky text-[10px] px-2.5 py-1">+ Watchlist</button>}
-                      </div>
-                      {showFunds.has(sig.ticker) && <FundamentalsState data={askAnalystData[sig.ticker]} />}
-                    </div>
-                    <div className="hidden sm:block">
-                      <FundamentalsRow f={askAnalystData[sig.ticker] ?? undefined} />
-                      <div className="mt-2.5 flex justify-end">
-                        {watchingSet.has(sig.ticker)
-                          ? <span className="text-[10px] text-up-2">✓ In Watchlist</span>
-                          : <button onClick={() => quickAddWatch(sig.ticker)} className="btn-sky text-[10px] px-2.5 py-1">+ Add to Watchlist</button>}
-                      </div>
-                    </div>
-                  </article>
+                  <StockRow
+                    key={sig.ticker}
+                    signal={sig.signal}
+                    ticker={sig.ticker}
+                    subtitle={sectorOf(sig.ticker)}
+                    meta={<MiniBar pct={sig.confidence} signal={sig.signal} label="AI confidence" />}
+                    spark={sparks[sig.ticker]}
+                    price={displayPrice}
+                    change={displayChange}
+                    open={expanded.has(key)}
+                    onToggle={() => toggleRow(key, sig.ticker)}
+                    actions={
+                      watchingSet.has(sig.ticker)
+                        ? <span className="text-gold-2 text-[15px] leading-none" title="On watchlist">★</span>
+                        : <button onClick={() => quickAddWatch(sig.ticker)} className="text-ink-3 hover:text-gold-2 text-[15px] leading-none cursor-pointer" title="Add to watchlist" aria-label="Add to watchlist">☆</button>
+                    }
+                  >
+                    <StockDetailBody detail={detail} />
+                  </StockRow>
                 );
               })}
             </div>
@@ -996,7 +963,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {holdings.map(h => {
                 const p = prices[h.ticker];
                 const livePrice = p?.currentPrice;
@@ -1006,52 +973,57 @@ export default function Dashboard() {
                 const pnlPct = pnl ? (pnl / cost) * 100 : null;
                 const tech = holdingTech[h.ticker];
                 const isEditing = editingHolding?.ticker === h.ticker;
+                const key = `hold:${h.ticker}`;
+                const s = getHoldingSuggestion(h.ticker, pnlPct);
+                const aiSig = scanResult?.signals.find(sig => sig.ticker === h.ticker);
+                const detail: SignalDetail = {
+                  ticker: h.ticker,
+                  signal: s?.signal ?? tech?.technicalSignal,
+                  confidence: aiSig?.confidence ?? tech?.compositeScore,
+                  reason: s ? `${s.text}${s.source ? `  ·  via ${s.source}` : ""}` : undefined,
+                  newsHeadline: aiSig?.newsHeadline,
+                  catalysts: aiSig?.catalysts?.length ? aiSig.catalysts : (tech ? techCatalysts(tech) : []),
+                  risks: aiSig?.risks?.length ? aiSig.risks : (tech ? techRisks(tech) : []),
+                  suggestedEntry: aiSig?.suggestedEntry, tech,
+                  fundamentals: askAnalystData[h.ticker],
+                  currentPrice: livePrice ?? undefined, changePercent: p?.changePercent, spark: sparks[h.ticker],
+                };
                 return (
-                  <article key={h.ticker} className="card card-hover">
-                    <div className="flex items-start justify-between gap-3 mb-2.5">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[15px] font-bold tracking-tight">{h.ticker}</span>
-                          {h.shariah && <span className="text-[9px] text-up-2 bg-up-dim border border-up/40 px-1.5 py-px rounded-md">Shariah ✓</span>}
-                          {tech && (
-                            <Pill
-                              signal={tech.technicalSignal}
-                              small
-                              onClick={() => setSignalDetail({
-                                ticker: h.ticker, signal: tech.technicalSignal, confidence: tech.compositeScore,
-                                reason: tech.reasons[0], catalysts: techCatalysts(tech), risks: techRisks(tech),
-                                tech, fundamentals: askAnalystData[h.ticker] ?? undefined,
-                                currentPrice: livePrice ?? undefined, changePercent: p?.changePercent ?? undefined,
-                                spark: sparks[h.ticker],
-                              })}
-                            />
-                          )}
-                        </div>
-                        <div className="text-[11px] text-ink-3">{h.name}</div>
-                      </div>
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <Sparkline data={sparks[h.ticker]} />
-                        <PriceTag price={livePrice} changePercent={p?.changePercent} />
-                        {!isEditing && pendingDeleteHolding !== h.ticker && (
-                          <button
-                            onClick={() => setEditingHolding({ ticker: h.ticker, shares: String(h.shares), avg: String(h.avgPrice) })}
-                            className="btn-ghost px-1.5 py-0.5 text-ink-3 hover:text-ink text-xs"
-                            title="Edit shares / avg price"
-                          >✎</button>
-                        )}
-                        {!isEditing && (
-                          <ConfirmDelete
-                            pending={pendingDeleteHolding === h.ticker}
-                            onArm={() => setPendingDeleteHolding(h.ticker)}
-                            onConfirm={() => { setHoldings(prev => prev.filter(x => x.ticker !== h.ticker)); setPendingDeleteHolding(null); toast(`${h.ticker} removed`); }}
-                            onCancel={() => setPendingDeleteHolding(null)}
-                          />
-                        )}
-                      </div>
-                    </div>
-
+                  <StockRow
+                    key={h.ticker}
+                    signal={tech?.technicalSignal}
+                    ticker={
+                      <span className="inline-flex items-center gap-1.5">
+                        {h.ticker}
+                        {h.shariah && <span className="text-[8px] font-medium text-up-2 bg-up-dim border border-up/40 px-1 py-px rounded">Shariah</span>}
+                      </span>
+                    }
+                    subtitle={sectorOf(h.ticker) ?? (h.name.includes(" · ") ? h.name.split(" · ").slice(1).join(" · ") : undefined)}
+                    meta={pnlPct !== null
+                      ? <span className={`text-[12px] font-medium num ${pnlPct >= 0 ? "text-up-2" : "text-down-2"}`}>{pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}% <span className="text-ink-3 font-normal">P&L</span></span>
+                      : <span className="text-[10px] text-ink-3">—</span>}
+                    spark={sparks[h.ticker]}
+                    price={livePrice}
+                    change={p?.changePercent}
+                    open={expanded.has(key)}
+                    onToggle={() => toggleRow(key, h.ticker)}
+                    actions={
+                      <>
+                        <button
+                          onClick={() => { setEditingHolding({ ticker: h.ticker, shares: String(h.shares), avg: String(h.avgPrice) }); setExpanded(prev => new Set(prev).add(key)); }}
+                          className="text-ink-3 hover:text-ink text-xs cursor-pointer" title="Edit shares / avg price" aria-label="Edit holding"
+                        >✎</button>
+                        <ConfirmDelete
+                          pending={pendingDeleteHolding === h.ticker}
+                          onArm={() => setPendingDeleteHolding(h.ticker)}
+                          onConfirm={() => { setHoldings(prev => prev.filter(x => x.ticker !== h.ticker)); setPendingDeleteHolding(null); toast(`${h.ticker} removed`); }}
+                          onCancel={() => setPendingDeleteHolding(null)}
+                        />
+                      </>
+                    }
+                  >
                     {isEditing ? (
-                      <div className="bg-inset rounded-lg p-3 mb-1">
+                      <div className="bg-inset rounded-lg p-3 mt-3">
                         <div className="text-[10px] text-ink-3 mb-2">Edit {h.ticker}</div>
                         <div className="flex gap-2.5 items-end flex-wrap">
                           <div className="flex flex-col gap-1">
@@ -1087,7 +1059,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                      <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-3">
                         {([
                           ["Shares", h.shares.toLocaleString(), "text-ink"],
                           ["Avg cost", `PKR ${h.avgPrice.toFixed(2)}`, "text-ink"],
@@ -1104,62 +1076,8 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    {tech && (
-                      <div className="mt-3 pt-3 border-t border-line">
-                        <TechChips tech={tech} liveVolume={prices[h.ticker]?.volume} />
-                        {tech.reasons?.[0] && (
-                          <div className="hidden sm:block text-[10px] text-ink-2 mt-1.5">▲ {tech.reasons[0]}</div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Fundamentals */}
-                    <div className="sm:hidden mt-2">
-                      <button onClick={() => toggleFunds(h.ticker)} className="btn text-[10px] px-2.5 py-1">
-                        {showFunds.has(h.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
-                      </button>
-                      {showFunds.has(h.ticker) && <FundamentalsState data={askAnalystData[h.ticker]} />}
-                    </div>
-                    <div className="hidden sm:block">
-                      <FundamentalsRow f={askAnalystData[h.ticker] ?? undefined} />
-                    </div>
-
-                    {/* AI suggestion banner — desktop */}
-                    {(() => {
-                      const s = getHoldingSuggestion(h.ticker, pnlPct);
-                      if (!s) return (
-                        <div className="hidden sm:block mt-2.5 text-[10px] text-ink-3 italic">
-                          Run a full scan or load signals to get AI advice for this holding.
-                        </div>
-                      );
-                      const toneMap: Record<string, string> = {
-                        BUY: "bg-up-dim text-up-2", STRONG_BUY: "bg-up-dim text-up-2",
-                        SELL: "bg-down-dim text-down-2", AVOID: "bg-down-dim text-down-2",
-                        HOLD: "bg-gold-dim text-gold-2",
-                      };
-                      const tone = toneMap[s.signal] ?? "bg-sky-dim text-sky-2";
-                      const aiSig = scanResult?.signals.find(sig => sig.ticker === h.ticker);
-                      return (
-                        <button
-                          onClick={() => setSignalDetail({
-                            ticker: h.ticker, signal: s.signal, confidence: aiSig?.confidence ?? tech?.compositeScore,
-                            reason: s.text, newsHeadline: aiSig?.newsHeadline,
-                            catalysts: aiSig?.catalysts ?? (tech ? techCatalysts(tech) : []),
-                            risks: aiSig?.risks ?? (tech ? techRisks(tech) : []),
-                            suggestedEntry: aiSig?.suggestedEntry, tech: tech ?? undefined,
-                            fundamentals: askAnalystData[h.ticker] ?? undefined,
-                            currentPrice: livePrice ?? undefined, changePercent: p?.changePercent ?? undefined,
-                            spark: sparks[h.ticker],
-                          })}
-                          className={`hidden sm:flex w-full mt-2.5 rounded-lg px-3 py-2 items-center gap-2.5 cursor-pointer hover:brightness-110 transition text-left ${tone}`}
-                        >
-                          <span className="text-[10px] font-bold uppercase tracking-wide whitespace-nowrap">{s.signal.replace("_", " ")}</span>
-                          <span className="text-[11px] flex-1">{s.text}</span>
-                          <span className="text-[9px] text-ink-3 whitespace-nowrap">{s.source} ↗</span>
-                        </button>
-                      );
-                    })()}
-                  </article>
+                    <StockDetailBody detail={detail} />
+                  </StockRow>
                 );
               })}
             </div>
@@ -1250,7 +1168,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {sortedWatch(watching).map(w => {
                 const p = prices[w.ticker];
                 const sig = watchSignals[w.ticker];
@@ -1264,73 +1182,46 @@ export default function Dashboard() {
                 const displayConfPct = activeSig ? activeSig.confidence : tech ? tech.compositeScore : null;
                 const displaySignal = activeSig ? activeSig.signal : tech ? tech.technicalSignal : null;
                 const confLabel = activeSig ? "AI confidence" : "Technical score";
-                const hasContent = displayReason !== null;
+                const key = `watch:${w.ticker}`;
                 const detail: SignalDetail = {
                   ticker: w.ticker, signal: displaySignal ?? undefined, confidence: displayConfPct ?? undefined,
                   reason: displayReason ?? undefined, newsHeadline: activeSig?.newsHeadline,
                   catalysts: displayCats, risks: displayRisks, suggestedEntry: activeSig?.suggestedEntry,
-                  tech, fundamentals: askAnalystData[w.ticker] ?? undefined,
+                  tech, fundamentals: askAnalystData[w.ticker],
                   currentPrice: p?.currentPrice, changePercent: p?.changePercent, spark: sparks[w.ticker],
                 };
 
                 return (
-                  <article key={w.ticker} className="card card-hover">
-                    <div className="flex items-start justify-between gap-3 mb-1.5">
-                      <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <button onClick={() => setSignalDetail(detail)} className="text-[15px] font-bold tracking-tight cursor-pointer hover:text-up-2 transition-colors">
-                          {w.ticker}
-                        </button>
-                        {displaySignal && <Pill signal={displaySignal} onClick={() => setSignalDetail(detail)} />}
-                      </div>
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <Sparkline data={sparks[w.ticker]} />
-                        <PriceTag price={p?.currentPrice} changePercent={p?.changePercent} />
-                        <ConfirmDelete
-                          pending={pendingDeleteWatch === w.ticker}
-                          onArm={() => setPendingDeleteWatch(w.ticker)}
-                          onConfirm={() => { setWatching(prev => prev.filter(x => x.ticker !== w.ticker)); setPendingDeleteWatch(null); toast(`${w.ticker} removed`); }}
-                          onCancel={() => setPendingDeleteWatch(null)}
-                        />
-                      </div>
-                    </div>
-
-                    {hasContent && (
-                      <>
-                        <div className="text-[11px] text-ink-2 leading-snug mb-1">{displayReason}</div>
-                        {activeSig?.newsHeadline && activeSig.newsHeadline !== "No recent news" && (
-                          <div className="text-[11px] text-ink-3 italic mb-1.5">📰 {activeSig.newsHeadline}</div>
-                        )}
-                        {displayConfPct !== null && (
-                          <ConfBar pct={displayConfPct} signal={displaySignal ?? undefined} label={confLabel} />
-                        )}
-                        <CatalystsRisks catalysts={displayCats} risks={displayRisks} />
-                      </>
-                    )}
-
-                    {tech && (
-                      <div className={hasContent ? "mt-3 pt-3 border-t border-line" : ""}>
-                        <TechChips tech={tech} liveVolume={prices[w.ticker]?.volume} />
-                      </div>
-                    )}
-
-                    {/* Fundamentals */}
-                    <div className="sm:hidden mt-2">
-                      <button onClick={() => toggleFunds(w.ticker)} className="btn text-[10px] px-2.5 py-1">
-                        {showFunds.has(w.ticker) ? "▲ Hide Fundamentals" : "▼ Fundamentals"}
-                      </button>
-                      {showFunds.has(w.ticker) && <FundamentalsState data={askAnalystData[w.ticker]} />}
-                    </div>
-                    <div className="hidden sm:block">
-                      <FundamentalsRow f={askAnalystData[w.ticker] ?? undefined} />
-                    </div>
-
+                  <StockRow
+                    key={w.ticker}
+                    signal={displaySignal ?? undefined}
+                    ticker={w.ticker}
+                    subtitle={sectorOf(w.ticker)}
+                    meta={displayConfPct !== null
+                      ? <MiniBar pct={displayConfPct} signal={displaySignal ?? undefined} label={confLabel} />
+                      : <span className="text-[10px] text-ink-3 italic">no signal yet</span>}
+                    spark={sparks[w.ticker]}
+                    price={p?.currentPrice}
+                    change={p?.changePercent}
+                    open={expanded.has(key)}
+                    onToggle={() => toggleRow(key, w.ticker)}
+                    actions={
+                      <ConfirmDelete
+                        pending={pendingDeleteWatch === w.ticker}
+                        onArm={() => setPendingDeleteWatch(w.ticker)}
+                        onConfirm={() => { setWatching(prev => prev.filter(x => x.ticker !== w.ticker)); setPendingDeleteWatch(null); toast(`${w.ticker} removed`); }}
+                        onCancel={() => setPendingDeleteWatch(null)}
+                      />
+                    }
+                  >
+                    <StockDetailBody detail={detail} />
                     {!tech && !activeSig && (
                       <div className="flex items-center gap-2 text-[10px] text-ink-3 mt-1">
                         <Skeleton className="w-3 h-3 rounded-full" />
-                        Loading technicals… use "↻ Refresh" to retry or "✦ AI Analysis" for full signals.
+                        Loading technicals… use “↻ Refresh” to retry or “✦ AI Analysis” for full signals.
                       </div>
                     )}
-                  </article>
+                  </StockRow>
                 );
               })}
             </div>
@@ -1368,7 +1259,6 @@ export default function Dashboard() {
 
       <Settings open={showSettings} onClose={() => setShowSettings(false)} onSave={s => { setSettings(s); setShowSettings(false); }} />
       <MetricsGuide open={showMetricsGuide} onClose={() => setShowMetricsGuide(false)} />
-      {signalDetail && <SignalDetailModal data={signalDetail} onClose={() => setSignalDetail(null)} />}
       <Toaster />
     </div>
   );

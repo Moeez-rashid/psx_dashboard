@@ -86,44 +86,36 @@ export function CatalystsRisks({ catalysts, risks }: { catalysts: string[]; risk
 }
 
 // ─── Fundamentals chips (AskAnalyst data) ───────────────────────────────────
-export function FundamentalsRow({ f }: { f: AskAnalystFundamentals | undefined }) {
-  if (!f) return null;
-
-  const pos52w =
-    f.fiftyTwoWeekHigh !== null && f.fiftyTwoWeekLow !== null && f.fiftyTwoWeekHigh > f.fiftyTwoWeekLow
-      ? Math.round(((f.currentPrice - f.fiftyTwoWeekLow) / (f.fiftyTwoWeekHigh - f.fiftyTwoWeekLow)) * 100)
-      : null;
-
+/** Build the P/E · ROE · D/E · Div · PBV chip set from rationew fundamentals.
+ *  `price` lets us derive a trailing P/E for banks (which don't report PER). */
+export function fundamentalChips(f: AskAnalystFundamentals, price?: number): [string, string, string][] {
+  const pe = f.pe ?? (f.eps && f.eps > 0 && price ? price / f.eps : null);
   const chips: [string, string, string][] = [];
-  if (f.pe !== null)
-    chips.push(["P/E", `${f.pe.toFixed(1)}x`, f.pe < 8 ? "text-up-2" : f.pe > 20 ? "text-gold-2" : "text-ink"]);
-  if (f.pbv !== null) chips.push(["PBV", `${f.pbv.toFixed(1)}x`, "text-ink-2"]);
+  if (pe !== null && pe > 0)
+    chips.push(["P/E", `${pe.toFixed(1)}x`, pe < 8 ? "text-up-2" : pe > 20 ? "text-gold-2" : "text-ink"]);
+  if (f.roe !== null)
+    chips.push(["ROE", `${f.roe.toFixed(0)}%`, f.roe >= 15 ? "text-up-2" : f.roe < 8 ? "text-down-2" : "text-ink"]);
+  if (f.debtToEquity !== null)
+    chips.push(["D/E", f.debtToEquity.toFixed(2), f.debtToEquity <= 0.5 ? "text-up-2" : f.debtToEquity > 1.5 ? "text-down-2" : "text-ink"]);
   if (f.dividendYield !== null && f.dividendYield > 0)
-    chips.push(["Div", `${f.dividendYield.toFixed(1)}%`, "text-up-2"]);
-  if (f.totalReturn1M !== null)
-    chips.push(["1M", `${f.totalReturn1M >= 0 ? "+" : ""}${f.totalReturn1M.toFixed(1)}%`, f.totalReturn1M >= 0 ? "text-up-2" : "text-down-2"]);
-  if (f.totalReturn1Y !== null)
-    chips.push(["1Y", `${f.totalReturn1Y >= 0 ? "+" : ""}${f.totalReturn1Y.toFixed(1)}%`, f.totalReturn1Y >= 0 ? "text-up-2" : "text-down-2"]);
-  if (f.marketCap !== null && f.marketCap > 0)
-    chips.push(["MCap", f.marketCap >= 1_000 ? `${(f.marketCap / 1_000).toFixed(0)}B` : `${Math.round(f.marketCap)}M`, "text-ink-2"]);
+    chips.push(["Div", `${f.dividendYield.toFixed(1)}%`, f.dividendYield >= 5 ? "text-up-2" : "text-ink-2"]);
+  if (f.pbv !== null)
+    chips.push(["PBV", `${f.pbv.toFixed(1)}x`, "text-ink-2"]);
+  return chips;
+}
 
+export function FundamentalsRow({ f, price, bare }: { f: AskAnalystFundamentals | undefined; price?: number; bare?: boolean }) {
+  if (!f) return null;
+  const chips = fundamentalChips(f, price);
+  if (chips.length === 0) return null;
   return (
-    <div className="mt-3 pt-2.5 border-t border-line">
-      <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1.5">Fundamentals</div>
+    <div className={bare ? "" : "mt-3 pt-2.5 border-t border-line"}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[9px] uppercase tracking-wide text-ink-3">Fundamentals</span>
+        {f.fiscalYear && <span className="text-[9px] text-ink-3 num">FY{f.fiscalYear}</span>}
+      </div>
       <div className="flex gap-1.5 flex-wrap items-center">
         {chips.map(([lbl, val, tone]) => <Chip key={lbl} label={lbl} value={val} tone={tone} />)}
-        {pos52w !== null && (
-          <div className="chip">
-            <span className="text-[9px] uppercase tracking-wide text-ink-3">52W</span>
-            <div className="w-10 h-1 bg-line-2 rounded-full relative">
-              <div
-                className={`absolute left-0 top-0 h-1 rounded-full ${pos52w > 70 ? "bg-up" : pos52w < 30 ? "bg-down" : "bg-gold"}`}
-                style={{ width: `${Math.min(100, pos52w)}%` }}
-              />
-            </div>
-            <span className="text-[10px] text-ink-2 num">{pos52w}%</span>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -131,8 +123,11 @@ export function FundamentalsRow({ f }: { f: AskAnalystFundamentals | undefined }
 
 /** Fundamentals with loading / no-data sentinel handling.
  *  `data === undefined` → never fetched (loading), `null` → fetched but unavailable. */
-export function FundamentalsState({ data }: { data: AskAnalystFundamentals | null | undefined }) {
-  if (data === undefined) return <div className="mt-2 text-[10px] text-ink-3">Loading fundamentals…</div>;
-  if (data === null) return <div className="mt-2 text-[10px] text-ink-3">No fundamentals available</div>;
-  return <FundamentalsRow f={data} />;
+export function FundamentalsState({ data, price, bare }: { data: AskAnalystFundamentals | null | undefined; price?: number; bare?: boolean }) {
+  const wrap = bare ? "" : "mt-3 pt-2.5 border-t border-line";
+  if (data === undefined)
+    return <div className={`${wrap} text-[10px] text-ink-3`}>Loading fundamentals…</div>;
+  if (data === null)
+    return <div className={`${wrap} text-[10px] text-ink-3`}>Fundamentals unavailable for this ticker</div>;
+  return <FundamentalsRow f={data} price={price} bare={bare} />;
 }
