@@ -76,7 +76,7 @@ export function PriceTag({ price, changePercent, big }: { price?: number; change
 }
 
 // ─── Sparkline ──────────────────────────────────────────────────────────────
-export function Sparkline({ data, width = 84, height = 30 }: { data?: number[]; width?: number; height?: number }) {
+export function Sparkline({ data, width = 84, height = 30, color }: { data?: number[]; width?: number; height?: number; color?: string }) {
   if (!data || data.length < 5) return null;
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
@@ -88,7 +88,7 @@ export function Sparkline({ data, width = 84, height = 30 }: { data?: number[]; 
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   const up = data[data.length - 1] >= data[0];
-  const stroke = up ? "var(--color-up-2)" : "var(--color-down-2)";
+  const stroke = color ?? (up ? "var(--color-up-2)" : "var(--color-down-2)");
   const fillPts = [`${pad},${height - pad}`, ...pts, `${width - pad},${height - pad}`].join(" ");
   return (
     <svg width={width} height={height} className="shrink-0" aria-hidden>

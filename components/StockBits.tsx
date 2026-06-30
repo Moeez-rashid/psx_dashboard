@@ -112,10 +112,16 @@ export function FundamentalsRow({ f, price, bare }: { f: AskAnalystFundamentals 
     <div className={bare ? "" : "mt-3 pt-2.5 border-t border-line"}>
       <div className="flex items-center gap-2 mb-1.5">
         <span className="text-[9px] uppercase tracking-wide text-ink-3">Fundamentals</span>
-        {f.fiscalYear && <span className="text-[9px] text-ink-3 num">FY{f.fiscalYear}</span>}
+        {f.fiscalYear && <span className="text-[9px] text-violet-2 num bg-violet-dim border border-violet/30 rounded px-1 leading-tight">FY{f.fiscalYear}</span>}
       </div>
+      {/* Distinct (violet) chip styling so fundamentals read apart from the neutral technicals chips */}
       <div className="flex gap-1.5 flex-wrap items-center">
-        {chips.map(([lbl, val, tone]) => <Chip key={lbl} label={lbl} value={val} tone={tone} />)}
+        {chips.map(([lbl, val, tone]) => (
+          <div key={lbl} className="inline-flex items-center gap-1.5 bg-violet-dim border border-violet/25 rounded-md px-2 py-1">
+            <span className="text-[9px] uppercase tracking-wide text-violet-2/80">{lbl}</span>
+            <span className={`text-[11px] font-medium num ${tone}`}>{val}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
