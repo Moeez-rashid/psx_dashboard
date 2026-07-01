@@ -1,7 +1,7 @@
 "use client";
-import type { ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
-import { Sparkline, signalStyle } from "./ui/primitives";
+import { Sparkline } from "./ui/primitives";
 import { TechChips, FundamentalsState, type StockTech } from "./StockBits";
 
 // ─── Detail payload shared by every tab ─────────────────────────────────────
@@ -60,33 +60,29 @@ export function buildTechnicalNarrative(tech?: StockTech): string {
   return t;
 }
 
-/** CSS stroke color for a signal — keeps sparkline/bar/badge in agreement. */
-function signalStroke(signal?: string): string {
+// ─── Single hue per row ─────────────────────────────────────────────────────
+// Every status-signal element (left edge, badge, confidence, sparkline) draws
+// from ONE hue for the row; only treatment varies. P&L%, the entry fragment and
+// the news accent are intentionally outside this system.
+interface Hue { edge: string; text: string; border: string; bar: string; stroke: string }
+const HUE: Record<string, Hue> = {
+  up:   { edge: "var(--color-up)",   text: "text-up-2",   border: "border-up/50",   bar: "bg-up",   stroke: "var(--color-up-2)" },
+  gold: { edge: "var(--color-gold)", text: "text-gold-2", border: "border-gold/50", bar: "bg-gold", stroke: "var(--color-gold-2)" },
+  down: { edge: "var(--color-down)", text: "text-down-2", border: "border-down/50", bar: "bg-down", stroke: "var(--color-down-2)" },
+  sky:  { edge: "var(--color-sky)",  text: "text-sky-2",  border: "border-sky/50",  bar: "bg-sky",  stroke: "var(--color-sky-2)" },
+};
+function hueOf(signal?: string): Hue {
   const s = (signal ?? "").toUpperCase();
-  if (s === "BUY" || s === "STRONG_BUY" || s === "STRONG") return "var(--color-up-2)";
-  if (s === "HOLD") return "var(--color-gold-2)";
-  if (s === "SELL" || s === "AVOID") return "var(--color-down-2)";
-  return "var(--color-sky-2)";
+  if (s === "BUY" || s === "STRONG_BUY" || s === "STRONG") return HUE.up;
+  if (s === "HOLD") return HUE.gold;
+  if (s === "SELL" || s === "AVOID") return HUE.down;
+  return HUE.sky;
 }
 
 const BADGE_SHORT: Record<string, string> = { STRONG_BUY: "STRONG", NEUTRAL: "WATCH" };
 function badgeLabel(signal?: string): string {
   const u = (signal ?? "—").toUpperCase();
   return BADGE_SHORT[u] ?? u.replace("_", " ");
-}
-
-// ─── Tier-1 conviction / P&L bar ────────────────────────────────────────────
-function TierBar({ pct, fillClass, label, labelClass = "text-ink-2" }: {
-  pct: number; fillClass: string; label: string; labelClass?: string;
-}) {
-  return (
-    <div className="flex items-center gap-1.5 w-full min-w-0">
-      <div className="flex-1 h-1 bg-line-2 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${fillClass}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
-      </div>
-      <span className={`text-[10px] num shrink-0 ${labelClass}`}>{label}</span>
-    </div>
-  );
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -97,16 +93,61 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-// ─── Expanded inline detail body (two-column rhythm; replaces the old modal) ─
-export function StockDetailBody({ detail, topBlock, entryStrip, onOpenNews, footer = true }: {
+// ─── Watchlist star with a discrete 2-step confirm on removal ───────────────
+function StarButton({ starred, onToggle }: { starred: boolean; onToggle: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    if (!confirming) return;
+    const close = () => setConfirming(false);
+    // defer so the click that opened the popover doesn't immediately close it
+    const id = setTimeout(() => document.addEventListener("click", close, { once: true }), 0);
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setConfirming(false); };
+    document.addEventListener("keydown", esc);
+    return () => { clearTimeout(id); document.removeEventListener("click", close); document.removeEventListener("keydown", esc); };
+  }, [confirming]);
+
+  // Adding is immediate; only removal asks for confirmation.
+  if (!starred) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        className="text-[15px] leading-none text-ink-3 hover:text-gold-2 cursor-pointer"
+        title="Add to watchlist" aria-label="Add to watchlist"
+      >☆</button>
+    );
+  }
+  return (
+    <div className="relative">
+      <button
+        onClick={(e) => { e.stopPropagation(); setConfirming(v => !v); }}
+        className={`text-[15px] leading-none cursor-pointer transition-colors ${confirming ? "text-down-2" : "text-gold-2 hover:text-down-2"}`}
+        title="Remove from watchlist" aria-label="Remove from watchlist"
+      >★</button>
+      {confirming && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-0 top-7 z-30 w-40 bg-card border border-line-2 rounded-lg shadow-xl shadow-black/50 p-2 animate-fade-in"
+        >
+          <div className="text-[11px] text-ink-2 mb-1.5 leading-snug">Remove from watchlist?</div>
+          <div className="flex gap-1.5">
+            <button onClick={(e) => { e.stopPropagation(); setConfirming(false); onToggle(); }} className="btn-danger text-[10px] px-2 py-0.5 flex-1 font-semibold">Remove</button>
+            <button onClick={(e) => { e.stopPropagation(); setConfirming(false); }} className="btn text-[10px] px-2 py-0.5 flex-1">Keep</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Expanded inline detail body (two-column rhythm; no modal) ──────────────
+export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }: {
   detail: SignalDetail;
-  topBlock?: ReactNode;        // holding position grid, rendered first
-  entryStrip?: ReactNode;      // overrides the signal "suggested entry" strip
+  topBlock?: ReactNode;        // holding position block, rendered first
   onOpenNews?: (ticker: string) => void;
   footer?: boolean;
 }) {
-  const { ticker, signal, reason, newsHeadline, catalysts, risks, suggestedEntry, tech, fundamentals, currentPrice } = detail;
-  const s = signalStyle(signal);
+  const { ticker, signal, reason, newsHeadline, catalysts, risks, tech, fundamentals, currentPrice } = detail;
+  const hue = hueOf(signal);
   const technical = buildTechnicalNarrative(tech);
   const hasNews = !!newsHeadline && newsHeadline !== "No recent news";
   const hasCats = (catalysts?.length ?? 0) > 0;
@@ -117,7 +158,7 @@ export function StockDetailBody({ detail, topBlock, entryStrip, onOpenNews, foot
       {topBlock}
 
       {reason && (
-        <p className={`text-[13px] leading-relaxed border-l-2 pl-3 italic ${s.text} border-current`}>{reason}</p>
+        <p className={`text-[13px] leading-relaxed border-l-2 pl-3 italic ${hue.text} border-current`}>{reason}</p>
       )}
 
       {technical && (
@@ -125,18 +166,6 @@ export function StockDetailBody({ detail, topBlock, entryStrip, onOpenNews, foot
           <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1">Technical setup</div>
           <p className="text-xs text-ink-2 leading-relaxed">{technical}</p>
         </div>
-      )}
-
-      {/* Catalyst strip — the single nav entry point to the (filtered) News page */}
-      {hasNews && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onOpenNews?.(ticker); }}
-          className="w-full flex items-center gap-2 bg-sky-dim border border-sky/30 rounded-lg px-3 py-2 text-left cursor-pointer hover:brightness-110 transition"
-        >
-          <span className="text-sky-2 text-[13px] shrink-0">📰</span>
-          <span className="text-[12px] text-sky-2 leading-snug flex-1 min-w-0">{newsHeadline}</span>
-          <span className="text-[10px] text-ink-3 shrink-0">News ›</span>
-        </button>
       )}
 
       {/* Two-column row: Why it works | Watch out for */}
@@ -170,13 +199,17 @@ export function StockDetailBody({ detail, topBlock, entryStrip, onOpenNews, foot
         </div>
       </div>
 
-      {/* Suggested entry (signal) — full-width amber strip — or caller override */}
-      {entryStrip ?? (suggestedEntry && (
-        <div className="bg-gold-dim border border-gold/40 rounded-lg px-3.5 py-2 flex items-center justify-between gap-3">
-          <span className="text-[10px] uppercase tracking-wide text-ink-3">Suggested entry</span>
-          <span className="text-[13px] font-semibold text-gold-2 num">{suggestedEntry}</span>
-        </div>
-      ))}
+      {/* Bottom catalyst strip — headline + News › only (entry range lives in tier 2, not here) */}
+      {hasNews && (
+        <button
+          onClick={() => onOpenNews?.(ticker)}
+          className="w-full flex items-center gap-2 bg-sky-dim border border-sky/30 rounded-lg px-3 py-2 text-left cursor-pointer hover:brightness-110 transition"
+        >
+          <span className="text-sky-2 text-[13px] shrink-0">📰</span>
+          <span className="text-[12px] text-sky-2 leading-snug flex-1 min-w-0 truncate">{newsHeadline}</span>
+          <span className="text-[10px] text-ink-3 shrink-0">News ›</span>
+        </button>
+      )}
 
       {footer && (
         <div className="text-[10px] text-ink-3 pt-1">
@@ -189,16 +222,15 @@ export function StockDetailBody({ detail, topBlock, entryStrip, onOpenNews, foot
 
 // ─── Two-tier collapsed card → expands inline ───────────────────────────────
 export function StockRow({
-  variant, signal, ticker, sector, confidence, pnlPct, thesis,
+  variant, signal, ticker, sector, confidence, pnlPct,
   spark, price, change, starred, onToggleStar, tier2, open, onToggle, children,
 }: {
   variant: "signal" | "holding";
   signal?: string;
   ticker: string;
   sector?: string;
-  confidence?: number;        // signal variant — conviction bar
-  pnlPct?: number | null;     // holding variant — P&L bar
-  thesis?: string;            // tier-1 flowing line (desktop)
+  confidence?: number;        // signal variant — conviction stat (status hue)
+  pnlPct?: number | null;     // holding variant — P&L stat (own sign color)
   spark?: number[];
   price?: number;
   change?: number;
@@ -209,14 +241,17 @@ export function StockRow({
   onToggle: () => void;
   children?: ReactNode;       // expanded content
 }) {
-  const stroke = signalStroke(signal);
+  const hue = hueOf(signal);
   const isSignal = variant === "signal";
   const grid = isSignal
-    ? "grid-cols-[56px_minmax(0,1fr)_76px_20px_14px] sm:grid-cols-[56px_104px_92px_minmax(0,1fr)_50px_76px_20px_14px]"
-    : "grid-cols-[56px_minmax(0,1fr)_64px_76px_14px] sm:grid-cols-[56px_104px_96px_minmax(0,1fr)_50px_76px_14px]";
+    ? "grid-cols-[56px_minmax(0,1fr)_78px_20px_14px] sm:grid-cols-[56px_minmax(0,1fr)_132px_50px_78px_20px_14px]"
+    : "grid-cols-[56px_minmax(0,1fr)_78px_14px] sm:grid-cols-[56px_minmax(0,1fr)_132px_50px_78px_14px]";
 
   return (
-    <article className={`bg-card border rounded-xl overflow-hidden transition-colors ${open ? "border-line-2" : "border-line hover:border-line-2"}`}>
+    <article
+      className={`bg-card border rounded-xl overflow-hidden transition-colors ${open ? "border-line-2" : "border-line hover:border-line-2"}`}
+      style={{ borderLeftWidth: "3px", borderLeftColor: hue.edge }}
+    >
       {/* Toggle target = tier 1 + tier 2 (the collapsed card) */}
       <div
         role="button"
@@ -226,61 +261,62 @@ export function StockRow({
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         className="cursor-pointer select-none"
       >
-        {/* ── Tier 1 ── */}
+        {/* ── Tier 1 (no prose — badge · ticker · dominant confidence/P&L · spark · price · star · chevron) ── */}
         <div className={`grid items-center gap-x-2 sm:gap-x-3 px-3.5 pt-3 pb-2.5 ${grid}`}>
-          {/* badge */}
-          <div className="flex justify-center">
-            <span className={`inline-flex items-center justify-center rounded-md border text-[9px] font-bold tracking-wide px-1.5 py-0.5 w-full ${signalStyle(signal).pill}`}>
+          {/* badge — outline, status hue */}
+          <div className="flex justify-center min-w-0">
+            <span className={`inline-flex items-center justify-center rounded-md border bg-transparent text-[9px] font-bold tracking-wide px-1.5 py-0.5 w-full ${hue.text} ${hue.border}`}>
               {badgeLabel(signal)}
             </span>
           </div>
 
-          {/* ticker + sector */}
+          {/* ticker + sector (absorbs slack) */}
           <div className="min-w-0">
             <div className="text-[14px] font-bold tracking-tight truncate leading-tight">{ticker}</div>
             {sector && <div className="text-[10px] text-ink-3 truncate leading-tight">{sector}</div>}
           </div>
 
-          {/* conviction (signal) / P&L (holding) bar */}
-          <div className={`min-w-0 ${isSignal ? "hidden sm:flex items-center" : "flex items-center"}`}>
-            {isSignal
-              ? (confidence !== undefined
-                  ? <TierBar pct={confidence} fillClass={signalStyle(signal).bar} label={`${Math.round(confidence)}%`} />
-                  : null)
-              : (pnlPct !== null && pnlPct !== undefined
-                  ? <TierBar pct={Math.min(100, Math.abs(pnlPct))} fillClass={pnlPct >= 0 ? "bg-up" : "bg-down"}
-                             label={`${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%`} labelClass={pnlPct >= 0 ? "text-up-2" : "text-down-2"} />
-                  : <span className="text-[10px] text-ink-3">—</span>)}
-          </div>
-
-          {/* thesis (desktop) */}
+          {/* confidence (signal) / P&L% (holding) — dominant stat + wide bar beneath */}
           <div className="hidden sm:block min-w-0">
-            {thesis && <span className="text-[11px] text-ink-3 truncate block">{thesis}</span>}
+            {isSignal ? (
+              confidence !== undefined ? (
+                <>
+                  <div className={`text-[15px] font-semibold num leading-none ${hue.text}`}>{Math.round(confidence)}%</div>
+                  <div className="h-1 bg-line-2 rounded-full overflow-hidden mt-1.5">
+                    <div className={`h-full rounded-full ${hue.bar}`} style={{ width: `${Math.min(100, Math.max(0, confidence))}%` }} />
+                  </div>
+                </>
+              ) : null
+            ) : (
+              pnlPct !== null && pnlPct !== undefined ? (
+                <>
+                  <div className={`text-[15px] font-semibold num leading-none ${pnlPct >= 0 ? "text-up-2" : "text-down-2"}`}>{pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%</div>
+                  <div className="h-1 bg-line-2 rounded-full overflow-hidden mt-1.5">
+                    <div className={`h-full rounded-full ${pnlPct >= 0 ? "bg-up" : "bg-down"}`} style={{ width: `${Math.min(100, Math.abs(pnlPct))}%` }} />
+                  </div>
+                </>
+              ) : <span className="text-[11px] text-ink-3">—</span>
+            )}
           </div>
 
-          {/* sparkline (desktop) */}
+          {/* sparkline (desktop) — muted, status hue */}
           <div className="hidden sm:flex justify-center min-w-0">
-            {spark && spark.length >= 5 ? <Sparkline data={spark} width={50} height={24} color={stroke} /> : null}
+            {spark && spark.length >= 5 ? <Sparkline data={spark} width={50} height={24} color={hue.stroke} opacity={0.6} /> : null}
           </div>
 
-          {/* price + change (stacked, compact) */}
+          {/* price + change (stacked, matches confidence weight) */}
           <div className="text-right min-w-0 leading-tight">
-            <div className="text-[13px] font-semibold num truncate">{price !== undefined ? price.toFixed(2) : "—"}</div>
+            <div className="text-[15px] font-semibold num truncate">{price !== undefined ? price.toFixed(2) : "—"}</div>
             {change !== undefined && (
               <div className={`text-[10px] num ${change >= 0 ? "text-up-2" : "text-down-2"}`}>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</div>
             )}
           </div>
 
-          {/* star (signal only) */}
+          {/* star (signal only) — discrete 2-step confirm on removal */}
           {isSignal && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleStar?.(); }}
-              className={`text-[15px] leading-none cursor-pointer transition-colors ${starred ? "text-gold-2" : "text-ink-3 hover:text-gold-2"}`}
-              title={starred ? "Remove from watchlist" : "Add to watchlist"}
-              aria-label={starred ? "Remove from watchlist" : "Add to watchlist"}
-            >
-              {starred ? "★" : "☆"}
-            </button>
+            <div className="flex justify-center min-w-0">
+              <StarButton starred={!!starred} onToggle={() => onToggleStar?.()} />
+            </div>
           )}
 
           {/* chevron */}

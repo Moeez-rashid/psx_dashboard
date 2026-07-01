@@ -76,7 +76,7 @@ export function PriceTag({ price, changePercent, big }: { price?: number; change
 }
 
 // ─── Sparkline ──────────────────────────────────────────────────────────────
-export function Sparkline({ data, width = 84, height = 30, color }: { data?: number[]; width?: number; height?: number; color?: string }) {
+export function Sparkline({ data, width = 84, height = 30, color, opacity = 0.9 }: { data?: number[]; width?: number; height?: number; color?: string; opacity?: number }) {
   if (!data || data.length < 5) return null;
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
@@ -93,7 +93,7 @@ export function Sparkline({ data, width = 84, height = 30, color }: { data?: num
   return (
     <svg width={width} height={height} className="shrink-0" aria-hidden>
       <polygon points={fillPts} fill={stroke} opacity={0.08} />
-      <polyline points={pts.join(" ")} fill="none" stroke={stroke} strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round" opacity={0.9} />
+      <polyline points={pts.join(" ")} fill="none" stroke={stroke} strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round" opacity={opacity} />
     </svg>
   );
 }

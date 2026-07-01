@@ -958,7 +958,6 @@ export default function Dashboard() {
                     ticker={sig.ticker}
                     sector={sectorOf(sig.ticker)}
                     confidence={sig.confidence}
-                    thesis={sig.reason}
                     spark={sparks[sig.ticker]}
                     price={displayPrice}
                     change={displayChange}
@@ -1097,18 +1096,17 @@ export default function Dashboard() {
                         ))}
                       </div>
                     )}
+                    {!isEditing && livePrice && pnlPct !== null && (
+                      <div className="bg-inset border border-line rounded-lg px-3.5 py-2 flex items-center justify-between gap-3 mt-2">
+                        <span className="text-[10px] uppercase tracking-wide text-ink-3">Avg cost → current</span>
+                        <span className="text-[12px] num text-ink">
+                          PKR {h.avgPrice.toFixed(2)} → PKR {livePrice.toFixed(2)}{" "}
+                          <span className={pnlPct >= 0 ? "text-up-2" : "text-down-2"}>({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%)</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
-
-                const entryStrip = (livePrice && pnlPct !== null) ? (
-                  <div className="bg-inset border border-line rounded-lg px-3.5 py-2 flex items-center justify-between gap-3">
-                    <span className="text-[10px] uppercase tracking-wide text-ink-3">Avg cost → current</span>
-                    <span className="text-[12px] num text-ink">
-                      PKR {h.avgPrice.toFixed(2)} → PKR {livePrice.toFixed(2)}{" "}
-                      <span className={pnlPct >= 0 ? "text-up-2" : "text-down-2"}>({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%)</span>
-                    </span>
-                  </div>
-                ) : undefined;
 
                 return (
                   <StockRow
@@ -1118,7 +1116,6 @@ export default function Dashboard() {
                     ticker={h.ticker}
                     sector={sectorLine}
                     pnlPct={pnlPct}
-                    thesis={s?.text}
                     spark={sparks[h.ticker]}
                     price={livePrice}
                     change={p?.changePercent}
@@ -1126,7 +1123,7 @@ export default function Dashboard() {
                     open={expanded.has(key)}
                     onToggle={() => toggleRow(key, h.ticker)}
                   >
-                    <StockDetailBody detail={detail} topBlock={positionBlock} entryStrip={entryStrip} onOpenNews={openNewsFor} />
+                    <StockDetailBody detail={detail} topBlock={positionBlock} onOpenNews={openNewsFor} />
                   </StockRow>
                 );
               })}
@@ -1248,7 +1245,6 @@ export default function Dashboard() {
                     ticker={w.ticker}
                     sector={sectorOf(w.ticker)}
                     confidence={displayConfPct ?? undefined}
-                    thesis={displayReason ?? undefined}
                     spark={sparks[w.ticker]}
                     price={p?.currentPrice}
                     change={p?.changePercent}
