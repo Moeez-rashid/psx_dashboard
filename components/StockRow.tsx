@@ -89,11 +89,11 @@ function StatBar({ label, value, valueClass, barClass, pct }: {
   return (
     <div className="text-left">
       <div className="flex items-baseline gap-1">
-        <span className={`text-[11px] font-medium num leading-none ${valueClass}`}>{value}</span>
-        <span className="text-[7px] uppercase tracking-[0.08em] text-ink-3 leading-none">{label}</span>
+        <span className={`text-[13px] font-medium num leading-none ${valueClass}`}>{value}</span>
+        <span className="text-[8px] uppercase tracking-[0.08em] text-ink-3 leading-none">{label}</span>
       </div>
-      <div className="h-[2px] bg-line-2/70 rounded-full overflow-hidden mt-1">
-        <div className={`h-full rounded-full ${barClass} opacity-80`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+      <div className="h-[3px] bg-line-2/70 rounded-full overflow-hidden mt-1.5">
+        <div className={`h-full rounded-full ${barClass} opacity-90`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
       </div>
     </div>
   );
@@ -261,7 +261,7 @@ export function StockRow({
   // Identical grid for both variants → columns line up across every tab.
   // Confidence/P&L sits directly after the ticker (left-aligned); a flexible
   // spacer pushes the sparkline/price/action cluster to the right edge.
-  const grid = "grid-cols-[56px_minmax(0,1fr)_80px_22px_14px] sm:grid-cols-[56px_96px_84px_minmax(0,1fr)_50px_80px_22px_14px]";
+  const grid = "grid-cols-[56px_minmax(0,1fr)_80px_22px_14px] sm:grid-cols-[56px_96px_116px_minmax(0,1fr)_64px_80px_22px_14px]";
 
   return (
     <article
@@ -309,7 +309,7 @@ export function StockRow({
 
           {/* 5 · sparkline (desktop) — muted, status hue */}
           <div className="hidden sm:flex justify-center min-w-0">
-            {spark && spark.length >= 5 ? <Sparkline data={spark} width={50} height={24} color={hue.stroke} opacity={0.6} /> : null}
+            {spark && spark.length >= 5 ? <Sparkline data={spark} width={64} height={28} color={hue.stroke} opacity={0.75} /> : null}
           </div>
 
           {/* 6 · price + change (stacked) */}
