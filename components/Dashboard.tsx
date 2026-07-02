@@ -6,7 +6,7 @@ import type { StockQuote } from "@/lib/psx";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { isPKTOpen, pktNow } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
-import { Modal, ModalHeader, ErrorBanner, ConfirmDelete, Skeleton } from "./ui/primitives";
+import { Modal, ModalHeader, ErrorBanner, Skeleton } from "./ui/primitives";
 import { toast, Toaster } from "./ui/Toast";
 import TickerInput from "./ui/TickerInput";
 import MarketStrip from "./MarketStrip";
@@ -182,7 +182,6 @@ export default function Dashboard() {
   const [addingHolding, setAddingHolding] = useState(false);
   const [addingWatch, setAddingWatch] = useState(false);
   const [editingHolding, setEditingHolding] = useState<{ ticker: string; shares: string; avg: string } | null>(null);
-  const [pendingDeleteHolding, setPendingDeleteHolding] = useState<string | null>(null);
 
   // ── Price fetching ────────────────────────────────────────────────────────
   const allTickers = [...new Set([
@@ -1027,22 +1026,14 @@ export default function Dashboard() {
                 ].filter(Boolean).join(" · ") || undefined;
 
                 const positionBlock = (
-                  <div className="mt-3">
+                  <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[9px] uppercase tracking-wide text-ink-3">Position</span>
-                      <div className="flex items-center gap-2">
-                        {!isEditing && (
-                          <button
-                            onClick={() => setEditingHolding({ ticker: h.ticker, shares: String(h.shares), avg: String(h.avgPrice) })}
-                            className="text-[10px] text-ink-3 hover:text-ink cursor-pointer">✎ Edit</button>
-                        )}
-                        <ConfirmDelete
-                          pending={pendingDeleteHolding === h.ticker}
-                          onArm={() => setPendingDeleteHolding(h.ticker)}
-                          onConfirm={() => { setHoldings(prev => prev.filter(x => x.ticker !== h.ticker)); setPendingDeleteHolding(null); toast(`${h.ticker} removed`); }}
-                          onCancel={() => setPendingDeleteHolding(null)}
-                        />
-                      </div>
+                      {!isEditing && (
+                        <button
+                          onClick={() => setEditingHolding({ ticker: h.ticker, shares: String(h.shares), avg: String(h.avgPrice) })}
+                          className="text-[10px] text-ink-3 hover:text-ink cursor-pointer">✎ Edit</button>
+                      )}
                     </div>
                     {isEditing ? (
                       <div className="bg-inset rounded-lg p-3">
@@ -1122,6 +1113,7 @@ export default function Dashboard() {
                     tier2={holdingTier2(h, marketVal, pnl)}
                     open={expanded.has(key)}
                     onToggle={() => toggleRow(key, h.ticker)}
+                    onRemove={() => { setHoldings(prev => prev.filter(x => x.ticker !== h.ticker)); toast(`${h.ticker} removed`); }}
                   >
                     <StockDetailBody detail={detail} topBlock={positionBlock} onOpenNews={openNewsFor} />
                   </StockRow>
