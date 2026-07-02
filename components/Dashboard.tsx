@@ -6,11 +6,12 @@ import type { StockQuote } from "@/lib/psx";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { isPKTOpen, pktNow } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
-import { Modal, ModalHeader, ErrorBanner, Skeleton } from "./ui/primitives";
+import { ErrorBanner, Skeleton } from "./ui/primitives";
 import { toast, Toaster } from "./ui/Toast";
 import TickerInput from "./ui/TickerInput";
 import MarketStrip from "./MarketStrip";
 import MetricsGuide from "./MetricsGuide";
+import NewsView, { deriveSentiment, type SentimentPoint } from "./NewsView";
 import { StockRow, StockDetailBody, firstClause, buildTechnicalNarrative, type SignalDetail, type Tier2 } from "./StockRow";
 import HoldingsOverview, { type Holding } from "./HoldingsOverview";
 import { techCatalysts, techRisks, volLabel, type StockTech } from "./StockBits";
@@ -104,7 +105,6 @@ export default function Dashboard() {
     newsSources: string[];
     newsFromCache: boolean;
   } | null>(null);
-  const [showNewsModal, setShowNewsModal] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [scanPhase, setScanPhase] = useState("");
@@ -148,8 +148,19 @@ export default function Dashboard() {
     return raw ? resolveSectorName(raw) : undefined;
   };
 
-  // News-page nav seam — the filtered News page lands in the next pass; wire it then.
-  const openNewsFor = (ticker: string) => toast(`News for ${ticker} — full News page is coming next`);
+  // News-page nav seams ------------------------------------------------------
+  // A card's catalyst strip → News tab, headline feed filtered to that ticker.
+  const openNewsFor = (ticker: string) => { setNewsFilterTicker(ticker); setTab("news"); };
+  // A News sector-watch row → Buy Opportunities filtered to that sector.
+  const filterOppsBySector = (sectorName: string) => { setOppSectorFilter(sectorName); setTab("opportunities"); };
+  // A News headline row → the stock's own expanded card on whichever tab holds it.
+  const openTickerCard = (ticker: string) => {
+    if (scanResult?.signals.some(s => s.ticker === ticker)) { setTab("opportunities"); setExpanded(prev => new Set(prev).add(`opp:${ticker}`)); }
+    else if (watching.some(w => w.ticker === ticker)) { setTab("watching"); setExpanded(prev => new Set(prev).add(`watch:${ticker}`)); }
+    else if (holdings.some(h => h.ticker === ticker)) { setTab("holdings"); setExpanded(prev => new Set(prev).add(`hold:${ticker}`)); }
+    else { setTab("opportunities"); }
+    if (askAnalystData[ticker] === undefined) fetchAskAnalystBatch([ticker]);
+  };
 
   // Tier-2 flowing line for the signal variant: catalyst headline → first technical clause.
   const signalTier2 = (d: SignalDetail): Tier2 => {
@@ -174,7 +185,13 @@ export default function Dashboard() {
   };
 
   // UI state
-  const [tab, setTab] = useState<"opportunities" | "holdings" | "watching">("opportunities");
+  const [tab, setTab] = useState<"opportunities" | "holdings" | "watching" | "news">("opportunities");
+  // News page: ticker to filter the headline feed to (set when arriving from a card's catalyst strip)
+  const [newsFilterTicker, setNewsFilterTicker] = useState<string | null>(null);
+  // Buy Opportunities: sector to filter the list to (set when arriving from the News sector watch)
+  const [oppSectorFilter, setOppSectorFilter] = useState<string | null>(null);
+  // 7-day sentiment history, persisted to localStorage and appended on each news refresh
+  const [sentimentHistory, setSentimentHistory] = useState<SentimentPoint[]>([]);
   const [newHolding, setNewHolding] = useState({ ticker: "", shares: "", avg: "" });
   const [newWatch, setNewWatch] = useState("");
   const [holdingError, setHoldingError] = useState("");
@@ -475,11 +492,29 @@ export default function Dashboard() {
     fetchAskAnalystBatch(scanResult.signals.map(s => s.ticker));
   }, [scanResult?.timestamp]); // eslint-disable-line
 
+  // Append today's derived sentiment whenever a fresh news analysis lands (one point per PKT day, last 7 kept)
+  useEffect(() => {
+    if (!storageLoadedRef.current) return;
+    const na = scanResult?.newsAnalysis;
+    if (!na) return;
+    const { label, score } = deriveSentiment(na);
+    const p = pktNow();
+    const today = `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, "0")}-${String(p.getDate()).padStart(2, "0")}`;
+    setSentimentHistory(prev => {
+      const next = [...prev.filter(x => x.date !== today), { date: today, score, label }]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-7);
+      localStorage.setItem("psx_sentiment", JSON.stringify(next));
+      return next;
+    });
+  }, [scanResult?.newsAnalysis, scanResult?.timestamp]); // eslint-disable-line
+
   // First mount: restore saved holdings/watchlist/settings, then prime fundamentals
   useEffect(() => {
     let h: Holding[] = [], w: WatchItem[] = [];
     try { h = JSON.parse(localStorage.getItem("psx_holdings") ?? "null") ?? DEFAULT_HOLDINGS; } catch {}
     try { w = JSON.parse(localStorage.getItem("psx_watch") ?? "null") ?? []; } catch {}
+    try { const sh = JSON.parse(localStorage.getItem("psx_sentiment") ?? "null"); if (Array.isArray(sh)) setSentimentHistory(sh); } catch {}
     if (h.length) setHoldings(h);
     if (w.length) setWatching(w);
     setSettings(loadSettings());
@@ -689,6 +724,17 @@ export default function Dashboard() {
     return arr; // scanner already sorted by confidence desc
   };
 
+  // Sector filter set from the News sector-watch. AI sector names and resolveSectorName()
+  // output can differ slightly, so match loosely (either substring) and degrade gracefully.
+  const sectorMatches = (ticker: string, sectorName: string) => {
+    const s = sectorOf(ticker);
+    if (!s) return false;
+    const a = s.toLowerCase(), b = sectorName.toLowerCase();
+    return a === b || a.includes(b) || b.includes(a);
+  };
+  const visibleOpps = (sigs: AISignal[]) =>
+    sortedOpps(oppSectorFilter ? sigs.filter(s => sectorMatches(s.ticker, oppSectorFilter)) : sigs);
+
   const sortedWatch = (items: WatchItem[]) => {
     const arr = [...items];
     if (sortWatch === "name") return arr.sort((a, b) => a.ticker.localeCompare(b.ticker));
@@ -725,6 +771,7 @@ export default function Dashboard() {
     { id: "opportunities" as const, label: "Buy Opportunities", short: "Signals", count: scanResult?.signals.length },
     { id: "holdings" as const, label: "My Holdings", short: "Holdings", count: holdings.length || undefined },
     { id: "watching" as const, label: "Watchlist", short: "Watchlist", count: watching.length || undefined },
+    { id: "news" as const, label: "News", short: "News", count: undefined },
   ];
 
   return (
@@ -771,7 +818,11 @@ export default function Dashboard() {
           {TABS.map(t => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                if (t.id === "news") setNewsFilterTicker(null);
+                if (t.id === "opportunities") setOppSectorFilter(null);
+                setTab(t.id);
+              }}
               className={`relative px-3.5 py-2.5 text-xs font-medium transition-colors cursor-pointer
                 ${tab === t.id ? "text-ink" : "text-ink-3 hover:text-ink-2"}`}
             >
@@ -850,35 +901,9 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div className="flex justify-end">
-                  <button onClick={() => setShowNewsModal(true)} className="btn text-[10px] px-2.5 py-1">Read full analysis</button>
+                  <button onClick={() => setTab("news")} className="btn text-[10px] px-2.5 py-1">Full briefing in News →</button>
                 </div>
               </div>
-            )}
-
-            {/* News detail modal */}
-            {showNewsModal && na && (
-              <Modal onClose={() => setShowNewsModal(false)} maxWidth="max-w-xl">
-                <ModalHeader title="Macro Context · Today" onClose={() => setShowNewsModal(false)} />
-                <p className="text-xs text-ink-2 leading-relaxed mb-3">{na.summary}</p>
-                {na.affectedSectors.length > 0 && (
-                  <div className="mb-3 space-y-1">
-                    {na.affectedSectors.map((sec, i) => <SectorImpact key={i} sec={sec} />)}
-                  </div>
-                )}
-                {na.globalFactors.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {na.globalFactors.map((f, i) => (
-                      <span key={i} className="text-[10px] text-sky-2 bg-sky-dim px-2 py-0.5 rounded-full">{f}</span>
-                    ))}
-                  </div>
-                )}
-                <p className="text-xs text-ink-2 leading-loose pt-3 border-t border-line">
-                  {na.detailedNarrative ?? buildExpandedNarrative(na)}
-                </p>
-                {scanResult!.newsSources.length > 0 && (
-                  <div className="text-[10px] text-ink-3 mt-3">Sources: {scanResult!.newsSources.join(" · ")}</div>
-                )}
-              </Modal>
             )}
 
             {/* Empty state */}
@@ -935,9 +960,24 @@ export default function Dashboard() {
               </div>
             )}
 
+            {/* Sector filter chip — set from the News sector watch */}
+            {oppSectorFilter && (
+              <div className="flex items-center gap-2 mb-3 text-xs text-ink-2">
+                <span>Filtered by sector</span>
+                <span className="font-semibold text-sky-2">{oppSectorFilter}</span>
+                <button onClick={() => setOppSectorFilter(null)} className="btn text-[10px] px-2 py-0.5">Clear ✕</button>
+              </div>
+            )}
+            {scanResult && oppSectorFilter && visibleOpps(scanResult.signals).length === 0 && (
+              <p className="text-xs text-ink-3 py-3">
+                No current opportunities in {oppSectorFilter}.{" "}
+                <button onClick={() => setOppSectorFilter(null)} className="text-sky-2 underline underline-offset-2 cursor-pointer">Clear filter</button>
+              </p>
+            )}
+
             {/* Signal rows — collapsed by default, expand inline */}
             <div className="space-y-2">
-              {scanResult && sortedOpps(scanResult.signals).map((sig) => {
+              {scanResult && visibleOpps(scanResult.signals).map((sig) => {
                 const sigTech = scanResult.technicalData?.find(t => t.symbol === sig.ticker);
                 const liveQuote = prices[sig.ticker];
                 const displayPrice = liveQuote?.currentPrice ?? sigTech?.currentPrice;
@@ -1277,6 +1317,27 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ════ NEWS ════ */}
+        {tab === "news" && (
+          <NewsView
+            na={na ?? null}
+            narrative={na ? (na.detailedNarrative ?? buildExpandedNarrative(na)) : ""}
+            newsHeadlines={scanResult?.newsHeadlines ?? []}
+            newsSources={scanResult?.newsSources ?? []}
+            signals={scanResult?.signals ?? []}
+            timestamp={scanResult?.timestamp}
+            newsFromCache={scanResult?.newsFromCache}
+            sentimentHistory={sentimentHistory}
+            filterTicker={newsFilterTicker}
+            onClearFilter={() => setNewsFilterTicker(null)}
+            onOpenTicker={openTickerCard}
+            onFilterSector={filterOppsBySector}
+            hasKey={hasKey}
+            scanning={scanning}
+            onRunScan={runFullScan}
+          />
         )}
       </main>
 
