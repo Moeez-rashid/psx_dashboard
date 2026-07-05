@@ -1,6 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
+import MarketStrip from "./MarketStrip";
 
 // ─── Sentiment model ────────────────────────────────────────────────────────
 // The scan's NewsAnalysis has no explicit sentiment field, so we derive one
@@ -169,9 +170,9 @@ function FeedRow({ item, onOpenTicker }: { item: FeedItem; onOpenTicker: (t: str
 
 // ─── News page ────────────────────────────────────────────────────────────────
 export default function NewsView({
-  na, narrative, newsHeadlines, newsSources, signals, timestamp, newsFromCache,
+  na, narrative, newsHeadlines, newsSources, signals, timestamp,
   sentimentHistory, filterTicker, onClearFilter, onOpenTicker, onFilterSector,
-  hasKey, scanning, onRunScan,
+  hasKey, scanning, onRunScan, onRefreshNews, onAddWatch, watchingTickers,
 }: {
   na: NewsAnalysis | null;
   narrative: string;
@@ -179,7 +180,6 @@ export default function NewsView({
   newsSources: string[];
   signals: AISignal[];
   timestamp?: string;
-  newsFromCache?: boolean;
   sentimentHistory: SentimentPoint[];
   filterTicker: string | null;
   onClearFilter: () => void;
@@ -188,6 +188,9 @@ export default function NewsView({
   hasKey: boolean;
   scanning: boolean;
   onRunScan: () => void;
+  onRefreshNews: () => void;
+  onAddWatch: (ticker: string) => void;
+  watchingTickers: Set<string>;
 }) {
   // Merge per-ticker AI catalysts (actionable, shown first) with macro RSS headlines,
   // de-duplicating by headline prefix so a stock's catalyst wins over its macro echo.
@@ -214,9 +217,10 @@ export default function NewsView({
 
   const visibleFeed = filterTicker ? feed.filter(f => f.ticker === filterTicker) : feed;
 
-  // Scan running with no prior analysis → progress state, not a half-empty page.
-  if (!na && scanning) {
-    return (
+  // No analysis yet → a scanning progress card or the run-a-scan prompt.
+  // Market movers below stay live either way (they need no AI key).
+  const statusCard = !na ? (
+    scanning ? (
       <div className="card text-center py-10 px-5">
         <div className="flex justify-center gap-1.5 mb-4">
           {[0, 1, 2].map(i => (
@@ -226,26 +230,25 @@ export default function NewsView({
         <div className="text-xs text-ink mb-1">Building today&rsquo;s briefing…</div>
         <div className="text-[11px] text-ink-3">Fetching RSS news and running AI analysis — usually 30–90 seconds.</div>
       </div>
-    );
-  }
-
-  // No scan yet → prompt to run one (mirrors the Buy Opportunities empty state).
-  if (!na && !scanning) {
-    return (
+    ) : (
       <div className="card text-center py-10 px-5">
         <div className="text-3xl mb-3">📰</div>
         <div className="text-sm font-medium text-ink mb-1.5">No briefing yet</div>
         <p className="text-xs text-ink-3 leading-relaxed max-w-md mx-auto">
           {hasKey
-            ? "Run a full scan (or refresh news) on the Buy Opportunities tab to generate today's market briefing, sector watch and latest headlines."
+            ? "Run a full scan to generate today's market briefing, sector watch and latest headlines."
             : "Add an AI key in Settings, then run a scan to generate today's briefing. The news feed is built from the same free RSS sources the scanner reads."}
         </p>
         <button onClick={onRunScan} className="btn-accent mt-5 px-5 py-2 font-semibold">
           {hasKey ? "↗ Run Full Scan" : "⚙ Set API Key"}
         </button>
       </div>
-    );
-  }
+    )
+  ) : null;
+
+  const updatedAt = timestamp
+    ? new Date(timestamp).toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" })
+    : null;
 
   return (
     <div className="space-y-4">
@@ -258,12 +261,20 @@ export default function NewsView({
         </div>
       )}
 
+      {statusCard}
+
       {/* ── 1. Today's briefing ── */}
+      {na && (
       <section className="card">
         <div className="flex items-center justify-between gap-2 mb-3">
           <span className="label">Today&rsquo;s briefing</span>
           <div className="flex items-center gap-2">
-            {newsFromCache && <span className="text-[9px] text-ink-3 bg-raised px-2 py-px rounded-full">✓ cached</span>}
+            {updatedAt && <span className="text-[9px] text-ink-3 bg-raised px-2 py-px rounded-full num">updated {updatedAt}</span>}
+            {hasKey && (
+              <button onClick={onRefreshNews} disabled={scanning} className="btn text-[10px] px-2 py-0.5" title="Re-analyse today's news without re-scoring every stock">
+                {scanning ? "⟳ Refreshing…" : "↻ Refresh"}
+              </button>
+            )}
             <SentimentBadge na={na} />
           </div>
         </div>
@@ -282,17 +293,11 @@ export default function NewsView({
         )}
 
         <div className="mt-4 pt-3 border-t border-line">
-          <div className="flex items-center justify-between mb-2">
-            <span className="label">7-day sentiment</span>
-            {timestamp && (
-              <span className="text-[10px] text-ink-3">
-                updated {new Date(timestamp).toLocaleDateString("en-PK", { month: "short", day: "numeric" })}
-              </span>
-            )}
-          </div>
+          <div className="label mb-2">7-day sentiment</div>
           <SentimentChart history={sentimentHistory} />
         </div>
       </section>
+      )}
 
       {/* ── 2. Sector watch ── */}
       {na && na.affectedSectors.length > 0 && (
@@ -309,7 +314,11 @@ export default function NewsView({
         </section>
       )}
 
-      {/* ── 3. Latest headlines ── */}
+      {/* ── 3. Market movers — full ranked lists (live, no key needed) ── */}
+      <MarketStrip variant="full" onAddWatch={onAddWatch} watchingTickers={watchingTickers} />
+
+      {/* ── 4. Latest headlines ── */}
+      {na && (
       <section className="card">
         <div className="flex items-center justify-between mb-1">
           <span className="label">Latest headlines</span>
@@ -335,6 +344,7 @@ export default function NewsView({
           Headlines from public RSS feeds · sentiment is AI-derived · Not financial advice
         </div>
       </section>
+      )}
     </div>
   );
 }

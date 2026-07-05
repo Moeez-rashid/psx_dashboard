@@ -790,8 +790,8 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <div className="hidden md:block mr-2"><PKTClock /></div>
             <button onClick={fetchPrices} className="btn px-2.5" title="Refresh prices">↻</button>
-            <button onClick={exportForClaude} className="btn-sky px-2.5" title="Copy full snapshot for Claude">
-              ⎘<span className="hidden sm:inline">Export</span>
+            <button onClick={exportForClaude} className="btn-sky px-2.5" title="Copy full snapshot for AI analysis (Claude, ChatGPT, …)">
+              ⎘
             </button>
             <button onClick={() => setShowMetricsGuide(true)} className="btn px-2.5 hidden sm:inline-flex" title="Metrics guide">
               ?<span className="hidden sm:inline">Guide</span>
@@ -838,19 +838,14 @@ export default function Dashboard() {
         {/* ════ BUY OPPORTUNITIES ════ */}
         {tab === "opportunities" && (
           <div>
-            {/* Live market overview — zero-setup value */}
-            <MarketStrip onAddWatch={quickAddWatch} watchingTickers={watchingSet} />
+            {/* Live market pulse — compact; the full ranked lists live on the News tab */}
+            <MarketStrip variant="compact" onViewAll={() => setTab("news")} />
 
             {/* Scanner controls */}
             <div className="flex gap-2 mb-4 flex-wrap items-center">
               <button onClick={runFullScan} disabled={scanning} className="btn-accent font-semibold px-4 py-2">
                 {scanning ? "⟳ Scanning…" : scanResult ? "↻ Re-run Full Scan" : "↗ Full Scan · KMI-30 + News"}
               </button>
-              {scanResult?.newsAnalysis && (
-                <button onClick={runNewsRefresh} disabled={scanning} className="btn py-2" title="Re-analyse today's news without re-scoring every stock">
-                  Refresh news only
-                </button>
-              )}
               {scanResult && (
                 <span className="text-[10px] text-ink-3">
                   Last scan {new Date(scanResult.timestamp).toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" })} PKT
@@ -871,9 +866,6 @@ export default function Dashboard() {
               >
                 <SentimentBadge na={na} />
                 <span className="flex-1 min-w-0 truncate text-xs text-ink-2">{na.summary}</span>
-                {scanResult!.newsFromCache && (
-                  <span className="hidden sm:inline text-[9px] text-ink-3 bg-raised px-2 py-px rounded-full shrink-0">✓ cached</span>
-                )}
                 <span className="text-[10px] text-ink-3 shrink-0">Details →</span>
               </button>
             )}
@@ -984,10 +976,6 @@ export default function Dashboard() {
               })}
             </div>
 
-            <p className="text-[10px] text-ink-3 text-center py-5 leading-relaxed">
-              ⚠ Not financial advice. Signals are AI-generated for informational purposes only.<br />
-              Always do your own research. Past signals do not guarantee future returns.
-            </p>
           </div>
         )}
 
@@ -1293,6 +1281,8 @@ export default function Dashboard() {
 
         {/* ════ NEWS ════ */}
         {tab === "news" && (
+          <div>
+          <ErrorBanner msg={scanError} onDismiss={() => setScanError("")} />
           <NewsView
             na={na ?? null}
             narrative={na ? (na.detailedNarrative ?? buildExpandedNarrative(na)) : ""}
@@ -1300,7 +1290,6 @@ export default function Dashboard() {
             newsSources={scanResult?.newsSources ?? []}
             signals={scanResult?.signals ?? []}
             timestamp={scanResult?.timestamp}
-            newsFromCache={scanResult?.newsFromCache}
             sentimentHistory={sentimentHistory}
             filterTicker={newsFilterTicker}
             onClearFilter={() => setNewsFilterTicker(null)}
@@ -1309,7 +1298,11 @@ export default function Dashboard() {
             hasKey={hasKey}
             scanning={scanning}
             onRunScan={runFullScan}
+            onRefreshNews={runNewsRefresh}
+            onAddWatch={quickAddWatch}
+            watchingTickers={watchingSet}
           />
+          </div>
         )}
       </main>
 

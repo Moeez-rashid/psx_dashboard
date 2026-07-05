@@ -285,10 +285,20 @@ export function StockRow({
             </span>
           </div>
 
-          {/* 2 · ticker + sector */}
+          {/* 2 · ticker + sector (+ conf/P&L % on mobile, where column 3 is hidden) */}
           <div className="min-w-0">
             <div className="text-[14px] font-bold tracking-tight truncate leading-tight">{ticker}</div>
-            {sector && <div className="text-[10px] text-ink-3 truncate leading-tight">{sector}</div>}
+            <div className="flex items-center gap-1 min-w-0 leading-tight">
+              {sector && <span className="text-[10px] text-ink-3 truncate min-w-0">{sector}</span>}
+              {isSignal && confidence !== undefined && (
+                <span className={`sm:hidden shrink-0 text-[10px] num font-medium ${hue.text}`}>· {Math.round(confidence)}%</span>
+              )}
+              {!isSignal && pnlPct !== null && pnlPct !== undefined && (
+                <span className={`sm:hidden shrink-0 text-[10px] num font-medium ${pnlPct >= 0 ? "text-up-2" : "text-down-2"}`}>
+                  · {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%
+                </span>
+              )}
+            </div>
           </div>
 
           {/* 3 · confidence (signal) / P&L% (holding) — labeled, left-aligned */}
