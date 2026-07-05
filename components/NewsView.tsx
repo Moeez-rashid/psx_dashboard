@@ -214,6 +214,21 @@ export default function NewsView({
 
   const visibleFeed = filterTicker ? feed.filter(f => f.ticker === filterTicker) : feed;
 
+  // Scan running with no prior analysis → progress state, not a half-empty page.
+  if (!na && scanning) {
+    return (
+      <div className="card text-center py-10 px-5">
+        <div className="flex justify-center gap-1.5 mb-4">
+          {[0, 1, 2].map(i => (
+            <span key={i} className="w-2 h-2 rounded-full bg-up animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
+          ))}
+        </div>
+        <div className="text-xs text-ink mb-1">Building today&rsquo;s briefing…</div>
+        <div className="text-[11px] text-ink-3">Fetching RSS news and running AI analysis — usually 30–90 seconds.</div>
+      </div>
+    );
+  }
+
   // No scan yet → prompt to run one (mirrors the Buy Opportunities empty state).
   if (!na && !scanning) {
     return (
