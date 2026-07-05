@@ -11,7 +11,7 @@ import { toast, Toaster } from "./ui/Toast";
 import TickerInput from "./ui/TickerInput";
 import MarketStrip from "./MarketStrip";
 import MetricsGuide from "./MetricsGuide";
-import NewsView, { deriveSentiment, type SentimentPoint } from "./NewsView";
+import NewsView, { deriveSentiment, SentimentBadge, type SentimentPoint } from "./NewsView";
 import { StockRow, StockDetailBody, firstClause, buildTechnicalNarrative, type SignalDetail, type Tier2 } from "./StockRow";
 import HoldingsOverview, { type Holding } from "./HoldingsOverview";
 import { techCatalysts, techRisks, volLabel, type StockTech } from "./StockBits";
@@ -66,13 +66,6 @@ function buildExpandedNarrative(analysis: NewsAnalysis): string {
     parts.push("No specific sector catalysts were identified from today's news. Market conditions appear broadly neutral based on available data.");
   }
   return parts.join(" ");
-}
-
-// ─── Sector impact line ─────────────────────────────────────────────────────
-function SectorImpact({ sec }: { sec: NewsAnalysis["affectedSectors"][0] }) {
-  const tone = sec.impact === "POSITIVE" ? "text-up-2" : sec.impact === "NEGATIVE" ? "text-down-2" : "text-ink-2";
-  const icon = sec.impact === "POSITIVE" ? "▲" : sec.impact === "NEGATIVE" ? "▼" : "–";
-  return <div className={`text-[11px] leading-relaxed ${tone}`}>{icon} {sec.sectorName}: {sec.reason}</div>;
 }
 
 // ─── Main Dashboard ─────────────────────────────────────────────────────────
@@ -869,41 +862,20 @@ export default function Dashboard() {
 
             <ErrorBanner msg={scanError} onDismiss={() => setScanError("")} />
 
-            {/* Macro context panel */}
+            {/* Macro banner — one-line glance; the full briefing lives on the News tab */}
             {na && !scanning && (
-              <div className="card mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="label">Macro Context · Today</span>
-                  {scanResult!.newsFromCache && (
-                    <span className="text-[9px] text-ink-3 bg-raised px-2 py-px rounded-full">✓ cached</span>
-                  )}
-                </div>
-                <p className="text-xs text-ink-2 leading-relaxed mb-2">{na.summary}</p>
-                {na.affectedSectors.length > 0 && (
-                  <div className="mb-2 space-y-0.5 hidden sm:block">
-                    {na.affectedSectors.map((sec, i) => <SectorImpact key={i} sec={sec} />)}
-                  </div>
+              <button
+                onClick={() => setTab("news")}
+                className="w-full card card-hover mb-4 py-2.5 px-3.5 flex items-center gap-2.5 text-left cursor-pointer"
+                title="Open today's full briefing"
+              >
+                <SentimentBadge na={na} />
+                <span className="flex-1 min-w-0 truncate text-xs text-ink-2">{na.summary}</span>
+                {scanResult!.newsFromCache && (
+                  <span className="hidden sm:inline text-[9px] text-ink-3 bg-raised px-2 py-px rounded-full shrink-0">✓ cached</span>
                 )}
-                {na.affectedSectors.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2 sm:hidden">
-                    {na.affectedSectors.map((sec, i) => (
-                      <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full bg-raised ${sec.impact === "POSITIVE" ? "text-up-2" : sec.impact === "NEGATIVE" ? "text-down-2" : "text-ink-2"}`}>
-                        {sec.impact === "POSITIVE" ? "▲" : sec.impact === "NEGATIVE" ? "▼" : "–"} {sec.sectorName}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {na.globalFactors.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {na.globalFactors.map((f, i) => (
-                      <span key={i} className="text-[10px] text-sky-2 bg-sky-dim px-2 py-0.5 rounded-full">{f}</span>
-                    ))}
-                  </div>
-                )}
-                <div className="flex justify-end">
-                  <button onClick={() => setTab("news")} className="btn text-[10px] px-2.5 py-1">Full briefing in News →</button>
-                </div>
-              </div>
+                <span className="text-[10px] text-ink-3 shrink-0">Details →</span>
+              </button>
             )}
 
             {/* Empty state */}

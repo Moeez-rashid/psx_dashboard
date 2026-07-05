@@ -68,8 +68,8 @@ interface FeedItem {
   desc: string;
 }
 
-// ─── Sentiment badge ─────────────────────────────────────────────────────────
-function SentimentBadge({ na }: { na: NewsAnalysis | null }) {
+// ─── Sentiment badge (also reused by the Buy Opportunities macro banner) ────
+export function SentimentBadge({ na }: { na: NewsAnalysis | null }) {
   const { label, tone } = deriveSentiment(na);
   const t = TONE[tone];
   return (

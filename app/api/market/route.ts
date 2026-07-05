@@ -32,11 +32,12 @@ export async function GET() {
       volume: s.volume,
     });
 
-    const gainers = [...liquid].sort((a, b) => b.changePercent - a.changePercent).slice(0, 6).map(slim);
-    const losers = [...liquid].sort((a, b) => a.changePercent - b.changePercent).slice(0, 6).map(slim);
+    // 15 per list: the strip shows 5 collapsed, "View all" reveals the rest client-side
+    const gainers = [...liquid].sort((a, b) => b.changePercent - a.changePercent).slice(0, 15).map(slim);
+    const losers = [...liquid].sort((a, b) => a.changePercent - b.changePercent).slice(0, 15).map(slim);
     const mostActive = [...active]
       .sort((a, b) => b.volume * b.currentPrice - a.volume * a.currentPrice)
-      .slice(0, 6)
+      .slice(0, 15)
       .map(slim);
 
     return NextResponse.json({

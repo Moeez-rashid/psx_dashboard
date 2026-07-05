@@ -41,13 +41,14 @@ function MoverRow({ m, onAdd, added }: { m: Mover; onAdd: (t: string) => void; a
   );
 }
 
-function MoverList({ movers, onAdd, watching }: {
+function MoverList({ movers, onAdd, watching, limit }: {
   movers: Mover[] | undefined;
   onAdd: (t: string) => void;
   watching: Set<string>;
+  limit: number;
 }) {
   if (!movers) return <>{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-5 my-1" />)}</>;
-  return <>{movers.slice(0, 5).map(m => <MoverRow key={m.symbol} m={m} onAdd={onAdd} added={watching.has(m.symbol)} />)}</>;
+  return <>{movers.slice(0, limit).map(m => <MoverRow key={m.symbol} m={m} onAdd={onAdd} added={watching.has(m.symbol)} />)}</>;
 }
 
 const PANELS = [
@@ -65,6 +66,8 @@ export default function MarketStrip({ onAddWatch, watchingTickers }: {
   const [data, setData] = useState<MarketData | null>(null);
   const [failed, setFailed] = useState(false);
   const [panel, setPanel] = useState<PanelId>("gainers");
+  const [showAll, setShowAll] = useState(false);
+  const limit = showAll ? 15 : 5;
 
   useEffect(() => {
     let alive = true;
@@ -103,6 +106,17 @@ export default function MarketStrip({ onAddWatch, watchingTickers }: {
         )}
       </div>
 
+      {/* Section label + plain-text expand link (not a 4th box) */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="label">Market movers</span>
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="text-[10px] text-ink-3 hover:text-sky-2 transition-colors cursor-pointer"
+        >
+          {showAll ? "Show less" : "View all →"}
+        </button>
+      </div>
+
       {/* Mobile: one compact card with segmented switcher */}
       <div className="sm:hidden card py-2.5 px-3">
         <div className="flex gap-1 mb-1.5 bg-inset rounded-lg p-0.5">
@@ -117,16 +131,16 @@ export default function MarketStrip({ onAddWatch, watchingTickers }: {
             </button>
           ))}
         </div>
-        <MoverList movers={listFor(panel)} onAdd={onAddWatch} watching={watchingTickers} />
+        <MoverList movers={listFor(panel)} onAdd={onAddWatch} watching={watchingTickers} limit={limit} />
         <div className="text-[9px] text-ink-3 mt-1">tap ＋ to watchlist</div>
       </div>
 
-      {/* Desktop: three columns */}
-      <div className="hidden sm:grid grid-cols-3 gap-3">
+      {/* Desktop: ONE bordered container, three cells split by hairline dividers */}
+      <div className="hidden sm:grid card p-0 grid-cols-3 divide-x divide-line overflow-hidden">
         {PANELS.map(p => (
-          <div key={p.id} className="card py-3">
+          <div key={p.id} className="py-3 px-3.5 min-w-0">
             <div className="label mb-1.5">{p.title}</div>
-            <MoverList movers={listFor(p.id)} onAdd={onAddWatch} watching={watchingTickers} />
+            <MoverList movers={listFor(p.id)} onAdd={onAddWatch} watching={watchingTickers} limit={limit} />
             {p.id === "active" && data?.mostActive?.[0] && (
               <div className="text-[9px] text-ink-3 mt-1.5">
                 Top turnover {fmtVol(data.mostActive[0].volume)} shares · tap ＋ to watchlist
