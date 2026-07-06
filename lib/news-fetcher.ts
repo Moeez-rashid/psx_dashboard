@@ -41,6 +41,7 @@ export interface NewsItem {
   description: string;
   pubDate: string;
   source: string;
+  link: string; // article URL from the RSS <link> tag ("" when the feed omits it)
 }
 
 /** Fetch and parse a single RSS feed with a 6-second timeout. */
@@ -146,8 +147,10 @@ function parseRSS(xml: string, source: string, max: number): NewsItem[] {
     if (!isFinanceRelevant(title, description)) continue;
 
     const pubDate = getTag(block, "pubDate");
+    const rawLink = getTag(block, "link").trim();
+    const link = /^https?:\/\/\S+$/.test(rawLink) ? rawLink : "";
 
-    items.push({ title, description, pubDate, source });
+    items.push({ title, description, pubDate, source, link });
   }
 
   return items;
@@ -184,13 +187,18 @@ function cleanText(raw: string): string {
     .trim();
 }
 
+export interface StructuredNews {
+  text: string;      // formatted block for the AI prompt
+  items: NewsItem[]; // deduped, newest-first — for the News page (with links)
+}
+
 /**
- * Fetch all RSS feeds in parallel, merge results, de-duplicate, and
- * return a formatted text block for AI consumption.
+ * Fetch all RSS feeds in parallel, merge results, de-duplicate, and return
+ * both the AI-ready text block and the structured items behind it.
  *
  * Never throws — returns a fallback message on total failure.
  */
-export async function fetchPakistanNews(): Promise<string> {
+export async function fetchPakistanNewsStructured(): Promise<StructuredNews> {
   const settled = await Promise.allSettled(
     RSS_FEEDS.map((f) => fetchFeed(f.url, f.name))
   );
@@ -201,7 +209,10 @@ export async function fetchPakistanNews(): Promise<string> {
   }
 
   if (all.length === 0) {
-    return "No news available from RSS feeds right now. Analyze based on general Pakistan market context.";
+    return {
+      text: "No news available from RSS feeds right now. Analyze based on general Pakistan market context.",
+      items: [],
+    };
   }
 
   // Sort newest-first where we have a parse-able date
@@ -239,5 +250,10 @@ export async function fetchPakistanNews(): Promise<string> {
     return `[${item.source}${date}] ${item.title}${desc}`;
   });
 
-  return lines.join("\n");
+  return { text: lines.join("\n"), items: unique.slice(0, 40) };
+}
+
+/** Back-compat wrapper — just the AI text block. */
+export async function fetchPakistanNews(): Promise<string> {
+  return (await fetchPakistanNewsStructured()).text;
 }

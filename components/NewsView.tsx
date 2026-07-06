@@ -1,7 +1,12 @@
 "use client";
 import { useMemo } from "react";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
+import type { NewsItem } from "@/lib/news-fetcher";
 import MarketStrip from "./MarketStrip";
+
+/** Google News search fallback for rows without an article link. */
+const googleNewsUrl = (q: string) =>
+  `https://news.google.com/search?q=${encodeURIComponent(q)}`;
 
 // ─── Sentiment model ────────────────────────────────────────────────────────
 // The scan's NewsAnalysis has no explicit sentiment field, so we derive one
@@ -67,6 +72,7 @@ interface FeedItem {
   date: string;
   head: string;
   desc: string;
+  link?: string; // article URL — rows fall back to a Google News search without it
 }
 
 // ─── Sentiment badge (also reused by the Buy Opportunities macro banner) ────
@@ -137,34 +143,69 @@ function SectorRow({ sec, onFilter }: { sec: NewsAnalysis["affectedSectors"][0];
 }
 
 // ─── Headline feed row ───────────────────────────────────────────────────────
+// Macro rows open the article (or a Google News search) in a new tab.
+// Ticker rows open the stock's card in-app, with a small ↗ for the news search.
 function FeedRow({ item, onOpenTicker }: { item: FeedItem; onOpenTicker: (t: string) => void }) {
   const isTicker = item.kind === "ticker";
-  const Tag = isTicker ? "button" : "div";
-  return (
-    <Tag
-      {...(isTicker ? { onClick: () => onOpenTicker(item.ticker!), title: `Open ${item.ticker}` } : {})}
-      className={`w-full flex items-start gap-2.5 py-2.5 text-left ${isTicker ? "cursor-pointer group" : ""}`}
+
+  const badge = (
+    <span
+      className={`shrink-0 mt-px text-[9px] font-semibold px-1.5 py-0.5 rounded num ${
+        isTicker ? "bg-sky-dim text-sky-2" : "bg-raised text-ink-3"
+      }`}
     >
-      <span
-        className={`shrink-0 mt-px text-[9px] font-semibold px-1.5 py-0.5 rounded num ${
-          isTicker ? "bg-sky-dim text-sky-2" : "bg-raised text-ink-3"
-        }`}
-      >
-        {isTicker ? item.ticker : "Macro"}
+      {isTicker ? item.ticker : "Macro"}
+    </span>
+  );
+
+  const body = (
+    <span className="flex-1 min-w-0">
+      <span className="block text-xs leading-snug text-ink group-hover:text-sky-2 transition-colors">
+        {item.head}
       </span>
-      <span className="flex-1 min-w-0">
-        <span className={`block text-xs leading-snug ${isTicker ? "text-ink group-hover:text-sky-2 transition-colors" : "text-ink"}`}>
-          {item.head}
+      {item.desc && item.desc !== item.head && (
+        <span className="block text-[11px] text-ink-3 leading-snug mt-0.5 line-clamp-2">{item.desc}</span>
+      )}
+      {(item.source || item.date) && (
+        <span className="block text-[10px] text-ink-3 mt-1">
+          {item.source}{item.source && item.date ? " · " : ""}{item.date}
         </span>
-        {item.desc && <span className="block text-[11px] text-ink-3 leading-snug mt-0.5 line-clamp-2">{item.desc}</span>}
-        {(item.source || item.date) && (
-          <span className="block text-[10px] text-ink-3 mt-1">
-            {item.source}{item.source && item.date ? " · " : ""}{item.date}
-          </span>
-        )}
-      </span>
-      {isTicker && <span className="text-[10px] text-ink-3 shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity">›</span>}
-    </Tag>
+      )}
+    </span>
+  );
+
+  if (isTicker) {
+    return (
+      <button
+        onClick={() => onOpenTicker(item.ticker!)}
+        title={`Open ${item.ticker}`}
+        className="w-full flex items-start gap-2.5 py-2.5 text-left cursor-pointer group"
+      >
+        {badge}
+        {body}
+        <a
+          href={item.link || googleNewsUrl(`${item.ticker} PSX ${item.head}`)}
+          target="_blank" rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          title="Search this story online"
+          className="text-[11px] text-ink-3 hover:text-sky-2 shrink-0 self-center px-1"
+        >↗</a>
+        <span className="text-[10px] text-ink-3 shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity">›</span>
+      </button>
+    );
+  }
+
+  return (
+    <a
+      href={item.link || googleNewsUrl(item.head)}
+      target="_blank" rel="noopener noreferrer"
+      title={item.link ? "Open article" : "Search this story on Google News"}
+      className="w-full flex items-start gap-2.5 py-2.5 text-left cursor-pointer group"
+    >
+      {badge}
+      {body}
+      <span className="text-[11px] text-ink-3 shrink-0 self-center opacity-60 group-hover:opacity-100 group-hover:text-sky-2 transition-opacity">↗</span>
+    </a>
   );
 }
 
@@ -173,6 +214,7 @@ export default function NewsView({
   na, narrative, newsHeadlines, newsSources, signals, timestamp,
   sentimentHistory, filterTicker, onClearFilter, onOpenTicker, onFilterSector,
   hasKey, scanning, onRunScan, onRefreshNews, onAddWatch, watchingTickers,
+  newsItems, dividendPayers,
 }: {
   na: NewsAnalysis | null;
   narrative: string;
@@ -191,29 +233,49 @@ export default function NewsView({
   onRefreshNews: () => void;
   onAddWatch: (ticker: string) => void;
   watchingTickers: Set<string>;
+  newsItems: NewsItem[];
+  dividendPayers: { ticker: string; yieldPct: number }[];
 }) {
-  // Merge per-ticker AI catalysts (actionable, shown first) with macro RSS headlines,
+  // Merge per-ticker AI catalysts (actionable, shown first) with macro headlines,
   // de-duplicating by headline prefix so a stock's catalyst wins over its macro echo.
+  // Structured items (with article links) are preferred; the formatted-string
+  // parse remains as a fallback for older cached scan responses.
   const feed = useMemo<FeedItem[]>(() => {
     const out: FeedItem[] = [];
     const seen = new Set<string>();
     const key = (s: string) => s.slice(0, 55).toLowerCase();
+
+    // A catalyst headline copied verbatim from the news can be matched back to
+    // its structured item to inherit the real article link.
+    const linkFor = (head: string) =>
+      newsItems.find(n => key(n.title) === key(head))?.link || "";
 
     for (const sig of signals) {
       const h = sig.newsHeadline;
       if (!h || h === "No recent news") continue;
       if (seen.has(key(h))) continue;
       seen.add(key(h));
-      out.push({ kind: "ticker", ticker: sig.ticker, source: "AI catalyst", date: "", head: h, desc: "" });
+      out.push({ kind: "ticker", ticker: sig.ticker, source: "AI catalyst", date: "", head: h, desc: "", link: linkFor(h) });
     }
-    for (const line of newsHeadlines) {
-      const { source, date, head, desc } = parseHeadline(line);
-      if (!head || seen.has(key(head))) continue;
-      seen.add(key(head));
-      out.push({ kind: "macro", source, date, head, desc });
+
+    if (newsItems.length > 0) {
+      for (const n of newsItems) {
+        if (!n.title || seen.has(key(n.title))) continue;
+        seen.add(key(n.title));
+        let date = "";
+        try { if (n.pubDate) date = new Date(n.pubDate).toLocaleDateString("en-PK", { month: "short", day: "numeric" }); } catch {}
+        out.push({ kind: "macro", source: n.source, date, head: n.title, desc: n.description, link: n.link });
+      }
+    } else {
+      for (const line of newsHeadlines) {
+        const { source, date, head, desc } = parseHeadline(line);
+        if (!head || seen.has(key(head))) continue;
+        seen.add(key(head));
+        out.push({ kind: "macro", source, date, head, desc });
+      }
     }
     return out;
-  }, [signals, newsHeadlines]);
+  }, [signals, newsHeadlines, newsItems]);
 
   // Cap the unfiltered feed at 7 rows (per-ticker catalysts first, macro fills the rest)
   const visibleFeed = filterTicker ? feed.filter(f => f.ticker === filterTicker) : feed.slice(0, 7);
@@ -341,8 +403,35 @@ export default function NewsView({
             {filterTicker && <button onClick={onClearFilter} className="text-sky-2 cursor-pointer underline underline-offset-2">Show all</button>}
           </p>
         )}
+        {/* Dividends — yields we already track + the official announcements page */}
+        <div className="flex items-center gap-2 flex-wrap pt-3 mt-1 border-t border-line">
+          <span className="text-[11px] shrink-0">💰</span>
+          <span className="label shrink-0">Dividends</span>
+          {dividendPayers.length > 0 ? (
+            dividendPayers.map(d => (
+              <button
+                key={d.ticker}
+                onClick={() => onOpenTicker(d.ticker)}
+                title={`Open ${d.ticker}`}
+                className="text-[10px] num bg-raised text-ink-2 hover:text-up-2 px-2 py-0.5 rounded-full cursor-pointer transition-colors"
+              >
+                {d.ticker} <span className="text-up-2">{d.yieldPct.toFixed(1)}%</span>
+              </button>
+            ))
+          ) : (
+            <span className="text-[10px] text-ink-3">yields appear as stocks are scanned</span>
+          )}
+          <a
+            href="https://dps.psx.com.pk/announcements/companies"
+            target="_blank" rel="noopener noreferrer"
+            className="text-[10px] text-sky-2 hover:underline underline-offset-2 ml-auto shrink-0"
+          >
+            All dividend & board announcements ↗
+          </a>
+        </div>
+
         <div className="text-[10px] text-ink-3 pt-3 mt-1 border-t border-line">
-          Headlines from public RSS feeds · sentiment is AI-derived · Not financial advice
+          Headlines from public RSS feeds · sentiment is AI-derived · dividend yields from latest reported fiscal year · Not financial advice
         </div>
       </section>
       )}

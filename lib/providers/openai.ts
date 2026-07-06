@@ -78,7 +78,7 @@ export async function getStockSignals(
     messages: [
       {
         role: "user",
-        content: `You are a PSX Shariah-compliant swing trading analyst. Select the BEST 1-8 stocks for short-term swing trades (days to 2 weeks).
+        content: `You are a PSX Shariah-compliant swing trading analyst. Build today's ranked slate of 5-8 signals for short-term swing trades (days to 2 weeks). Return fewer than 5 only when fewer than 5 stocks are listed below.
 
 MACRO CONTEXT (from today's Pakistan news):
 ${newsContext}
@@ -107,6 +107,11 @@ confidence — calibrate against evidence, do not guess:
   50-64 = decent setup with one clear caveat (thin volume, mixed macro, stretched RSI)
   under 50 = speculative — use WATCH or HOLD rather than BUY
 Keep confidence within 25 points of the stock's technical score.
+
+Slate rules:
+- Rank strongest BUY/STRONG_BUY first, then early or pullback WATCH candidates; include HOLD/AVOID for well-known names whose setup is deteriorating. A useful daily slate is 5-8 entries, not 1-2.
+- Never rate BUY or STRONG_BUY when RSI is above 70 or price is stretched more than 8% above EMA20 — rate WATCH with a pullback entry instead.
+- Prefer sector diversity: avoid three or more picks from one sector unless conviction is exceptional.
 
 newsHeadline: copy a headline verbatim from MACRO CONTEXT only if it directly concerns this stock or its sector; otherwise exactly "No recent news". Never invent headlines.`,
       },

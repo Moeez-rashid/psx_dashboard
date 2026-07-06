@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
+import type { NewsItem } from "@/lib/news-fetcher";
 import type { StockQuote } from "@/lib/psx";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { isPKTOpen, pktNow } from "@/lib/format";
@@ -97,6 +98,7 @@ export default function Dashboard() {
     newsHeadlines: string[];
     newsSources: string[];
     newsFromCache: boolean;
+    newsItems: NewsItem[];
   } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
@@ -273,6 +275,7 @@ export default function Dashboard() {
         newsHeadlines: data.newsHeadlines ?? [],
         newsSources: data.newsSources ?? [],
         newsFromCache: data.newsFromCache ?? false,
+        newsItems: data.newsItems ?? [],
       });
       toast(`Scan complete — ${newSignals.length} signal${newSignals.length === 1 ? "" : "s"} found`);
     } catch (e) {
@@ -298,6 +301,7 @@ export default function Dashboard() {
         newsHeadlines: news.newsHeadlines ?? prev.newsHeadlines,
         newsSources: news.newsSources ?? prev.newsSources,
         newsFromCache: news.newsFromCache ?? false,
+        newsItems: news.newsItems ?? prev.newsItems,
       } : null);
     } catch (e) {
       setScanError(e instanceof Error ? e.message : "Unknown error");
@@ -759,6 +763,13 @@ export default function Dashboard() {
   const hasKey = !!settings.apiKey;
   const watchingSet = new Set(watching.map(w => w.ticker));
   const na = scanResult?.newsAnalysis;
+
+  // Dividend payers among tickers we already hold fundamentals for (yield ≥ 2%)
+  const dividendPayers = Object.entries(askAnalystData)
+    .filter((e): e is [string, AskAnalystFundamentals] => !!e[1] && (e[1].dividendYield ?? 0) >= 2)
+    .map(([ticker, f]) => ({ ticker, yieldPct: f.dividendYield as number }))
+    .sort((a, b) => b.yieldPct - a.yieldPct)
+    .slice(0, 6);
 
   const TABS = [
     { id: "opportunities" as const, label: "Buy Opportunities", short: "Signals", count: scanResult?.signals.length },
@@ -1301,6 +1312,8 @@ export default function Dashboard() {
             onRefreshNews={runNewsRefresh}
             onAddWatch={quickAddWatch}
             watchingTickers={watchingSet}
+            newsItems={scanResult?.newsItems ?? []}
+            dividendPayers={dividendPayers}
           />
           </div>
         )}

@@ -200,7 +200,19 @@ export function scoreStock(
     reasons.push(`Volume ${volumeRatio}x average — low participation, thin market`);
   }
 
-  const compositeScore = Math.min(100, Math.round(score));
+  // --- Trend-entry adjustments — favour buyable pullbacks over extended chases ---
+  // Without these the top of the list is always whatever already ran the
+  // furthest (max EMA points + momentum), i.e. the stocks closest to overbought.
+  if (ema20 > ema50 && Math.abs(currentPrice - ema20) / ema20 <= 0.025) {
+    score += 8;
+    reasons.push("Pulled back to EMA20 support within an uptrend — favourable entry zone");
+  }
+  if (ema20 > 0 && currentPrice > ema20 * 1.08) {
+    score -= 10;
+    reasons.push(`Extended ${(((currentPrice - ema20) / ema20) * 100).toFixed(0)}% above EMA20 — chase risk, wait for a pullback`);
+  }
+
+  const compositeScore = Math.min(100, Math.max(0, Math.round(score)));
 
   let technicalSignal: TechnicalScore["technicalSignal"];
   if (compositeScore >= 75) technicalSignal = "STRONG_BUY";
