@@ -143,6 +143,47 @@ export async function getHistory(symbol: string): Promise<EODPoint[]> {
     .sort((a, b) => b.timestamp - a.timestamp); // newest first
 }
 
+export interface IndexSnapshot {
+  value: number;          // current index points
+  change: number;
+  changePercent: number;
+}
+
+/** KSE-100 snapshot scraped from the dps.psx.com.pk indices table.
+ *  Columns are mapped by header name so a column reorder can't silently
+ *  misread values. Returns null on any failure — callers treat it as optional. */
+export async function getKSE100(): Promise<IndexSnapshot | null> {
+  try {
+    const res = await fetch(`${BASE}/indices`, {
+      headers: HEADERS,
+      next: { revalidate: 60 },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    const headBlock = html.match(/<thead[^>]*>([\s\S]*?)<\/thead>/i)?.[1] ?? "";
+    const headers = [...headBlock.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)]
+      .map((m) => m[1].replace(/<[^>]+>/g, "").trim().toLowerCase());
+    const col = (name: string) => headers.findIndex((h) => h.includes(name));
+    const iCur = col("current"), iChg = col("change"), iPct = col("%");
+    if (iCur < 0 || iChg < 0) return null;
+
+    for (const row of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const cells = [...row[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+        .map((m) => m[1].replace(/<[^>]+>/g, "").trim());
+      if (!/^KSE\s?100$/i.test(cells[0] ?? "")) continue;
+      return {
+        value: parseNum(cells[iCur]),
+        change: parseNum(cells[iChg]),
+        changePercent: iPct >= 0 ? parseNum(cells[iPct]) : 0,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** Get quotes for multiple symbols in one market-watch fetch. */
 export async function getQuotes(
   symbols: string[]

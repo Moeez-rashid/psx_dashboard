@@ -215,7 +215,8 @@ export default function NewsView({
     return out;
   }, [signals, newsHeadlines]);
 
-  const visibleFeed = filterTicker ? feed.filter(f => f.ticker === filterTicker) : feed;
+  // Cap the unfiltered feed at 7 rows (per-ticker catalysts first, macro fills the rest)
+  const visibleFeed = filterTicker ? feed.filter(f => f.ticker === filterTicker) : feed.slice(0, 7);
 
   // No analysis yet → a scanning progress card or the run-a-scan prompt.
   // Market movers below stay live either way (they need no AI key).
@@ -261,9 +262,12 @@ export default function NewsView({
         </div>
       )}
 
+      {/* ── 1. Market movers — live pulse first, works without an AI key ── */}
+      <MarketStrip variant="full" onAddWatch={onAddWatch} watchingTickers={watchingTickers} />
+
       {statusCard}
 
-      {/* ── 1. Today's briefing ── */}
+      {/* ── 2. Today's briefing ── */}
       {na && (
       <section className="card">
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -313,9 +317,6 @@ export default function NewsView({
           </div>
         </section>
       )}
-
-      {/* ── 3. Market movers — full ranked lists (live, no key needed) ── */}
-      <MarketStrip variant="full" onAddWatch={onAddWatch} watchingTickers={watchingTickers} />
 
       {/* ── 4. Latest headlines ── */}
       {na && (

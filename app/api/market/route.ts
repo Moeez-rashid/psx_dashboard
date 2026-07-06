@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAllStocks } from "@/lib/psx";
+import { getAllStocks, getKSE100 } from "@/lib/psx";
 
 export interface MarketMover {
   symbol: string;
@@ -15,7 +15,7 @@ export interface MarketMover {
  */
 export async function GET() {
   try {
-    const all = await getAllStocks();
+    const [all, kse100] = await Promise.all([getAllStocks(), getKSE100()]);
     // Tradeable rows only: real price and some liquidity, skip penny noise
     const active = all.filter(s => s.currentPrice > 0 && s.volume > 0);
 
@@ -42,6 +42,7 @@ export async function GET() {
 
     return NextResponse.json({
       breadth: { advancing, declining, unchanged, total: active.length },
+      kse100, // null when the indices scrape fails — the UI falls back to breadth
       gainers,
       losers,
       mostActive,

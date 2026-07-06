@@ -13,6 +13,7 @@ interface Mover {
 }
 interface MarketData {
   breadth: { advancing: number; declining: number; unchanged: number; total: number };
+  kse100: { value: number; change: number; changePercent: number } | null;
   gainers: Mover[];
   losers: Mover[];
   mostActive: Mover[];
@@ -51,23 +52,28 @@ function MoverList({ movers, onAdd, watching, limit }: {
   return <>{movers.slice(0, limit).map(m => <MoverRow key={m.symbol} m={m} onAdd={onAdd} added={watching.has(m.symbol)} />)}</>;
 }
 
-/** Breadth advancing/declining bar — rendered inside the movers container. */
-function BreadthStrip({ b }: { b: MarketData["breadth"] | undefined }) {
-  const advPct = b && b.total > 0 ? (b.advancing / b.total) * 100 : 50;
+/** Index points strip — KSE-100 value + day change inside the movers container.
+ *  Falls back to the advancing/declining counts when the index scrape fails. */
+function IndexStrip({ data }: { data: MarketData | null }) {
+  const k = data?.kse100;
+  const b = data?.breadth;
   return (
-    <div className="flex items-center gap-3 px-3.5 py-2 border-b border-line">
-      <span className="label">Breadth</span>
-      {b ? (
+    <div className="flex items-center gap-3 px-3.5 py-2 border-b border-line min-w-0">
+      <span className="label shrink-0">KSE-100</span>
+      {k ? (
         <>
-          <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-line-2 flex">
-            <div className="bg-up h-full transition-all duration-700" style={{ width: `${advPct}%` }} />
-            <div className="bg-down h-full flex-1" />
-          </div>
-          <span className="text-[11px] num text-up-2">{b.advancing} ▲</span>
-          <span className="text-[11px] num text-down-2">{b.declining} ▼</span>
+          <span className="text-[13px] font-semibold num text-ink">{k.value.toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span className={`text-[11px] num ${k.change >= 0 ? "text-up-2" : "text-down-2"}`}>
+            {k.change >= 0 ? "▲ +" : "▼ "}{k.change.toLocaleString("en-PK", { maximumFractionDigits: 2 })} ({k.changePercent >= 0 ? "+" : ""}{k.changePercent.toFixed(2)}%)
+          </span>
+          {b && (
+            <span className="hidden sm:inline text-[10px] text-ink-3 num ml-auto">{b.advancing} ▲ · {b.declining} ▼</span>
+          )}
         </>
+      ) : b ? (
+        <span className="text-[11px] num text-ink-2">{b.advancing} <span className="text-up-2">▲</span> · {b.declining} <span className="text-down-2">▼</span></span>
       ) : (
-        <Skeleton className="flex-1 h-1.5" />
+        <Skeleton className="flex-1 h-3.5 max-w-40" />
       )}
     </div>
   );
@@ -124,7 +130,7 @@ export default function MarketStrip({ variant = "full", onAddWatch, watchingTick
           )}
         </div>
         <div className="card p-0 overflow-hidden">
-          <BreadthStrip b={data?.breadth} />
+          <IndexStrip data={data} />
           <div className="grid grid-cols-3 divide-x divide-line">
             {PANELS.map(p => {
               const m = listFor(p.id)?.[0];
@@ -168,16 +174,16 @@ export default function MarketStrip({ variant = "full", onAddWatch, watchingTick
         </button>
       </div>
 
-      {/* Mobile: one compact card with segmented switcher */}
-      <div className="sm:hidden card p-0 overflow-hidden">
-        <BreadthStrip b={data?.breadth} />
+      {/* One compact card: segmented panel switcher, 5 rows (View all → 15) */}
+      <div className="card p-0 overflow-hidden">
+        <IndexStrip data={data} />
         <div className="py-2.5 px-3">
-          <div className="flex gap-1 mb-1.5 bg-inset rounded-lg p-0.5">
+          <div className="flex gap-1 mb-1.5 bg-inset rounded-lg p-0.5 sm:max-w-xs">
             {PANELS.map(p => (
               <button
                 key={p.id}
                 onClick={() => setPanel(p.id)}
-                className={`flex-1 text-[10px] font-semibold py-1.5 rounded-md transition-colors cursor-pointer
+                className={`flex-1 text-[10px] font-semibold py-1.5 px-3 rounded-md transition-colors cursor-pointer
                   ${panel === p.id ? "bg-raised text-ink" : "text-ink-3"}`}
               >
                 {p.label}
@@ -186,24 +192,6 @@ export default function MarketStrip({ variant = "full", onAddWatch, watchingTick
           </div>
           <MoverList movers={listFor(panel)} onAdd={add} watching={watching} limit={limit} />
           <div className="text-[9px] text-ink-3 mt-1">tap ＋ to watchlist</div>
-        </div>
-      </div>
-
-      {/* Desktop: ONE bordered container, three cells split by hairline dividers */}
-      <div className="hidden sm:block card p-0 overflow-hidden">
-        <BreadthStrip b={data?.breadth} />
-        <div className="grid grid-cols-3 divide-x divide-line">
-          {PANELS.map(p => (
-            <div key={p.id} className="py-3 px-3.5 min-w-0">
-              <div className="label mb-1.5">{p.title}</div>
-              <MoverList movers={listFor(p.id)} onAdd={add} watching={watching} limit={limit} />
-              {p.id === "active" && data?.mostActive?.[0] && (
-                <div className="text-[9px] text-ink-3 mt-1.5">
-                  Top turnover {fmtVol(data.mostActive[0].volume)} shares · tap ＋ to watchlist
-                </div>
-              )}
-            </div>
-          ))}
         </div>
       </div>
     </section>

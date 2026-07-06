@@ -122,7 +122,16 @@ Return a JSON object with a 'signals' array:
   "risks": ["Market weakness", "Rupee risk"],
   "suggestedEntry": "PKR 308-312"
 }]}
-signal: BUY | STRONG_BUY | WATCH | HOLD | SELL | AVOID`,
+signal: BUY | STRONG_BUY | WATCH | HOLD | SELL | AVOID
+
+confidence — calibrate against evidence, do not guess:
+  80-95 = technical score >= 60 AND a specific fresh catalyst for this stock or its sector AND supportive macro (rare; never exceed 95)
+  65-79 = clean technical setup with sector/macro support, but no stock-specific catalyst
+  50-64 = decent setup with one clear caveat (thin volume, mixed macro, stretched RSI)
+  under 50 = speculative — use WATCH or HOLD rather than BUY
+Keep confidence within 25 points of the stock's technical score.
+
+newsHeadline: copy a headline verbatim from MACRO CONTEXT only if it directly concerns this stock or its sector; otherwise exactly "No recent news". Never invent headlines.`,
       },
     ],
   });

@@ -838,10 +838,7 @@ export default function Dashboard() {
         {/* ════ BUY OPPORTUNITIES ════ */}
         {tab === "opportunities" && (
           <div>
-            {/* Live market pulse — compact; the full ranked lists live on the News tab */}
-            <MarketStrip variant="compact" onViewAll={() => setTab("news")} />
-
-            {/* Scanner controls */}
+            {/* Scanner controls — the tab's primary action stays on top */}
             <div className="flex gap-2 mb-4 flex-wrap items-center">
               <button onClick={runFullScan} disabled={scanning} className="btn-accent font-semibold px-4 py-2">
                 {scanning ? "⟳ Scanning…" : scanResult ? "↻ Re-run Full Scan" : "↗ Full Scan · KMI-30 + News"}
@@ -856,6 +853,9 @@ export default function Dashboard() {
             </div>
 
             <ErrorBanner msg={scanError} onDismiss={() => setScanError("")} />
+
+            {/* Live market pulse — compact; the full ranked lists live on the News tab */}
+            <MarketStrip variant="compact" onViewAll={() => setTab("news")} />
 
             {/* Macro banner — one-line glance; the full briefing lives on the News tab */}
             {na && !scanning && (

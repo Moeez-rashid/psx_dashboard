@@ -92,6 +92,8 @@ export function Sparkline({ data, width = 84, height = 30, color, opacity = 0.9 
   const fillPts = [`${pad},${height - pad}`, ...pts, `${width - pad},${height - pad}`].join(" ");
   return (
     <svg width={width} height={height} className="shrink-0" aria-hidden>
+      {/* native hover tooltip so the chart's timeframe is discoverable */}
+      <title>{`${data.length}-day price trend (daily closes)`}</title>
       <polygon points={fillPts} fill={stroke} opacity={0.08} />
       <polyline points={pts.join(" ")} fill="none" stroke={stroke} strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round" opacity={opacity} />
     </svg>
