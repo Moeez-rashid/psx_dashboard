@@ -1,11 +1,16 @@
 /**
  * AskAnalyst.com.pk API client
- * Provides fundamental data: PE, PBV, div yield, 52-week range,
- * periodic returns, and market cap for PSX-listed companies.
+ * Provides fundamental ratios: P/E, P/BV, dividend yield, ROE, debt-to-equity,
+ * EPS and related valuation/profitability metrics for PSX-listed companies.
  *
  * All endpoints are public (no API key required).
- * Company list is cached for 24 hours; price data has no local cache
- * (callers should cache at a higher level or accept fresh-each-time).
+ *
+ * NOTE — endpoint migration (2026):
+ *   askanalyst retired the old `sharepricedatanew/{id}` snapshot endpoint; it now
+ *   returns HTTP 500 ("Unknown column 'dividend'") for every ticker. Their live site
+ *   moved to `rationew/{id}`, which returns annual financial ratios grouped into
+ *   sections. We read the latest reported fiscal year for each metric we care about.
+ *   Company list is cached for 24 hours.
  */
 
 const BASE = "https://api.askanalyst.com.pk/api";
@@ -60,34 +65,67 @@ export async function getCompanyId(symbol: string): Promise<number | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Fundamentals  (sharepricedatanew/{id})
+// Fundamentals  (rationew/{id})
 // ---------------------------------------------------------------------------
 
 export interface AskAnalystFundamentals {
   symbol: string;
-  currentPrice: number;
-  pe: number | null;
-  pbv: number | null;
-  dividendYield: number | null;   // percent
-  marketCap: number | null;       // millions PKR
-  shares: number | null;          // millions
-  fiftyTwoWeekHigh: number | null;
-  fiftyTwoWeekLow: number | null;
-  totalReturn1M: number | null;   // percent
-  totalReturn3M: number | null;
-  totalReturn6M: number | null;
-  totalReturn1Y: number | null;
-  volume: number | null;
-  sector: string;
   companyName: string;
+  sector: string;
+  fiscalYear: string | null;     // latest reported year, e.g. "2025"
+  pe: number | null;             // PER (Price/Earnings)
+  pbv: number | null;            // Price/Book
+  dividendYield: number | null;  // percent
+  roe: number | null;            // Return on Equity, percent
+  debtToEquity: number | null;   // x  (null for banks — not meaningful)
+  eps: number | null;            // PKR — lets the UI derive a trailing P/E for banks
+  netMargin: number | null;      // percent
+  revenueGrowth: number | null;  // percent (latest year YoY)
+  payoutRatio: number | null;    // percent
 }
 
 function nullNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
-  return isNaN(n) || v === null || v === undefined || v === "" ? null : n;
+  return isNaN(n) ? null : n;
 }
 
-/** Fetch current fundamentals for a single PSX ticker. Returns null if not found. */
+// ─── rationew response shape ────────────────────────────────────────────────
+interface YearValue { year: string; value: string }
+interface RatioMetric { label: string; unit?: string; data: YearValue[] }
+interface RatioSection { section: string; data: RatioMetric[] }
+
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Flatten all sections into a normalized-label → metric map (first match wins). */
+function indexMetrics(sections: RatioSection[]): Map<string, RatioMetric> {
+  const idx = new Map<string, RatioMetric>();
+  for (const sec of sections) {
+    if (!Array.isArray(sec?.data)) continue;
+    for (const m of sec.data) {
+      if (!m?.label) continue;
+      const key = norm(m.label);
+      if (!idx.has(key)) idx.set(key, m);
+    }
+  }
+  return idx;
+}
+
+/** Most recent year with a parseable value for a metric. */
+function latest(m: RatioMetric | undefined): { year: string; value: number } | null {
+  if (!m || !Array.isArray(m.data)) return null;
+  let best: { year: string; value: number } | null = null;
+  for (const yv of m.data) {
+    const v = nullNum(yv?.value);
+    if (v === null) continue;
+    const y = parseInt(yv.year, 10);
+    if (isNaN(y)) continue;
+    if (!best || y > parseInt(best.year, 10)) best = { year: yv.year, value: v };
+  }
+  return best;
+}
+
+/** Fetch current fundamental ratios for a single PSX ticker. Returns null if not found. */
 export async function getAskAnalystFundamentals(
   symbol: string
 ): Promise<AskAnalystFundamentals | null> {
@@ -96,33 +134,63 @@ export async function getAskAnalystFundamentals(
     const entry = map.get(symbol.toUpperCase());
     if (!entry) return null;
 
-    const res = await fetch(`${BASE}/sharepricedatanew/${entry.id}`, {
+    const res = await fetch(`${BASE}/rationew/${entry.id}`, {
       headers: { "User-Agent": "PSX-Dashboard/1.0" },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) return null;
 
-    const d = await res.json();
-    const tr = d.total_return ?? {};
+    const sections: RatioSection[] = await res.json();
+    if (!Array.isArray(sections) || sections.length === 0) return null;
 
-    return {
-      symbol: symbol.toUpperCase(),
-      currentPrice: nullNum(d.current) ?? 0,
-      pe: nullNum(d.pe),
-      pbv: nullNum(d.pbv),
-      dividendYield: nullNum(d.dividend_yield),
-      marketCap: nullNum(d.market_cap),
-      shares: nullNum(d.shares),
-      fiftyTwoWeekHigh: nullNum(d.fifty_two_week_high),
-      fiftyTwoWeekLow: nullNum(d.fifty_two_week_low),
-      totalReturn1M: nullNum(tr["1M"]),
-      totalReturn3M: nullNum(tr["3M"]),
-      totalReturn6M: nullNum(tr["6M"]),
-      totalReturn1Y: nullNum(tr["1Y"]),
-      volume: nullNum(d.volume),
-      sector: entry.sector ?? "",
-      companyName: entry.name ?? symbol,
+    const idx = indexMetrics(sections);
+    // First candidate label that exists wins (handles bank vs non-bank section shapes).
+    const pick = (...labels: string[]) => {
+      for (const l of labels) {
+        const hit = latest(idx.get(norm(l)));
+        if (hit) return hit;
+      }
+      return null;
     };
+
+    const pe = pick("PER", "P/E", "PE Ratio");
+    const pbv = pick("PBV", "P/BV");
+    const div = pick("Div Yield", "Dividend Yield");
+    const roe = pick("ROE");
+    const de = pick("Debt To Equity", "Debt/Equity");
+    const eps = pick("EPS");
+    const nm = pick("Net Margin", "Net Profit Margin");
+    const rev = pick("Revenue Growth");
+    const payout = pick("Payout Ratio");
+
+    const years = [pe, pbv, div, roe, eps].filter(Boolean) as { year: string }[];
+    const fiscalYear =
+      years.length > 0
+        ? years.reduce((a, b) => (parseInt(b.year, 10) > parseInt(a.year, 10) ? b : a)).year
+        : null;
+
+    const out: AskAnalystFundamentals = {
+      symbol: symbol.toUpperCase(),
+      companyName: entry.name ?? symbol,
+      sector: entry.sector ?? "",
+      fiscalYear,
+      pe: pe?.value ?? null,
+      pbv: pbv?.value ?? null,
+      dividendYield: div?.value ?? null,
+      roe: roe?.value ?? null,
+      // askanalyst reports Debt-To-Equity as a percent (e.g. 47.9); store as a ratio (0.48x).
+      debtToEquity: de ? de.value / 100 : null,
+      eps: eps?.value ?? null,
+      netMargin: nm?.value ?? null,
+      revenueGrowth: rev?.value ?? null,
+      payoutRatio: payout?.value ?? null,
+    };
+
+    // If nothing useful parsed, treat as no data.
+    if (out.pe === null && out.pbv === null && out.dividendYield === null && out.roe === null && out.eps === null) {
+      return null;
+    }
+    return out;
   } catch {
     return null;
   }
@@ -151,27 +219,15 @@ export async function getMultipleFundamentals(
 
 /**
  * Format a compact one-line fundamentals summary for AI prompt injection.
- * e.g. "PE 8.2x | PBV 1.1x | Div 4.3% | 52W 62% | 1Y -12.4%"
+ * e.g. "PE 8.2x | PBV 1.1x | ROE 14.0% | D/E 0.40 | Div 6.1%"
  */
 export function fundamentalsPromptLine(f: AskAnalystFundamentals): string {
   const parts: string[] = [];
   if (f.pe !== null) parts.push(`PE ${f.pe.toFixed(1)}x`);
   if (f.pbv !== null) parts.push(`PBV ${f.pbv.toFixed(1)}x`);
+  if (f.roe !== null) parts.push(`ROE ${f.roe.toFixed(1)}%`);
+  if (f.debtToEquity !== null) parts.push(`D/E ${f.debtToEquity.toFixed(2)}`);
   if (f.dividendYield !== null && f.dividendYield > 0)
     parts.push(`Div ${f.dividendYield.toFixed(1)}%`);
-  if (
-    f.fiftyTwoWeekHigh !== null &&
-    f.fiftyTwoWeekLow !== null &&
-    f.fiftyTwoWeekHigh > f.fiftyTwoWeekLow
-  ) {
-    const pos = Math.round(
-      ((f.currentPrice - f.fiftyTwoWeekLow) /
-        (f.fiftyTwoWeekHigh - f.fiftyTwoWeekLow)) *
-        100
-    );
-    parts.push(`52W-pos ${pos}%`);
-  }
-  if (f.totalReturn1Y !== null)
-    parts.push(`1Y ${f.totalReturn1Y > 0 ? "+" : ""}${f.totalReturn1Y.toFixed(1)}%`);
   return parts.join(" | ");
 }

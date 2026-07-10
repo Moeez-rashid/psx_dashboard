@@ -30,8 +30,9 @@ const RSS_FEEDS: { name: string; url: string }[] = [
     url: "https://www.thenews.com.pk/rss/2/business",
   },
   {
+    // Business category only — the general /feed/ mixes in sports & showbiz
     name: "ARY News",
-    url: "https://arynews.tv/feed/",
+    url: "https://arynews.tv/category/business/feed/",
   },
 ];
 
@@ -40,6 +41,7 @@ export interface NewsItem {
   description: string;
   pubDate: string;
   source: string;
+  link: string; // article URL from the RSS <link> tag ("" when the feed omits it)
 }
 
 /** Fetch and parse a single RSS feed with a 6-second timeout. */
@@ -72,29 +74,56 @@ async function fetchFeed(
 
 /**
  * Finance-relevance filter — strips military, sports, entertainment and other
- * non-market content before it reaches the AI.  At least one keyword must appear
- * in the combined title + description text (case-insensitive).
+ * non-market content before it reaches the AI.
+ *
+ * Matching is whole-word (regex \b) on CLEANED text: plain substring matching
+ * let "Bellingham powers England" through via "power", "World Cup quarters"
+ * via "quarter", and "prices" via "rice".  A blocklist catches sports/showbiz
+ * items; those survive only when a strong market term is also present
+ * (e.g. an article about World Cup broadcast rights and PSX-listed media).
  */
 const FINANCE_KEYWORDS = [
-  "stock", "market", "psx", "kse", "rupee", "pkr", "sbp", "secp",
-  "bank", "banking", "finance", "financial", "economy", "economic",
-  "inflation", "interest rate", "interest", "oil", "gas", "energy", "power",
-  "textile", "cement", "fertilizer", "tax", "budget", "trade",
-  "import", "export", "dollar", "investment", "investor", "corporate",
-  "earnings", "profit", "loss", "revenue", "dividend", "turnover",
-  "ipo", "shares", "equity", "bond", "treasury", "sukuk",
-  "gdp", "fiscal", "monetary", "currency", "devaluation", "exchange rate",
-  "petroleum", "electricity", "coal", "mining", "refinery",
-  "agriculture", "wheat", "sugar", "cotton", "rice", "crop",
-  "company", "companies", "industry", "industries", "sector",
-  "business", "enterprise", "commercial", "bourse",
-  "quarter", "annual", "result", "report", "listing", "privatisation",
+  "stock", "stocks", "market", "markets", "psx", "kse", "kse-100", "rupee", "pkr", "sbp", "secp",
+  "bank", "banks", "banking", "finance", "financial", "economy", "economic",
+  "inflation", "interest rate", "policy rate", "oil", "gas", "lng", "rlng", "energy", "power",
+  "textile", "cement", "fertilizer", "fertiliser", "tax", "taxes", "budget", "trade", "tariff", "tariffs",
+  "import", "imports", "export", "exports", "dollar", "investment", "investor", "investors", "corporate",
+  "earnings", "profit", "profits", "loss", "losses", "revenue", "dividend", "turnover",
+  "ipo", "shares", "equity", "equities", "bond", "bonds", "treasury", "sukuk",
+  "gdp", "fiscal", "monetary", "currency", "devaluation", "exchange rate", "remittance", "remittances",
+  "petroleum", "petrol", "diesel", "electricity", "coal", "mining", "refinery", "gold", "bullion",
+  "agriculture", "wheat", "sugar", "cotton", "rice", "crop", "crops",
+  "company", "companies", "industry", "industries", "sector", "sectors",
+  "business", "enterprise", "commercial", "bourse", "imf", "world bank", "moody", "fitch",
+  "quarterly", "annual results", "privatisation", "privatization", "bitcoin", "crypto",
   "ogdc", "ppl", "pso", "engro", "luck", "mebl", "hbl", "ubl", "mcb",
 ];
 
+// Clearly non-market topics. An item mentioning these needs a STRONG market
+// term to stay (weak ones like "power"/"gold" are too easy to hit by accident).
+const NOISE_KEYWORDS = [
+  "world cup", "cricket", "football", "soccer", "hockey", "tennis", "olympics",
+  "psl", "t20", "odi", "wicket", "innings", "stadium", "tournament", "match",
+  "showbiz", "bollywood", "hollywood", "drama", "film", "movie", "actor", "actress",
+  "celebrity", "singer", "concert", "viral", "simpsons", "tiktoker", "instagram",
+];
+
+const STRONG_FINANCE = [
+  "psx", "kse", "kse-100", "stock market", "stocks", "rupee", "sbp", "secp", "imf",
+  "inflation", "gdp", "fiscal", "monetary", "bourse", "equities", "dividend", "ipo",
+];
+
+const wordRe = (kw: string) => new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+const FINANCE_RES = FINANCE_KEYWORDS.map(wordRe);
+const NOISE_RES = NOISE_KEYWORDS.map(wordRe);
+const STRONG_RES = STRONG_FINANCE.map(wordRe);
+
 function isFinanceRelevant(title: string, description: string): boolean {
-  const text = (title + " " + description).toLowerCase();
-  return FINANCE_KEYWORDS.some((kw) => text.includes(kw));
+  const text = title + " " + description;
+  if (NOISE_RES.some((re) => re.test(text))) {
+    return STRONG_RES.some((re) => re.test(text));
+  }
+  return FINANCE_RES.some((re) => re.test(text));
 }
 
 /** Minimal RSS XML parser — handles both CDATA and plain text fields. */
@@ -105,22 +134,23 @@ function parseRSS(xml: string, source: string, max: number): NewsItem[] {
 
   while ((m = itemRe.exec(xml)) !== null && items.length < max) {
     const block = m[1];
-    const title = getTag(block, "title");
-    if (!title || title.length < 4) continue;
+    const rawTitle = getTag(block, "title");
+    if (!rawTitle || rawTitle.length < 4) continue;
 
-    const description = getTag(block, "description");
+    // Clean BEFORE filtering — raw descriptions are full of HTML boilerplate
+    // (links, related-article text) that false-matched finance keywords.
+    const title = cleanText(rawTitle);
+    let description = cleanText(getTag(block, "description")).slice(0, 200);
+    if (description === title || title.startsWith(description)) description = "";
+    if (/^https?:\/\/\S*$/.test(description)) description = ""; // some feeds ship only a link
 
-    // Skip articles with no connection to finance / markets / economy
     if (!isFinanceRelevant(title, description)) continue;
 
     const pubDate = getTag(block, "pubDate");
+    const rawLink = getTag(block, "link").trim();
+    const link = /^https?:\/\/\S+$/.test(rawLink) ? rawLink : "";
 
-    items.push({
-      title: cleanText(title),
-      description: cleanText(description).slice(0, 200),
-      pubDate,
-      source,
-    });
+    items.push({ title, description, pubDate, source, link });
   }
 
   return items;
@@ -137,25 +167,38 @@ function getTag(xml: string, tag: string): string {
 }
 
 function cleanText(raw: string): string {
-  return raw
-    .replace(/<[^>]+>/g, "")        // strip HTML tags
+  // Decode entities FIRST, then strip tags. The old order stripped tags before
+  // decoding, so feeds that ship escaped HTML (&lt;p&gt;…) decoded into literal
+  // <p>/<a href…> tags that leaked into the UI. Strip in a loop so nested
+  // escaping (&amp;lt;) can't smuggle a tag through either.
+  let s = raw
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
     .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ");
+  let prev = "";
+  while (prev !== s) { prev = s; s = s.replace(/<[^>]*>/g, ""); }
+  return s
     .replace(/&#?\w+;/g, "")        // remaining HTML entities
     .replace(/\s+/g, " ")
     .trim();
 }
 
+export interface StructuredNews {
+  text: string;      // formatted block for the AI prompt
+  items: NewsItem[]; // deduped, newest-first — for the News page (with links)
+}
+
 /**
- * Fetch all RSS feeds in parallel, merge results, de-duplicate, and
- * return a formatted text block for AI consumption.
+ * Fetch all RSS feeds in parallel, merge results, de-duplicate, and return
+ * both the AI-ready text block and the structured items behind it.
  *
  * Never throws — returns a fallback message on total failure.
  */
-export async function fetchPakistanNews(): Promise<string> {
+export async function fetchPakistanNewsStructured(): Promise<StructuredNews> {
   const settled = await Promise.allSettled(
     RSS_FEEDS.map((f) => fetchFeed(f.url, f.name))
   );
@@ -166,7 +209,10 @@ export async function fetchPakistanNews(): Promise<string> {
   }
 
   if (all.length === 0) {
-    return "No news available from RSS feeds right now. Analyze based on general Pakistan market context.";
+    return {
+      text: "No news available from RSS feeds right now. Analyze based on general Pakistan market context.",
+      items: [],
+    };
   }
 
   // Sort newest-first where we have a parse-able date
@@ -204,5 +250,10 @@ export async function fetchPakistanNews(): Promise<string> {
     return `[${item.source}${date}] ${item.title}${desc}`;
   });
 
-  return lines.join("\n");
+  return { text: lines.join("\n"), items: unique.slice(0, 40) };
+}
+
+/** Back-compat wrapper — just the AI text block. */
+export async function fetchPakistanNews(): Promise<string> {
+  return (await fetchPakistanNewsStructured()).text;
 }

@@ -19,6 +19,7 @@ import {
   getHistory,
   getStocksBySector,
   KMI30_TICKERS,
+  SECTOR_CODES,
   SECTOR_NAME_TO_CODE,
   type StockQuote,
 } from "./psx";
@@ -30,7 +31,7 @@ import {
   type NewsAnalysis,
   type ProviderConfig,
 } from "./providers";
-import { fetchPakistanNews } from "./news-fetcher";
+import { fetchPakistanNewsStructured, type NewsItem } from "./news-fetcher";
 import { getMultipleFundamentals, fundamentalsPromptLine } from "./askanalyst";
 
 export interface ScanResult {
@@ -44,6 +45,7 @@ export interface ScanResult {
   newsHeadlines: string[];      // top headlines fed to the AI (for transparency)
   newsSources: string[];        // RSS source names that had articles
   newsFromCache: boolean;       // true when AI analysis was reused (news unchanged)
+  newsItems: NewsItem[];        // structured headlines w/ article links (for the News page)
   fundamentals: Record<string, import("./askanalyst").AskAnalystFundamentals>; // keyed by ticker
 }
 
@@ -97,6 +99,7 @@ let _newsCache: {
   analysis: NewsAnalysis;
   headlines: string[];   // normalised for overlap detection
   sources: string[];
+  items: NewsItem[];
   at: number;
 } | null = null;
 const NEWS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -129,13 +132,16 @@ async function getNewsAnalysisWithCache(config: ProviderConfig): Promise<{
   newsAnalysis: NewsAnalysis;
   newsHeadlines: string[];
   newsSources: string[];
+  newsItems: NewsItem[];
   fromCache: boolean;
 }> {
   // Fetch RSS news and sector fundamentals in parallel — no extra latency
-  const [rawNews, fundamentalsCtx] = await Promise.all([
-    fetchPakistanNews(),
+  const [structured, fundamentalsCtx] = await Promise.all([
+    fetchPakistanNewsStructured(),
     getFundamentalsContext(),
   ]);
+  const rawNews = structured.text;
+  const newsItems = structured.items.slice(0, 12);
 
   const headlines = extractHeadlines(rawNews, 10);
   const sources = extractSources(rawNews);
@@ -146,7 +152,7 @@ async function getNewsAnalysisWithCache(config: ProviderConfig): Promise<{
     const newsUnchanged = headlinesStillFresh(headlines, _newsCache.headlines);
     if (cacheAlive || newsUnchanged) {
       _newsCache.at = Date.now(); // bump TTL
-      return { newsAnalysis: _newsCache.analysis, newsHeadlines: headlines, newsSources: sources, fromCache: true };
+      return { newsAnalysis: _newsCache.analysis, newsHeadlines: headlines, newsSources: sources, newsItems, fromCache: true };
     }
   }
 
@@ -156,8 +162,8 @@ async function getNewsAnalysisWithCache(config: ProviderConfig): Promise<{
 
   // Headlines changed significantly — run AI analysis on fresh (augmented) news
   const newsAnalysis = await getNewsAnalysis(config, augmentedNews);
-  _newsCache = { text: rawNews, analysis: newsAnalysis, headlines, sources, at: Date.now() };
-  return { newsAnalysis, newsHeadlines: headlines, newsSources: sources, fromCache: false };
+  _newsCache = { text: rawNews, analysis: newsAnalysis, headlines, sources, items: newsItems, at: Date.now() };
+  return { newsAnalysis, newsHeadlines: headlines, newsSources: sources, newsItems, fromCache: false };
 }
 
 interface ScanOptions {
@@ -203,14 +209,15 @@ function buildStockContext(
   fundamentals?: Map<string, import("./askanalyst").AskAnalystFundamentals>
 ): string {
   return scores
-    .slice(0, 20) // cap at 20 to keep prompt manageable
+    .slice(0, 30) // top 30 — enough variety for a diversified 5-8 slate
     .map((s) => {
       const q = quotes[s.symbol];
       const f = fundamentals?.get(s.symbol);
       const price = q?.currentPrice ?? s.currentPrice;
       const chg = q?.changePercent ?? 0;
+      const sectorName = SECTOR_CODES[q?.sector ?? ""] ?? q?.sector ?? "n/a";
       const lines = [
-        `${s.symbol} — PKR ${price} (${chg >= 0 ? "+" : ""}${chg.toFixed(2)}% today)`,
+        `${s.symbol} (${sectorName}) — PKR ${price} (${chg >= 0 ? "+" : ""}${chg.toFixed(2)}% today)`,
         `  Technical score: ${s.compositeScore}/100 [${s.technicalSignal}]`,
         `  RSI: ${s.rsi} | EMA20: ${s.ema20} | EMA50: ${s.ema50}`,
         `  Volume: ${s.volumeRatio}x 20d avg (${(s.avgVolume20d / 1000).toFixed(0)}K avg/day)`,
@@ -259,6 +266,7 @@ export async function runFullScan(
   };
   let newsHeadlines: string[] = [];
   let newsSources: string[] = [];
+  let newsItems: NewsItem[] = [];
   let newsFromCache = false;
 
   if (!skipNewsPass) {
@@ -266,6 +274,7 @@ export async function runFullScan(
     newsAnalysis = newsResult.newsAnalysis;
     newsHeadlines = newsResult.newsHeadlines;
     newsSources = newsResult.newsSources;
+    newsItems = newsResult.newsItems;
     newsFromCache = newsResult.fromCache;
   }
 
@@ -358,6 +367,7 @@ export async function runFullScan(
     newsHeadlines,
     newsSources,
     newsFromCache,
+    newsItems,
     fundamentals: fundamentalsRecord,
   };
 }
@@ -365,7 +375,7 @@ export async function runFullScan(
 /** Lightweight news-only refresh (Pass 1 only, no stock fetch). Uses same cache. */
 export async function runNewsRefresh(
   providerConfig: ProviderConfig
-): Promise<{ newsAnalysis: NewsAnalysis; newsHeadlines: string[]; newsSources: string[]; newsFromCache: boolean }> {
+): Promise<{ newsAnalysis: NewsAnalysis; newsHeadlines: string[]; newsSources: string[]; newsItems: NewsItem[]; newsFromCache: boolean }> {
   const r = await getNewsAnalysisWithCache(providerConfig);
-  return { newsAnalysis: r.newsAnalysis, newsHeadlines: r.newsHeadlines, newsSources: r.newsSources, newsFromCache: r.fromCache };
+  return { newsAnalysis: r.newsAnalysis, newsHeadlines: r.newsHeadlines, newsSources: r.newsSources, newsItems: r.newsItems, newsFromCache: r.fromCache };
 }

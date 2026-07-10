@@ -101,7 +101,7 @@ export async function getStockSignals(
       },
       {
         role: "user",
-        content: `Select the BEST 1-8 stocks for short-term swing trades (days to 2 weeks).
+        content: `Build today's ranked slate of 5-8 signals for short-term swing trades (days to 2 weeks). Return fewer than 5 only when fewer than 5 stocks are listed below.
 
 MACRO CONTEXT (from today's Pakistan news):
 ${newsContext}
@@ -122,7 +122,21 @@ Return a JSON object with a 'signals' array:
   "risks": ["Market weakness", "Rupee risk"],
   "suggestedEntry": "PKR 308-312"
 }]}
-signal: BUY | STRONG_BUY | WATCH | HOLD | SELL | AVOID`,
+signal: BUY | STRONG_BUY | WATCH | HOLD | SELL | AVOID
+
+confidence — calibrate against evidence, do not guess:
+  80-95 = technical score >= 60 AND a specific fresh catalyst for this stock or its sector AND supportive macro (rare; never exceed 95)
+  65-79 = clean technical setup with sector/macro support, but no stock-specific catalyst
+  50-64 = decent setup with one clear caveat (thin volume, mixed macro, stretched RSI)
+  under 50 = speculative — use WATCH or HOLD rather than BUY
+Keep confidence within 25 points of the stock's technical score.
+
+Slate rules:
+- Rank strongest BUY/STRONG_BUY first, then early or pullback WATCH candidates; include HOLD/AVOID for well-known names whose setup is deteriorating. A useful daily slate is 5-8 entries, not 1-2.
+- Never rate BUY or STRONG_BUY when RSI is above 70 or price is stretched more than 8% above EMA20 — rate WATCH with a pullback entry instead.
+- Prefer sector diversity: avoid three or more picks from one sector unless conviction is exceptional.
+
+newsHeadline: copy a headline verbatim from MACRO CONTEXT only if it directly concerns this stock or its sector; otherwise exactly "No recent news". Never invent headlines.`,
       },
     ],
   });

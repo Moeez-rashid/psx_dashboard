@@ -7,7 +7,6 @@ export interface UserSettings {
   provider: "claude" | "gemini" | "openai" | "groq";
   apiKey: string;
   model: string;
-  scanTime: string; // "09:00" PKT
 }
 
 const PROVIDER_LABELS = {
@@ -51,7 +50,7 @@ export function loadSettings(): UserSettings {
 }
 
 export function defaultSettings(): UserSettings {
-  return { provider: "groq", apiKey: "", model: DEFAULT_MODELS.groq, scanTime: "09:00" };
+  return { provider: "groq", apiKey: "", model: DEFAULT_MODELS.groq };
 }
 
 interface Props {
@@ -133,15 +132,6 @@ export default function Settings({ open, onClose, onSave }: Props) {
           <option key={m.value} value={m.value}>{m.label}</option>
         ))}
       </select>
-
-      {/* Scan time */}
-      <label className="label">Daily Auto-Scan Time (PKT)</label>
-      <input
-        type="time"
-        value={s.scanTime}
-        onChange={e => setS(p => ({ ...p, scanTime: e.target.value }))}
-        className="input mt-1.5 mb-5"
-      />
 
       <button
         onClick={save}

@@ -74,41 +74,32 @@ const FUND_GUIDE: Metric[] = [
     ],
   },
   {
+    name: "ROE", full: "Return on Equity",
+    desc: "Annual net profit as a percentage of shareholders' equity — how efficiently the company turns capital into profit.",
+    bands: [
+      { range: "> 20%",  label: "Excellent — highly profitable business", tone: UP },
+      { range: "15–20%", label: "Strong returns on capital", tone: UP },
+      { range: "8–15%",  label: "Average — acceptable for PSX", tone: MUTED },
+      { range: "< 8%",   label: "Weak — capital working inefficiently", tone: DOWN },
+    ],
+  },
+  {
+    name: "D/E", full: "Debt-to-Equity Ratio",
+    desc: "Total debt relative to shareholders' equity. Shows how leveraged the company is. (Not reported for banks.)",
+    bands: [
+      { range: "< 0.5×",  label: "Conservative — low financial risk", tone: UP },
+      { range: "0.5–1.5×", label: "Moderate leverage — typical", tone: MUTED },
+      { range: "> 1.5×",  label: "High leverage — sensitive to rates", tone: DOWN },
+    ],
+  },
+  {
     name: "Div %", full: "Dividend Yield",
-    desc: "Annual cash dividend paid to shareholders as a percentage of the current share price. Income return on your investment.",
+    desc: "Annual cash dividend as a percentage of the share price. Income return on your investment.",
     bands: [
       { range: "0%",   label: "No dividend — profits reinvested in growth", tone: MUTED },
       { range: "1–3%", label: "Low yield — growth-oriented stock", tone: MUTED },
-      { range: "3–6%", label: "Good yield — typical for PSX blue chips", tone: UP },
-      { range: "> 6%", label: "High yield — income stock or price has fallen", tone: UP },
-    ],
-  },
-  {
-    name: "1M / 1Y", full: "Periodic Price Returns",
-    desc: "Actual price change over the last 1 month and 1 year, shown as a percentage. Reflects momentum and long-term trend.",
-    bands: [
-      { range: "1Y > +20%",   label: "Strong long-term momentum", tone: UP },
-      { range: "1Y 0–20%",    label: "Positive but moderate trend", tone: UP },
-      { range: "1Y negative", label: "Underperformed — check why", tone: DOWN },
-    ],
-  },
-  {
-    name: "52W Bar", full: "52-Week Price Position",
-    desc: "Where the current price sits within the stock's 52-week high-low range. Shows if the stock is near a yearly high or low.",
-    bands: [
-      { range: "0–30%",   label: "Near 52-week low — beaten down, possible value entry", tone: DOWN },
-      { range: "30–70%",  label: "Mid-range — balanced momentum", tone: GOLD },
-      { range: "70–100%", label: "Near 52-week high — strong momentum, watch resistance", tone: UP },
-    ],
-  },
-  {
-    name: "MCap", full: "Market Capitalisation",
-    desc: "Total value of all outstanding shares (shares × price). Indicates company size and liquidity.",
-    bands: [
-      { range: "> 100B",  label: "Large cap — highly liquid, lower risk", tone: UP },
-      { range: "10–100B", label: "Mid cap — good balance of growth & size", tone: MUTED },
-      { range: "1–10B",   label: "Small cap — higher potential, more risk", tone: GOLD },
-      { range: "< 1B",    label: "Micro cap — illiquid, speculative", tone: DOWN },
+      { range: "3–5%", label: "Good yield — typical for PSX blue chips", tone: UP },
+      { range: "> 5%", label: "High yield — income stock or price has fallen", tone: UP },
     ],
   },
 ];

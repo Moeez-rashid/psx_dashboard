@@ -76,7 +76,7 @@ export function PriceTag({ price, changePercent, big }: { price?: number; change
 }
 
 // ─── Sparkline ──────────────────────────────────────────────────────────────
-export function Sparkline({ data, width = 84, height = 30 }: { data?: number[]; width?: number; height?: number }) {
+export function Sparkline({ data, width = 84, height = 30, color, opacity = 0.9 }: { data?: number[]; width?: number; height?: number; color?: string; opacity?: number }) {
   if (!data || data.length < 5) return null;
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
@@ -88,12 +88,14 @@ export function Sparkline({ data, width = 84, height = 30 }: { data?: number[]; 
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   const up = data[data.length - 1] >= data[0];
-  const stroke = up ? "var(--color-up-2)" : "var(--color-down-2)";
+  const stroke = color ?? (up ? "var(--color-up-2)" : "var(--color-down-2)");
   const fillPts = [`${pad},${height - pad}`, ...pts, `${width - pad},${height - pad}`].join(" ");
   return (
     <svg width={width} height={height} className="shrink-0" aria-hidden>
+      {/* native hover tooltip so the chart's timeframe is discoverable */}
+      <title>{`${data.length}-day price trend (daily closes)`}</title>
       <polygon points={fillPts} fill={stroke} opacity={0.08} />
-      <polyline points={pts.join(" ")} fill="none" stroke={stroke} strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round" opacity={0.9} />
+      <polyline points={pts.join(" ")} fill="none" stroke={stroke} strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round" opacity={opacity} />
     </svg>
   );
 }

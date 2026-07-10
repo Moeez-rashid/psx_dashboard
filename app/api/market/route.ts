@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAllStocks } from "@/lib/psx";
+import { getAllStocks, getKSE100 } from "@/lib/psx";
 
 export interface MarketMover {
   symbol: string;
@@ -15,7 +15,7 @@ export interface MarketMover {
  */
 export async function GET() {
   try {
-    const all = await getAllStocks();
+    const [all, kse100] = await Promise.all([getAllStocks(), getKSE100()]);
     // Tradeable rows only: real price and some liquidity, skip penny noise
     const active = all.filter(s => s.currentPrice > 0 && s.volume > 0);
 
@@ -32,15 +32,17 @@ export async function GET() {
       volume: s.volume,
     });
 
-    const gainers = [...liquid].sort((a, b) => b.changePercent - a.changePercent).slice(0, 6).map(slim);
-    const losers = [...liquid].sort((a, b) => a.changePercent - b.changePercent).slice(0, 6).map(slim);
+    // 15 per list: the strip shows 5 collapsed, "View all" reveals the rest client-side
+    const gainers = [...liquid].sort((a, b) => b.changePercent - a.changePercent).slice(0, 15).map(slim);
+    const losers = [...liquid].sort((a, b) => a.changePercent - b.changePercent).slice(0, 15).map(slim);
     const mostActive = [...active]
       .sort((a, b) => b.volume * b.currentPrice - a.volume * a.currentPrice)
-      .slice(0, 6)
+      .slice(0, 15)
       .map(slim);
 
     return NextResponse.json({
       breadth: { advancing, declining, unchanged, total: active.length },
+      kse100, // null when the indices scrape fails — the UI falls back to breadth
       gainers,
       losers,
       mostActive,
