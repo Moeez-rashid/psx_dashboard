@@ -9,13 +9,14 @@ const UP = "text-up-2", DOWN = "text-down-2", GOLD = "text-gold-2", MUTED = "tex
 const TECH_GUIDE: Metric[] = [
   {
     name: "RSI", full: "Relative Strength Index",
-    desc: "Momentum oscillator measuring speed and size of recent price moves. Scale: 0–100.",
+    desc: "Momentum oscillator measuring speed and size of recent price moves (0–100). Read it together with the trend: the same RSI means opposite things in an uptrend and a downtrend, and the Technical Score treats it that way.",
     bands: [
-      { range: "< 30",  label: "Deeply oversold — reversal zone", tone: UP },
-      { range: "30–45", label: "Oversold — good entry territory", tone: UP },
-      { range: "45–60", label: "Neutral — room to run", tone: MUTED },
-      { range: "60–70", label: "Approaching overbought", tone: GOLD },
-      { range: "> 70",  label: "Overbought — avoid chasing", tone: DOWN },
+      { range: "< 30 in uptrend",   label: "Deep dip — sharp, watch for a trend break", tone: GOLD },
+      { range: "< 30 in downtrend", label: "Falling knife — no trend support", tone: DOWN },
+      { range: "30–40 in uptrend",  label: "Pullback — best risk/reward", tone: UP },
+      { range: "40–55",             label: "Healthy momentum with room to run", tone: UP },
+      { range: "55–70",             label: "Firm, approaching overbought", tone: MUTED },
+      { range: "> 72",              label: "Overbought — poor entry", tone: DOWN },
     ],
   },
   {
@@ -30,23 +31,24 @@ const TECH_GUIDE: Metric[] = [
     ],
   },
   {
-    name: "Vol", full: "Volume Ratio (today vs 20-day avg)",
-    desc: "Compares today's traded volume to the 20-day average. High volume on a price move confirms conviction.",
+    name: "Vol", full: "Volume Ratio (today vs prior 20 sessions)",
+    desc: "Today's traded volume against the average of the 20 sessions before it — today is excluded from its own average, so a spike is not diluted by itself. Heavy volume on a down day counts as distribution, not accumulation.",
     bands: [
-      { range: "> 2.0×",   label: "Strong buying interest — high conviction", tone: UP },
-      { range: "1.3–2.0×", label: "Above-average activity", tone: UP },
-      { range: "0.8–1.3×", label: "Normal participation", tone: MUTED },
-      { range: "< 0.8×",   label: "Thin market — weak conviction", tone: DOWN },
+      { range: "> 4.0×",   label: "Extreme one-off spike — treated cautiously", tone: GOLD },
+      { range: "1.8–4.0×", label: "Strong participation", tone: UP },
+      { range: "1.2–1.8×", label: "Above-normal activity", tone: UP },
+      { range: "0.9–1.2×", label: "Normal participation", tone: MUTED },
+      { range: "< 0.9×",   label: "Thin trade — weak conviction", tone: DOWN },
     ],
   },
   {
-    name: "Score", full: "Composite Technical Score",
-    desc: "Weighted combination of RSI (30 pts), EMA trend (25 pts), EMA crossover (25 pts), and volume (20 pts).",
+    name: "Tech score", full: "Technical Score (0–100)",
+    desc: "A deterministic screening score computed only from price, trend, momentum and volume — no AI, news or fundamentals are involved, so it never changes with your AI provider. Trend structure 35 · Momentum 25 · Volume 20 · Entry quality 20. It ranks the technical quality of a setup; it is NOT a probability of profit.",
     bands: [
-      { range: "75–100", label: "STRONG BUY", tone: UP },
-      { range: "50–74",  label: "BUY — technically sound", tone: UP },
-      { range: "30–49",  label: "NEUTRAL — watch closely", tone: GOLD },
-      { range: "0–29",   label: "AVOID — weak technical setup", tone: DOWN },
+      { range: "78–100", label: "STRONG BUY — strong across every component", tone: UP },
+      { range: "60–77",  label: "BUY — technically sound", tone: UP },
+      { range: "40–59",  label: "NEUTRAL — watch closely", tone: GOLD },
+      { range: "0–39",   label: "AVOID — weak technical setup", tone: DOWN },
     ],
   },
 ];

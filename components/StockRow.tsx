@@ -8,7 +8,7 @@ import { TechChips, FundamentalsState, type StockTech } from "./StockBits";
 export interface SignalDetail {
   ticker: string;
   signal?: string;
-  confidence?: number;
+  technicalScore?: number;
   reason?: string;
   newsHeadline?: string;
   catalysts?: string[];
@@ -82,7 +82,7 @@ function badgeLabel(signal?: string): string {
   return BADGE_SHORT[u] ?? u.replace("_", " ");
 }
 
-// ─── Left-aligned labeled stat + bar (confidence / P&L) ─────────────────────
+// ─── Left-aligned labeled stat + bar (technical score / P&L) ────────────────
 function StatBar({ label, value, valueClass, barClass, pct }: {
   label: string; value: string; valueClass: string; barClass: string; pct: number;
 }) {
@@ -236,14 +236,14 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
 
 // ─── Two-tier collapsed card → expands inline ───────────────────────────────
 export function StockRow({
-  variant, signal, ticker, sector, confidence, pnlPct,
+  variant, signal, ticker, sector, technicalScore, pnlPct,
   spark, price, change, starred, onToggleStar, onRemove, tier2, open, onToggle, children,
 }: {
   variant: "signal" | "holding";
   signal?: string;
   ticker: string;
   sector?: string;
-  confidence?: number;        // signal variant — conviction stat (status hue)
+  technicalScore?: number;    // signal variant — deterministic 0-100 technical score
   pnlPct?: number | null;     // holding variant — P&L stat (own sign color)
   spark?: number[];
   price?: number;
@@ -259,7 +259,7 @@ export function StockRow({
   const hue = hueOf(signal);
   const isSignal = variant === "signal";
   // Identical grid for both variants → columns line up across every tab.
-  // Confidence/P&L sits directly after the ticker (left-aligned); a flexible
+  // Technical score / P&L sits directly after the ticker (left-aligned); a flexible
   // spacer pushes the sparkline/price/action cluster to the right edge.
   const grid = "grid-cols-[56px_minmax(0,1fr)_80px_22px_14px] sm:grid-cols-[56px_96px_116px_minmax(0,1fr)_64px_80px_22px_14px]";
 
@@ -285,13 +285,13 @@ export function StockRow({
             </span>
           </div>
 
-          {/* 2 · ticker + sector (+ conf/P&L % on mobile, where column 3 is hidden) */}
+          {/* 2 · ticker + sector (+ score/P&L on mobile, where column 3 is hidden) */}
           <div className="min-w-0">
             <div className="text-[14px] font-bold tracking-tight truncate leading-tight">{ticker}</div>
             <div className="flex items-center gap-1 min-w-0 leading-tight">
               {sector && <span className="text-[10px] text-ink-3 truncate min-w-0">{sector}</span>}
-              {isSignal && confidence !== undefined && (
-                <span className={`sm:hidden shrink-0 text-[10px] num font-medium ${hue.text}`}>· {Math.round(confidence)}%</span>
+              {isSignal && technicalScore !== undefined && (
+                <span className={`sm:hidden shrink-0 text-[10px] num font-medium ${hue.text}`}>· {Math.round(technicalScore)}</span>
               )}
               {!isSignal && pnlPct !== null && pnlPct !== undefined && (
                 <span className={`sm:hidden shrink-0 text-[10px] num font-medium ${pnlPct >= 0 ? "text-up-2" : "text-down-2"}`}>
@@ -301,11 +301,11 @@ export function StockRow({
             </div>
           </div>
 
-          {/* 3 · confidence (signal) / P&L% (holding) — labeled, left-aligned */}
+          {/* 3 · technical score (signal) / P&L% (holding) — labeled, left-aligned */}
           <div className="hidden sm:block min-w-0">
             {isSignal ? (
-              confidence !== undefined
-                ? <StatBar label="AI conf" value={`${Math.round(confidence)}%`} valueClass={hue.text} barClass={hue.bar} pct={confidence} />
+              technicalScore !== undefined
+                ? <StatBar label="Tech score" value={`${Math.round(technicalScore)}`} valueClass={hue.text} barClass={hue.bar} pct={technicalScore} />
                 : null
             ) : (
               pnlPct !== null && pnlPct !== undefined

@@ -99,6 +99,7 @@ export default function Dashboard() {
     newsSources: string[];
     newsFromCache: boolean;
     newsItems: NewsItem[];
+    aiError?: string;
   } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
@@ -119,8 +120,8 @@ export default function Dashboard() {
   const [sparks, setSparks] = useState<Record<string, number[]>>({});
 
   // Sort
-  const [sortOpps, setSortOpps] = useState<"confidence" | "name">("confidence");
-  const [sortWatch, setSortWatch] = useState<"confidence" | "name">("confidence");
+  const [sortOpps, setSortOpps] = useState<"score" | "name">("score");
+  const [sortWatch, setSortWatch] = useState<"score" | "name">("score");
 
   // Settings + modals — also loaded post-mount (see persistence note above)
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
@@ -276,8 +277,18 @@ export default function Dashboard() {
         newsSources: data.newsSources ?? [],
         newsFromCache: data.newsFromCache ?? false,
         newsItems: data.newsItems ?? [],
+        aiError: data.aiError,
       });
-      toast(`Scan complete — ${newSignals.length} signal${newSignals.length === 1 ? "" : "s"} found`);
+      // Scan tickers drive the follow-up price/spark fetches. When the AI pass
+      // failed there are no signals, so fall back to the technical slate.
+      if (newSignals.length === 0 && Array.isArray(data.technicalData)) {
+        scanTickersRef.current = (data.technicalData as StockTech[]).slice(0, 8).map(t => t.symbol);
+      }
+      toast(
+        data.aiError
+          ? `Scan complete — AI unavailable, ${(data.technicalData ?? []).length} stocks ranked by Technical Score`
+          : `Scan complete — ${newSignals.length} signal${newSignals.length === 1 ? "" : "s"} found`
+      );
     } catch (e) {
       setScanError(e instanceof Error ? e.message : "Unknown error");
     }
@@ -656,7 +667,8 @@ export default function Dashboard() {
 
         const sig = e.signal ?? watchSignals[ticker] ?? scanResult?.signals.find(s => s.ticker === ticker);
         if (sig) {
-          lines.push(`   Signal: ${sig.signal} (${sig.confidence}% confidence) — ${sig.reason}`);
+          const sigTech = scanResult?.technicalData?.find(t => t.symbol === sig.ticker);
+          lines.push(`   Signal: ${sig.signal}${sigTech ? ` (Technical Score ${sigTech.technicalScore}/100)` : ""} — ${sig.reason}`);
           if (sig.suggestedEntry) lines.push(`   Entry: ${sig.suggestedEntry}`);
           if (sig.newsHeadline && sig.newsHeadline !== "No recent news") lines.push(`   News: ${sig.newsHeadline}`);
           if (sig.catalysts?.length) lines.push(`   Catalysts: ${sig.catalysts.join("; ")}`);
@@ -665,7 +677,7 @@ export default function Dashboard() {
 
         const tech = holdingTech[ticker] ?? watchTech[ticker] ?? scanResult?.technicalData?.find(t => t.symbol === ticker);
         if (tech) {
-          const parts = [`RSI ${tech.rsi.toFixed(0)}`, `EMA20 ${tech.ema20.toFixed(2)}`, `Vol ${volLabel(tech, prices[ticker]?.volume)}`, `Score ${tech.compositeScore}/100 [${tech.technicalSignal}]`];
+          const parts = [`RSI ${tech.rsi.toFixed(0)}`, `EMA20 ${tech.ema20.toFixed(2)}`, `Vol ${volLabel(tech, prices[ticker]?.volume)}`, `Tech score ${tech.technicalScore}/100 [${tech.technicalSignal}]`];
           lines.push(`   Technicals: ${parts.join(" | ")}`);
         }
 
@@ -718,7 +730,7 @@ export default function Dashboard() {
   const sortedOpps = (sigs: AISignal[]) => {
     const arr = [...sigs];
     if (sortOpps === "name") return arr.sort((a, b) => a.ticker.localeCompare(b.ticker));
-    return arr; // scanner already sorted by confidence desc
+    return arr; // scanner already ranked by Technical Score desc (deterministic)
   };
 
   // Sector filter set from the News sector-watch. AI sector names and resolveSectorName()
@@ -735,12 +747,11 @@ export default function Dashboard() {
   const sortedWatch = (items: WatchItem[]) => {
     const arr = [...items];
     if (sortWatch === "name") return arr.sort((a, b) => a.ticker.localeCompare(b.ticker));
+    // Ranked by the deterministic Technical Score — never by AI confidence.
     return arr.sort((a, b) => {
-      const sigA = scanResult?.signals.find(s => s.ticker === a.ticker) ?? watchSignals[a.ticker];
-      const sigB = scanResult?.signals.find(s => s.ticker === b.ticker) ?? watchSignals[b.ticker];
-      const confA = sigA ? sigA.confidence : (watchTech[a.ticker]?.compositeScore ?? -1);
-      const confB = sigB ? sigB.confidence : (watchTech[b.ticker]?.compositeScore ?? -1);
-      return confB - confA;
+      const scoreA = watchTech[a.ticker]?.technicalScore ?? -1;
+      const scoreB = watchTech[b.ticker]?.technicalScore ?? -1;
+      return scoreB !== scoreA ? scoreB - scoreA : a.ticker.localeCompare(b.ticker);
     });
   };
 
@@ -923,13 +934,13 @@ export default function Dashboard() {
             {scanResult && scanResult.signals.length > 1 && (
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-[10px] text-ink-3">Sort</span>
-                {(["confidence", "name"] as const).map(opt => (
+                {(["score", "name"] as const).map(opt => (
                   <button
                     key={opt}
                     onClick={() => setSortOpps(opt)}
                     className={`btn text-[10px] px-2.5 py-1 ${sortOpps === opt ? "bg-raised text-ink border-line-2" : ""}`}
                   >
-                    {opt === "confidence" ? "AI Confidence" : "Name A–Z"}
+                    {opt === "score" ? "Technical Score ↓" : "Name A–Z"}
                   </button>
                 ))}
               </div>
@@ -950,6 +961,52 @@ export default function Dashboard() {
               </p>
             )}
 
+            {/* AI narrative unavailable — technicals below are still valid */}
+            {scanResult && scanResult.aiError && (
+              <div className="card px-3.5 py-2.5 mb-3 text-[11px] text-ink-2 border-gold/40">
+                <span className="text-gold-2 font-medium">AI commentary unavailable</span>
+                {" — showing the deterministic technical ranking. Technical Score is computed from price and volume only, so it is unaffected."}
+              </div>
+            )}
+
+            {/* Deterministic fallback: no AI narrative, but technicals stand alone */}
+            {scanResult && scanResult.signals.length === 0 && scanResult.technicalData.length > 0 && (
+              <div className="space-y-2">
+                {scanResult.technicalData.slice(0, 8).map((tech) => {
+                  const liveQuote = prices[tech.symbol];
+                  const key = `opp:${tech.symbol}`;
+                  const detail: SignalDetail = {
+                    ticker: tech.symbol, signal: tech.technicalSignal,
+                    technicalScore: tech.technicalScore,
+                    reason: tech.reasons[0], catalysts: techCatalysts(tech), risks: techRisks(tech),
+                    tech, fundamentals: askAnalystData[tech.symbol],
+                    currentPrice: liveQuote?.currentPrice ?? tech.currentPrice,
+                    changePercent: liveQuote?.changePercent, spark: sparks[tech.symbol],
+                  };
+                  return (
+                    <StockRow
+                      key={tech.symbol}
+                      variant="signal"
+                      signal={tech.technicalSignal}
+                      ticker={tech.symbol}
+                      sector={sectorOf(tech.symbol)}
+                      technicalScore={tech.technicalScore}
+                      spark={sparks[tech.symbol]}
+                      price={liveQuote?.currentPrice ?? tech.currentPrice}
+                      change={liveQuote?.changePercent}
+                      starred={watchingSet.has(tech.symbol)}
+                      onToggleStar={() => toggleWatch(tech.symbol)}
+                      tier2={signalTier2(detail)}
+                      open={expanded.has(key)}
+                      onToggle={() => toggleRow(key, tech.symbol)}
+                    >
+                      <StockDetailBody detail={detail} onOpenNews={openNewsFor} />
+                    </StockRow>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Signal rows — collapsed by default, expand inline */}
             <div className="space-y-2">
               {scanResult && visibleOpps(scanResult.signals).map((sig) => {
@@ -959,7 +1016,7 @@ export default function Dashboard() {
                 const displayChange = liveQuote?.changePercent;
                 const key = `opp:${sig.ticker}`;
                 const detail: SignalDetail = {
-                  ticker: sig.ticker, signal: sig.signal, confidence: sig.confidence, reason: sig.reason,
+                  ticker: sig.ticker, signal: sig.signal, technicalScore: sigTech?.technicalScore, reason: sig.reason,
                   newsHeadline: sig.newsHeadline, catalysts: sig.catalysts, risks: sig.risks,
                   suggestedEntry: sig.suggestedEntry, tech: sigTech, fundamentals: askAnalystData[sig.ticker],
                   currentPrice: displayPrice, changePercent: displayChange, spark: sparks[sig.ticker],
@@ -971,7 +1028,7 @@ export default function Dashboard() {
                     signal={sig.signal}
                     ticker={sig.ticker}
                     sector={sectorOf(sig.ticker)}
-                    confidence={sig.confidence}
+                    technicalScore={sigTech?.technicalScore}
                     spark={sparks[sig.ticker]}
                     price={displayPrice}
                     change={displayChange}
@@ -1022,7 +1079,7 @@ export default function Dashboard() {
                 const detail: SignalDetail = {
                   ticker: h.ticker,
                   signal: s?.signal ?? tech?.technicalSignal,
-                  confidence: aiSig?.confidence ?? tech?.compositeScore,
+                  technicalScore: tech?.technicalScore,
                   reason: s ? `${s.text}${s.source ? `  ·  via ${s.source}` : ""}` : undefined,
                   newsHeadline: aiSig?.newsHeadline,
                   catalysts: aiSig?.catalysts?.length ? aiSig.catalysts : (tech ? techCatalysts(tech) : []),
@@ -1193,13 +1250,13 @@ export default function Dashboard() {
             {watching.length > 1 && (
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-[10px] text-ink-3">Sort</span>
-                {(["confidence", "name"] as const).map(opt => (
+                {(["score", "name"] as const).map(opt => (
                   <button
                     key={opt}
                     onClick={() => setSortWatch(opt)}
                     className={`btn text-[10px] px-2.5 py-1 ${sortWatch === opt ? "bg-raised text-ink border-line-2" : ""}`}
                   >
-                    {opt === "confidence" ? "AI Confidence ↓" : "Name A–Z"}
+                    {opt === "score" ? "Technical Score ↓" : "Name A–Z"}
                   </button>
                 ))}
               </div>
@@ -1229,11 +1286,11 @@ export default function Dashboard() {
                 const displayReason = activeSig ? activeSig.reason : tech ? (tech.reasons[0] ?? "Technical analysis") : null;
                 const displayCats = activeSig?.catalysts?.length ? activeSig.catalysts : tech ? techCatalysts(tech) : [];
                 const displayRisks = activeSig?.risks?.length ? activeSig.risks : tech ? techRisks(tech) : [];
-                const displayConfPct = activeSig ? activeSig.confidence : tech ? tech.compositeScore : null;
+                const displayScore = tech ? tech.technicalScore : null;
                 const displaySignal = activeSig ? activeSig.signal : tech ? tech.technicalSignal : null;
                 const key = `watch:${w.ticker}`;
                 const detail: SignalDetail = {
-                  ticker: w.ticker, signal: displaySignal ?? undefined, confidence: displayConfPct ?? undefined,
+                  ticker: w.ticker, signal: displaySignal ?? undefined, technicalScore: displayScore ?? undefined,
                   reason: displayReason ?? undefined, newsHeadline: activeSig?.newsHeadline,
                   catalysts: displayCats, risks: displayRisks, suggestedEntry: activeSig?.suggestedEntry,
                   tech, fundamentals: askAnalystData[w.ticker],
@@ -1247,7 +1304,7 @@ export default function Dashboard() {
                     signal={displaySignal ?? undefined}
                     ticker={w.ticker}
                     sector={sectorOf(w.ticker)}
-                    confidence={displayConfPct ?? undefined}
+                    technicalScore={displayScore ?? undefined}
                     spark={sparks[w.ticker]}
                     price={p?.currentPrice}
                     change={p?.changePercent}

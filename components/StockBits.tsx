@@ -5,10 +5,11 @@ import { Chip } from "./ui/primitives";
 
 // ─── Technical score shape used across tabs (matches /api/technicals) ───────
 export interface StockTech {
-  symbol: string; compositeScore: number; technicalSignal: string;
+  symbol: string; technicalScore: number; technicalSignal: string;
   rsi: number; ema20: number; ema50: number; currentPrice: number;
   volumeRatio: number; todayVolume?: number; avgVolume20d?: number;
   crossoverSignal: string; priceVsEma20: string; priceVsEma50?: string; reasons: string[];
+  extensionPct?: number; trendRegime?: string;
 }
 
 /** Display string for the Vol chip.
@@ -38,7 +39,7 @@ export function techRisks(t: StockTech): string[] {
   if (t.rsi > 68) out.push(`RSI ${t.rsi.toFixed(0)} — approaching overbought`);
   if (t.volumeRatio < 0.8) out.push(`Volume ${t.volumeRatio.toFixed(1)}x avg — weak conviction`);
   if (t.ema20 < t.ema50)   out.push("EMA20 below EMA50 — bearish crossover");
-  if (t.compositeScore < 55) out.push("Moderate technical score — watch closely");
+  if (t.technicalScore < 55) out.push("Moderate technical score — watch closely");
   if (out.length === 0) out.push("General market volatility");
   out.push("Always verify with fundamentals");
   return out.slice(0, 3);
@@ -51,7 +52,7 @@ export function TechChips({ tech, liveVolume }: { tech: StockTech; liveVolume?: 
     ["EMA20", tech.ema20.toFixed(2), "text-ink-2"],
     ["EMA50", tech.ema50.toFixed(2), "text-ink-2"],
     ["Vol", volLabel(tech, liveVolume), tech.volumeRatio >= 1.5 ? "text-up-2" : "text-ink-2"],
-    ["Score", `${tech.compositeScore}/100`, tech.compositeScore >= 60 ? "text-up-2" : tech.compositeScore >= 40 ? "text-gold-2" : "text-down-2"],
+    ["Tech score", `${tech.technicalScore}/100`, tech.technicalScore >= 60 ? "text-up-2" : tech.technicalScore >= 40 ? "text-gold-2" : "text-down-2"],
   ];
   return (
     <div className="flex gap-1.5 flex-wrap">

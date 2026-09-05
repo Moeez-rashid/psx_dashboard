@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     const scored = settled
       .map((r) => (r.status === "fulfilled" ? r.value : null))
       .filter((v): v is NonNullable<typeof v> => v !== null)
-      .sort((a, b) => b.compositeScore - a.compositeScore);
+      .sort((a, b) => b.technicalScore - a.technicalScore);
 
     if (scored.length === 0) {
       return NextResponse.json({ error: "Not enough price history for any ticker" }, { status: 404 });
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     // Build prompt context
     const stockContext = scored
       .map((s) =>
-        `${s.symbol}: score=${s.compositeScore}/100 [${s.technicalSignal}] ` +
+        `${s.symbol}: score=${s.technicalScore}/100 [${s.technicalSignal}] ` +
         `RSI=${s.rsi.toFixed(1)} EMA20=${s.ema20.toFixed(2)} EMA50=${s.ema50.toFixed(2)} ` +
         `vol=${s.volumeRatio.toFixed(2)}x | ${s.reasons.slice(0, 2).join("; ")}`
       )
