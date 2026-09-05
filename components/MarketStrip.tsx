@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Check, Plus } from "lucide-react";
 import { fmtVol } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
 import { Skeleton } from "./ui/primitives";
@@ -26,10 +27,11 @@ function MoverRow({ m, onAdd, added }: { m: Mover; onAdd: (t: string) => void; a
       <button
         onClick={() => !added && onAdd(m.symbol)}
         title={added ? "Already in watchlist" : "Add to watchlist"}
-        className={`text-[10px] w-4 text-center leading-none transition-colors cursor-pointer
+        aria-label={added ? "Already in watchlist" : "Add to watchlist"}
+        className={`w-4 flex items-center justify-center leading-none transition-colors cursor-pointer
           ${added ? "text-up-2" : "text-ink-3 hover:text-sky-2 group-hover:text-ink-2"}`}
       >
-        {added ? "✓" : "+"}
+        {added ? <Check size={12} strokeWidth={2.5} /> : <Plus size={12} strokeWidth={2.5} />}
       </button>
       <span className="text-xs font-semibold text-ink truncate">{m.symbol}</span>
       <span className="text-[10px] text-ink-3 truncate flex-1 hidden lg:block">{resolveSectorName(m.sector)}</span>

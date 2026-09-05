@@ -2,6 +2,18 @@
 
 Reasoning behind significant choices, newest first. This is *why*, not *what* — for what changed, read `git log`.
 
+## UI overhaul: Watchlist gets its own component, not a reuse of Opportunities' cards (2026-09-05)
+
+**Decided:** `components/WatchlistRow.tsx` is a new, genuinely different presentation — a real table on desktop, a two-line compact row on mobile — rather than rendering Watchlist through the same `StockRow` cards Opportunities uses.
+
+**Why:** Opportunities and Watchlist answer different questions. Opportunities is discovery — "show me the best few setups right now," where one card per stock with room for a sparkline, reasons and fundamentals is appropriate. Watchlist is monitoring — "let me scan everything I'm tracking at a glance," which wants many rows visible at once, not many cards. Reusing `StockRow` for both (the pre-overhaul state) meant Watchlist inherited Opportunities' card chrome and information density regardless of how many tickers were on it. `WatchlistRow` shares the same underlying atoms (`hueOf`, `StockDetailBody`, `TechnicalScoreChip`) so the expanded detail is identical either way — only the collapsed row differs, which is where the two use cases actually diverge.
+
+**Deterministic technical reasons replace three redundant restatements of the same facts.** Before this pass, an expanded card could show: a generated narrative sentence about RSI/EMA/volume (`buildTechnicalNarrative`), a "Why it works"/"Watch out for" split fabricated from the *same* RSI/EMA/volume values relabeled as catalysts/risks (`techCatalysts`/`techRisks`), and a chips row repeating RSI/EMA/volume a third time — while `TechnicalScore.reasons` (already computed, already correctly regime-aware language) sat unused in the type. All three heuristic re-derivations are deleted; the real `reasons` array is now the single source of the technical explanation, shown once as "Key technical reasons," with the first entry additionally serving as the collapsed row's one-line summary (deduplicated so it isn't shown twice when expanded — see `dedupedReasons()` in `StockRow.tsx`).
+
+**AI catalysts/risks are shown only when the AI actually produced them.** The old fallback (`techCatalysts(tech)`/`techRisks(tech)` when no AI signal existed) manufactured a catalysts/risks framing that didn't exist as a distinct data source — it was just the same technical facts reworded twice more. Now that section simply doesn't render when there's no real AI narrative, rather than filling the space with a fabricated one.
+
+**Technical Score gets one shared component (`components/ui/TechnicalScore.tsx`) used everywhere it appears**, specifically so it is structurally impossible for a future edit to introduce bare-percentage or confidence-flavored copy in one place while another place still says "Technical Score N/100" — there's only one implementation to get right.
+
 ## Automated daily scan: Redis, not Postgres; EOD-date freshness check, not a holiday calendar (2026-09-05)
 
 **Persistence: Upstash Redis over Postgres**, despite no database existing yet to constrain the choice. The access pattern is write-once-daily / read-"give-me-latest"-many-times with no relational queries — a key-value shape, not a relational one. Redis also gives an atomic `SET NX EX` lock for free (Vercel's own cron docs recommend exactly this for preventing overlapping invocations), which a plain object store (Vercel Blob) cannot do atomically. Postgres would be the right call instead if cross-scan analytics (e.g. charting one ticker's score over 30 days) becomes an actual near-term goal — flagged, not built.

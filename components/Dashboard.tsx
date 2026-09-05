@@ -1,5 +1,10 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
+  TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
+  Radar, X, Pencil, Sparkles, CircleAlert,
+} from "lucide-react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
 import type { NewsItem } from "@/lib/news-fetcher";
@@ -7,15 +12,16 @@ import type { StockQuote } from "@/lib/psx";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { isPKTOpen, pktNow, toPKT } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
-import { ErrorBanner, Skeleton } from "./ui/primitives";
+import { ErrorBanner, Skeleton, EmptyState, IconButton } from "./ui/primitives";
 import { toast, Toaster } from "./ui/Toast";
 import TickerInput from "./ui/TickerInput";
 import MarketStrip from "./MarketStrip";
 import MetricsGuide from "./MetricsGuide";
 import NewsView, { deriveSentiment, SentimentBadge, type SentimentPoint } from "./NewsView";
-import { StockRow, StockDetailBody, firstClause, buildTechnicalNarrative, type SignalDetail, type Tier2 } from "./StockRow";
+import { StockRow, StockDetailBody, type SignalDetail, type Tier2 } from "./StockRow";
+import { WatchlistHeader, WatchlistRow } from "./WatchlistRow";
 import HoldingsOverview, { type Holding } from "./HoldingsOverview";
-import { techCatalysts, techRisks, volLabel, type StockTech } from "./StockBits";
+import { volLabel, type StockTech } from "./StockBits";
 import type { PersistedScan } from "@/lib/scan-store";
 import type { ScanResult } from "@/lib/scanner";
 
@@ -41,6 +47,13 @@ function formatScanTimestamp(iso: string): string {
   if (scanPKT.toDateString() === nowPKT.toDateString()) return `Last scan ${time} PKT`;
   const date = scanPKT.toLocaleDateString("en-PK", { month: "short", day: "numeric" });
   return `Last scan ${date}, ${time} PKT`;
+}
+
+/** True when the persisted scan is from a day before today (PKT) — used only
+ *  for a quiet status dot, never a banner. See PHASE 13 in the overhaul brief:
+ *  communicate staleness without making it visually dominant. */
+function isScanStale(iso: string): boolean {
+  return toPKT(new Date(iso)).toDateString() !== pktNow().toDateString();
 }
 
 /** Matches the scanResult state shape used after a live scan — `fundamentals`
@@ -205,13 +218,14 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
     if (askAnalystData[ticker] === undefined) fetchAskAnalystBatch([ticker]);
   };
 
-  // Tier-2 flowing line for the signal variant: catalyst headline → first technical clause.
+  // Tier-2 flowing line for the signal variant: news headline, else the top
+  // deterministic technical reason (already a complete sentence — no need
+  // for a separately-generated narrative clause).
   const signalTier2 = (d: SignalDetail): Tier2 => {
     const entryFrag = d.suggestedEntry ? { text: `entry ${d.suggestedEntry}`, className: "text-gold-2" } : undefined;
     if (d.newsHeadline && d.newsHeadline !== "No recent news")
-      return { icon: "📰", text: d.newsHeadline, fragment: entryFrag };
-    const clause = firstClause(buildTechnicalNarrative(d.tech));
-    return { icon: "📈", text: clause || "Awaiting technical data", fragment: entryFrag };
+      return { icon: NewspaperIcon, text: d.newsHeadline, fragment: entryFrag };
+    return { icon: TrendingUp, text: d.tech?.reasons?.[0] ?? "Awaiting technical data", fragment: entryFrag };
   };
 
   // Tier-2 for the holding variant: position summary + overall P&L fragment.
@@ -219,7 +233,7 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
     const parts = [`${h.shares.toLocaleString()} shares at avg PKR ${h.avgPrice.toFixed(2)}`];
     if (marketVal !== null) parts.push(`market value PKR ${Math.round(marketVal).toLocaleString()}`);
     return {
-      icon: "💼",
+      icon: Briefcase,
       text: parts.join(" · "),
       fragment: pnl !== null
         ? { text: `${pnl >= 0 ? "+" : ""}PKR ${Math.round(pnl).toLocaleString()}`, className: pnl >= 0 ? "text-up-2" : "text-down-2" }
@@ -830,10 +844,10 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
     .slice(0, 6);
 
   const TABS = [
-    { id: "opportunities" as const, label: "Buy Opportunities", short: "Signals", count: scanResult?.signals.length },
-    { id: "holdings" as const, label: "My Holdings", short: "Holdings", count: holdings.length || undefined },
-    { id: "watching" as const, label: "Watchlist", short: "Watchlist", count: watching.length || undefined },
-    { id: "news" as const, label: "News", short: "News", count: undefined },
+    { id: "opportunities" as const, label: "Buy Opportunities", short: "Signals", icon: TrendingUp, count: scanResult?.signals.length },
+    { id: "holdings" as const, label: "My Holdings", short: "Holdings", icon: Briefcase, count: holdings.length || undefined },
+    { id: "watching" as const, label: "Watchlist", short: "Watchlist", icon: Eye, count: watching.length || undefined },
+    { id: "news" as const, label: "News", short: "News", icon: NewspaperIcon, count: undefined },
   ];
 
   return (
@@ -856,21 +870,19 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
             )}
             {loadingPrices && <span className="hidden sm:inline text-[10px] text-ink-3 animate-pulse">refreshing…</span>}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <div className="hidden md:block mr-2"><PKTClock /></div>
-            <button onClick={fetchPrices} className="btn px-2.5" title="Refresh prices">↻</button>
-            <button onClick={exportForClaude} className="btn-sky px-2.5" title="Copy full snapshot for AI analysis (Claude, ChatGPT, …)">
-              ⎘
-            </button>
+            <IconButton icon={RefreshCw} label="Refresh prices" onClick={fetchPrices} />
+            <IconButton icon={Clipboard} label="Copy full snapshot for AI analysis (Claude, ChatGPT, …)" tone="sky" onClick={exportForClaude} />
             <button onClick={() => setShowMetricsGuide(true)} className="btn px-2.5 hidden sm:inline-flex" title="Metrics guide">
-              ?<span className="hidden sm:inline">Guide</span>
+              <HelpCircle size={14} strokeWidth={2} aria-hidden /><span className="hidden sm:inline">Guide</span>
             </button>
             <button
               onClick={() => setShowSettings(true)}
               className={`btn px-2.5 ${hasKey ? "border-up/50 text-up-2" : "border-gold/50 text-gold-2"}`}
               title="Settings"
             >
-              ⚙<span className="hidden sm:inline">{hasKey ? settings.provider : "Set API Key"}</span>
+              <SettingsIcon size={14} strokeWidth={2} aria-hidden /><span className="hidden sm:inline">{hasKey ? settings.provider : "Set API Key"}</span>
             </button>
           </div>
         </div>
@@ -885,13 +897,14 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
                 if (t.id === "opportunities") setOppSectorFilter(null);
                 setTab(t.id);
               }}
-              className={`relative px-3.5 py-2.5 text-xs font-medium transition-colors cursor-pointer
+              className={`relative flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium transition-colors cursor-pointer
                 ${tab === t.id ? "text-ink" : "text-ink-3 hover:text-ink-2"}`}
             >
+              <t.icon size={13} strokeWidth={2} aria-hidden />
               <span className="hidden sm:inline">{t.label}</span>
               <span className="sm:hidden">{t.short}</span>
               {t.count !== undefined && (
-                <span className={`ml-1.5 text-[9px] px-1.5 py-px rounded-full num ${tab === t.id ? "bg-up-dim text-up-2" : "bg-raised text-ink-3"}`}>
+                <span className={`ml-0.5 text-[9px] px-1.5 py-px rounded-full num ${tab === t.id ? "bg-up-dim text-up-2" : "bg-raised text-ink-3"}`}>
                   {t.count}
                 </span>
               )}
@@ -908,15 +921,25 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
         {tab === "opportunities" && (
           <div>
             {/* Scanner controls — the tab's primary action stays on top */}
-            <div className="flex gap-2 mb-4 flex-wrap items-center">
+            <div className="flex gap-2.5 mb-4 flex-wrap items-center">
               <button onClick={runFullScan} disabled={scanning} className="btn-accent font-semibold px-4 py-2">
-                {scanning ? "⟳ Scanning…" : scanResult ? "↻ Re-run Full Scan" : "↗ Full Scan · KMI-30 + News"}
+                {scanning
+                  ? <><RefreshCw size={14} strokeWidth={2.25} className="animate-spin" aria-hidden />Scanning…</>
+                  : scanResult
+                    ? <><RefreshCw size={14} strokeWidth={2.25} aria-hidden />Rerun Full Scan</>
+                    : <><Radar size={14} strokeWidth={2.25} aria-hidden />Run First Scan</>}
               </button>
-              {scanResult && (
-                <span className="text-[10px] text-ink-3">
+              {scanResult && !scanning && (
+                <span className="flex items-center gap-1.5 text-[10px] text-ink-3">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${isScanStale(scanResult.timestamp) ? "bg-ink-3" : "bg-up animate-pulse"}`}
+                    title={isScanStale(scanResult.timestamp) ? "Showing an earlier scan" : "Fresh scan"}
+                  />
                   {formatScanTimestamp(scanResult.timestamp)}
-                  · {scanResult.totalScanned} scanned · {scanResult.passedTechnicals} passed technicals
-                  {scanResult.expandedSectors.length > 0 && ` · expanded: ${scanResult.expandedSectors.join(", ")}`}
+                  <span className="hidden sm:inline">
+                    · {scanResult.totalScanned} scanned · {scanResult.passedTechnicals} passed technicals
+                    {scanResult.expandedSectors.length > 0 && ` · expanded: ${scanResult.expandedSectors.join(", ")}`}
+                  </span>
                 </span>
               )}
             </div>
@@ -941,29 +964,24 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
 
             {/* Empty state */}
             {!scanResult && !scanning && (
-              <div className="card text-center py-10 px-5">
-                <div className="text-3xl mb-3">📡</div>
-                <div className="text-sm font-medium text-ink mb-1.5">
-                  {hasKey ? "Ready to scan KMI-30 + Shariah stocks" : "AI scanner — bring your own key"}
-                </div>
-                <p className="text-xs text-ink-3 leading-relaxed max-w-md mx-auto">
-                  {hasKey
-                    ? "The scanner fetches live prices, computes RSI/EMA/volume for all KMI-30 stocks, expands into news-relevant sectors, and returns the best 1–8 setups."
-                    : "Add a free Groq key (or Claude / Gemini / OpenAI) in Settings to unlock AI buy signals with news catalysts, entries and risks. The live market data above works without any key."}
-                </p>
-                <button onClick={hasKey ? runFullScan : () => setShowSettings(true)} className="btn-accent mt-5 px-5 py-2 font-semibold">
-                  {hasKey ? "↗ Run First Scan" : "⚙ Set API Key"}
-                </button>
-              </div>
+              <EmptyState
+                icon={Radar}
+                title={hasKey ? "Ready to scan KMI-30 + Shariah stocks" : "AI scanner — bring your own key"}
+                description={hasKey
+                  ? "The scanner fetches live prices, computes RSI/EMA/volume for all KMI-30 stocks, expands into news-relevant sectors, and returns the best 1–8 setups. A scan also runs automatically every trading morning."
+                  : "Add a free Groq key (or Claude / Gemini / OpenAI) in Settings to unlock AI buy signals with news catalysts, entries and risks. The live market data above works without any key."}
+                action={hasKey
+                  ? { label: "Run First Scan", icon: Radar, onClick: runFullScan }
+                  : { label: "Set API Key", icon: SettingsIcon, onClick: () => setShowSettings(true) }}
+              />
             )}
 
-            {/* Scanning state */}
+            {/* Scanning state — an in-context indicator, not the startup splash;
+                the rest of the app (nav, other tabs) stays fully usable while this runs. */}
             {scanning && (
               <div className="card py-8 px-5 text-center">
-                <div className="flex justify-center gap-1.5 mb-4">
-                  {[0, 1, 2].map(i => (
-                    <span key={i} className="w-2 h-2 rounded-full bg-up animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
-                  ))}
+                <div className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-up-dim mb-4">
+                  <RefreshCw size={16} strokeWidth={2.25} className="text-up-2 animate-spin" aria-hidden />
                 </div>
                 <div className="text-xs text-ink mb-1">{scanPhase || "Scanning…"}</div>
                 <div className="text-[11px] text-ink-3">
@@ -998,7 +1016,7 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
               <div className="flex items-center gap-2 mb-3 text-xs text-ink-2">
                 <span>Filtered by sector</span>
                 <span className="font-semibold text-sky-2">{oppSectorFilter}</span>
-                <button onClick={() => setOppSectorFilter(null)} className="btn text-[10px] px-2 py-0.5">Clear ✕</button>
+                <button onClick={() => setOppSectorFilter(null)} className="btn text-[10px] px-2 py-0.5"><X size={11} strokeWidth={2.5} aria-hidden />Clear</button>
               </div>
             )}
             {scanResult && oppSectorFilter && visibleOpps(scanResult.signals).length === 0 && (
@@ -1010,13 +1028,16 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
 
             {/* AI narrative unavailable — technicals below are still valid */}
             {scanResult && scanResult.aiError && (
-              <div className="card px-3.5 py-2.5 mb-3 text-[11px] text-ink-2 border-gold/40">
-                <span className="text-gold-2 font-medium">AI commentary unavailable</span>
-                {" — showing the deterministic technical ranking. Technical Score is computed from price and volume only, so it is unaffected."}
+              <div className="flex items-start gap-2 card px-3.5 py-2.5 mb-3 text-[11px] text-ink-2 border-gold/40">
+                <CircleAlert size={14} strokeWidth={2} className="text-gold-2 shrink-0 mt-px" aria-hidden />
+                <span><span className="text-gold-2 font-medium">AI commentary unavailable</span>
+                {" — showing the deterministic technical ranking. Technical Score is computed from price and volume only, so it is unaffected."}</span>
               </div>
             )}
 
-            {/* Deterministic fallback: no AI narrative, but technicals stand alone */}
+            {/* Deterministic fallback: no AI narrative, but technicals stand alone.
+                No fabricated catalysts/risks here — StockDetailBody already shows the
+                full tech.reasons list, so there's nothing genuine to add in that slot. */}
             {scanResult && scanResult.signals.length === 0 && scanResult.technicalData.length > 0 && (
               <div className="space-y-2">
                 {scanResult.technicalData.slice(0, 8).map((tech) => {
@@ -1025,7 +1046,6 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
                   const detail: SignalDetail = {
                     ticker: tech.symbol, signal: tech.technicalSignal,
                     technicalScore: tech.technicalScore,
-                    reason: tech.reasons[0], catalysts: techCatalysts(tech), risks: techRisks(tech),
                     tech, fundamentals: askAnalystData[tech.symbol],
                     currentPrice: liveQuote?.currentPrice ?? tech.currentPrice,
                     changePercent: liveQuote?.changePercent, spark: sparks[tech.symbol],
@@ -1100,13 +1120,12 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
             <HoldingsOverview holdings={holdings} prices={prices} />
 
             {holdings.length === 0 && (
-              <div className="card text-center py-10 px-5 mb-4">
-                <div className="text-3xl mb-3">💼</div>
-                <div className="text-sm font-medium text-ink mb-1.5">Track your PSX portfolio</div>
-                <p className="text-xs text-ink-3 leading-relaxed max-w-md mx-auto">
-                  Add your holdings below to see live P&L, allocation, sector exposure, technicals and AI advice.
-                  Everything is stored in your browser only — nothing leaves your device.
-                </p>
+              <div className="mb-4">
+                <EmptyState
+                  icon={Briefcase}
+                  title="Track your PSX portfolio"
+                  description="Add your holdings below to see live P&L, allocation, sector exposure, technicals and AI advice. Everything is stored in your browser only — nothing leaves your device."
+                />
               </div>
             )}
 
@@ -1129,15 +1148,15 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
                   technicalScore: tech?.technicalScore,
                   reason: s ? `${s.text}${s.source ? `  ·  via ${s.source}` : ""}` : undefined,
                   newsHeadline: aiSig?.newsHeadline,
-                  catalysts: aiSig?.catalysts?.length ? aiSig.catalysts : (tech ? techCatalysts(tech) : []),
-                  risks: aiSig?.risks?.length ? aiSig.risks : (tech ? techRisks(tech) : []),
+                  catalysts: aiSig?.catalysts,
+                  risks: aiSig?.risks,
                   suggestedEntry: aiSig?.suggestedEntry, tech,
                   fundamentals: askAnalystData[h.ticker],
                   currentPrice: livePrice ?? undefined, changePercent: p?.changePercent, spark: sparks[h.ticker],
                 };
                 const sectorLine = [
                   sectorOf(h.ticker) ?? (h.name.includes(" · ") ? h.name.split(" · ").slice(1).join(" · ") : null),
-                  h.shariah ? "Shariah ✓" : null,
+                  h.shariah ? "Shariah" : null,
                 ].filter(Boolean).join(" · ") || undefined;
 
                 const positionBlock = (
@@ -1147,7 +1166,9 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
                       {!isEditing && (
                         <button
                           onClick={() => setEditingHolding({ ticker: h.ticker, shares: String(h.shares), avg: String(h.avgPrice) })}
-                          className="text-[10px] text-ink-3 hover:text-ink cursor-pointer">✎ Edit</button>
+                          className="inline-flex items-center gap-1 text-[10px] text-ink-3 hover:text-ink cursor-pointer">
+                          <Pencil size={10} strokeWidth={2} aria-hidden />Edit
+                        </button>
                       )}
                     </div>
                     {isEditing ? (
@@ -1267,7 +1288,7 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
           </div>
         )}
 
-        {/* ════ WATCHLIST ════ */}
+        {/* ════ WATCHLIST — monitoring, not a second Opportunities: one dense row per ticker ════ */}
         {tab === "watching" && (
           <div>
             <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
@@ -1280,7 +1301,8 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
                     className="btn text-[10px] px-2.5 py-1"
                     title="Refresh technicals and prices for all watchlist tickers"
                   >
-                    {loadingWatchTech ? "↻ Refreshing…" : "↻ Refresh"}
+                    <RefreshCw size={11} strokeWidth={2.25} className={loadingWatchTech ? "animate-spin" : ""} aria-hidden />
+                    {loadingWatchTech ? "Refreshing…" : "Refresh"}
                   </button>
                   <button
                     onClick={runWatchlistAI}
@@ -1288,7 +1310,8 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
                     className="btn-accent text-[10px] px-2.5 py-1"
                     title={!settings.apiKey ? "Set your API key in Settings first" : "Run AI analysis on your watchlist"}
                   >
-                    {runningWatchAI ? "⟳ Analysing…" : "✦ AI Analysis"}
+                    <Sparkles size={11} strokeWidth={2.25} className={runningWatchAI ? "animate-pulse" : ""} aria-hidden />
+                    {runningWatchAI ? "Analysing…" : "AI Analysis"}
                   </button>
                 </div>
               )}
@@ -1312,66 +1335,60 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
             <ErrorBanner msg={watchAIError} onDismiss={() => setWatchAIError("")} />
 
             {watching.length === 0 && (
-              <div className="card text-center py-10 px-5 mb-3">
-                <div className="text-3xl mb-3">👁</div>
-                <div className="text-sm font-medium text-ink mb-1.5">Nothing on your radar yet</div>
-                <p className="text-xs text-ink-3 leading-relaxed max-w-md mx-auto">
-                  Add tickers below, or tap ＋ next to any mover in the Buy Opportunities market overview.
-                  Watchlisted stocks get live prices, 30-day charts, technicals and optional AI analysis.
-                </p>
+              <div className="mb-3">
+                <EmptyState
+                  icon={Eye}
+                  title="Nothing on your radar yet"
+                  description="Add tickers below, or use the + next to any mover in the Buy Opportunities market overview. Watchlisted stocks get live prices, 30-day charts, technicals and optional AI analysis."
+                />
               </div>
             )}
 
-            <div className="space-y-2">
-              {sortedWatch(watching).map(w => {
-                const p = prices[w.ticker];
-                const sig = watchSignals[w.ticker];
-                const tech = watchTech[w.ticker];
-                const scanSig = scanResult?.signals.find(s => s.ticker === w.ticker);
-                const activeSig = scanSig ?? sig;
+            {watching.length > 0 && (
+              <div className="space-y-1.5">
+                <WatchlistHeader />
+                {sortedWatch(watching).map(w => {
+                  const p = prices[w.ticker];
+                  const sig = watchSignals[w.ticker];
+                  const tech = watchTech[w.ticker];
+                  const scanSig = scanResult?.signals.find(s => s.ticker === w.ticker);
+                  const activeSig = scanSig ?? sig;
 
-                const displayReason = activeSig ? activeSig.reason : tech ? (tech.reasons[0] ?? "Technical analysis") : null;
-                const displayCats = activeSig?.catalysts?.length ? activeSig.catalysts : tech ? techCatalysts(tech) : [];
-                const displayRisks = activeSig?.risks?.length ? activeSig.risks : tech ? techRisks(tech) : [];
-                const displayScore = tech ? tech.technicalScore : null;
-                const displaySignal = activeSig ? activeSig.signal : tech ? tech.technicalSignal : null;
-                const key = `watch:${w.ticker}`;
-                const detail: SignalDetail = {
-                  ticker: w.ticker, signal: displaySignal ?? undefined, technicalScore: displayScore ?? undefined,
-                  reason: displayReason ?? undefined, newsHeadline: activeSig?.newsHeadline,
-                  catalysts: displayCats, risks: displayRisks, suggestedEntry: activeSig?.suggestedEntry,
-                  tech, fundamentals: askAnalystData[w.ticker],
-                  currentPrice: p?.currentPrice, changePercent: p?.changePercent, spark: sparks[w.ticker],
-                };
+                  // AI catalysts/risks only when the AI pass actually produced them —
+                  // never re-derived from technicals, which StockDetailBody's own
+                  // "Key technical reasons" list already covers without duplication.
+                  const displayReason = activeSig ? activeSig.reason : (tech?.reasons?.[0] ?? null);
+                  const displayScore = tech ? tech.technicalScore : null;
+                  const displaySignal = activeSig ? activeSig.signal : tech ? tech.technicalSignal : null;
+                  const key = `watch:${w.ticker}`;
+                  const detail: SignalDetail = {
+                    ticker: w.ticker, signal: displaySignal ?? undefined, technicalScore: displayScore ?? undefined,
+                    reason: displayReason ?? undefined, newsHeadline: activeSig?.newsHeadline,
+                    catalysts: activeSig?.catalysts, risks: activeSig?.risks, suggestedEntry: activeSig?.suggestedEntry,
+                    tech, fundamentals: askAnalystData[w.ticker],
+                    currentPrice: p?.currentPrice, changePercent: p?.changePercent, spark: sparks[w.ticker],
+                  };
 
-                return (
-                  <StockRow
-                    key={w.ticker}
-                    variant="signal"
-                    signal={displaySignal ?? undefined}
-                    ticker={w.ticker}
-                    sector={sectorOf(w.ticker)}
-                    technicalScore={displayScore ?? undefined}
-                    spark={sparks[w.ticker]}
-                    price={p?.currentPrice}
-                    change={p?.changePercent}
-                    starred
-                    onToggleStar={() => toggleWatch(w.ticker)}
-                    tier2={signalTier2(detail)}
-                    open={expanded.has(key)}
-                    onToggle={() => toggleRow(key, w.ticker)}
-                  >
-                    <StockDetailBody detail={detail} onOpenNews={openNewsFor} />
-                    {!tech && !activeSig && (
-                      <div className="flex items-center gap-2 text-[10px] text-ink-3 mt-1 pt-1">
-                        <Skeleton className="w-3 h-3 rounded-full" />
-                        Loading technicals… use “↻ Refresh” to retry or “✦ AI Analysis” for full signals.
-                      </div>
-                    )}
-                  </StockRow>
-                );
-              })}
-            </div>
+                  return (
+                    <WatchlistRow
+                      key={w.ticker}
+                      ticker={w.ticker}
+                      sector={sectorOf(w.ticker)}
+                      signal={displaySignal}
+                      technicalScore={displayScore}
+                      price={p?.currentPrice}
+                      change={p?.changePercent}
+                      spark={sparks[w.ticker]}
+                      detail={detail}
+                      open={expanded.has(key)}
+                      onToggle={() => toggleRow(key, w.ticker)}
+                      onRemove={() => toggleWatch(w.ticker)}
+                      onOpenNews={openNewsFor}
+                    />
+                  );
+                })}
+              </div>
+            )}
 
             <ErrorBanner msg={watchError} onDismiss={() => setWatchError("")} />
 

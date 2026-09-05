@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { ExternalLink, Check } from "lucide-react";
 import { DEFAULT_MODELS } from "@/lib/providers/types";
 import { Modal, ModalHeader } from "./ui/primitives";
 
@@ -101,8 +102,8 @@ export default function Settings({ open, onClose, onSave }: Props) {
       {/* API Key */}
       <label className="label">
         API Key{" "}
-        <a href={pInfo.keyUrl} target="_blank" rel="noreferrer" className="text-sky-2 normal-case font-normal hover:underline">
-          (get one ↗)
+        <a href={pInfo.keyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-sky-2 normal-case font-normal hover:underline">
+          get one<ExternalLink size={10} strokeWidth={2.25} aria-hidden />
         </a>
       </label>
       <div className="flex gap-2 mt-1.5 mb-1.5">
@@ -135,10 +136,11 @@ export default function Settings({ open, onClose, onSave }: Props) {
 
       <button
         onClick={save}
-        className={`w-full py-2 rounded-lg cursor-pointer text-sm font-semibold border transition-all
+        className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-lg cursor-pointer text-sm font-semibold border transition-all
           ${saved ? "bg-up-dim text-up-2 border-up" : "bg-up text-white border-up hover:brightness-110"}`}
       >
-        {saved ? "✓ Saved!" : "Save Settings"}
+        {saved && <Check size={14} strokeWidth={2.5} aria-hidden />}
+        {saved ? "Saved!" : "Save Settings"}
       </button>
     </Modal>
   );
