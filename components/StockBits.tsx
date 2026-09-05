@@ -19,69 +19,21 @@ export function volLabel(tech: StockTech, liveVolume?: number): string {
   return vol ? `${fmtVol(vol)} (${tech.volumeRatio.toFixed(1)}x avg)` : `${tech.volumeRatio.toFixed(1)}x avg`;
 }
 
-export function techCatalysts(t: StockTech): string[] {
-  const out: string[] = [];
-  if (t.rsi < 35)       out.push(`RSI ${t.rsi.toFixed(0)} — oversold, potential bounce`);
-  else if (t.rsi <= 60) out.push(`RSI ${t.rsi.toFixed(0)} — neutral, room to run`);
-  else                  out.push(`RSI ${t.rsi.toFixed(0)} — strong upward momentum`);
-  if (t.ema20 > t.ema50)       out.push("EMA20 above EMA50 — uptrend confirmed");
-  if (t.volumeRatio >= 1.5)    out.push(`Volume ${t.volumeRatio.toFixed(1)}x above average`);
-  else if (t.volumeRatio >= 1) out.push(`Volume at ${t.volumeRatio.toFixed(1)}x average`);
-  for (const r of t.reasons) {
-    const already = out.some(o => o.slice(0, 12).toLowerCase() === r.slice(0, 12).toLowerCase());
-    if (!already) { out.push(r); if (out.length >= 4) break; }
-  }
-  return out.slice(0, 3);
-}
-
-export function techRisks(t: StockTech): string[] {
-  const out: string[] = [];
-  if (t.rsi > 68) out.push(`RSI ${t.rsi.toFixed(0)} — approaching overbought`);
-  if (t.volumeRatio < 0.8) out.push(`Volume ${t.volumeRatio.toFixed(1)}x avg — weak conviction`);
-  if (t.ema20 < t.ema50)   out.push("EMA20 below EMA50 — bearish crossover");
-  if (t.technicalScore < 55) out.push("Moderate technical score — watch closely");
-  if (out.length === 0) out.push("General market volatility");
-  out.push("Always verify with fundamentals");
-  return out.slice(0, 3);
-}
-
-// ─── Technical chips row (RSI · EMA20 · EMA50 · Vol · Score) ────────────────
+// ─── Secondary technical chips (RSI · EMA20 · EMA50 · Vol) ──────────────────
+// The score itself is deliberately NOT repeated here — it already has its own
+// prominent treatment (components/ui/TechnicalScore.tsx) in tier 1 of every
+// row, so restating it here as a sixth equal-weight chip would be the exact
+// kind of redundant duplication this pass was meant to remove.
 export function TechChips({ tech, liveVolume }: { tech: StockTech; liveVolume?: number }) {
   const items: [string, string, string][] = [
     ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? "text-up-2" : tech.rsi > 70 ? "text-down-2" : "text-ink-2"],
     ["EMA20", tech.ema20.toFixed(2), "text-ink-2"],
     ["EMA50", tech.ema50.toFixed(2), "text-ink-2"],
     ["Vol", volLabel(tech, liveVolume), tech.volumeRatio >= 1.5 ? "text-up-2" : "text-ink-2"],
-    ["Tech score", `${tech.technicalScore}/100`, tech.technicalScore >= 60 ? "text-up-2" : tech.technicalScore >= 40 ? "text-gold-2" : "text-down-2"],
   ];
   return (
     <div className="flex gap-1.5 flex-wrap">
       {items.map(([lbl, val, tone]) => <Chip key={lbl} label={lbl} value={val} tone={tone} />)}
-    </div>
-  );
-}
-
-// ─── Catalysts / Risks two-column block ─────────────────────────────────────
-export function CatalystsRisks({ catalysts, risks }: { catalysts: string[]; risks: string[] }) {
-  if (catalysts.length === 0 && risks.length === 0) return null;
-  return (
-    <div className="hidden sm:grid grid-cols-2 gap-3 mt-3">
-      {catalysts.length > 0 && (
-        <div>
-          <div className="text-[9px] uppercase tracking-wide text-up-2 mb-1">Catalysts</div>
-          {catalysts.map((c, j) => (
-            <div key={j} className="text-[11px] text-ink-2 leading-relaxed">▲ {c}</div>
-          ))}
-        </div>
-      )}
-      {risks.length > 0 && (
-        <div>
-          <div className="text-[9px] uppercase tracking-wide text-down-2 mb-1">Risks</div>
-          {risks.map((r, j) => (
-            <div key={j} className="text-[11px] text-ink-2 leading-relaxed">▼ {r}</div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { runFullScan, runNewsRefresh } from "@/lib/scanner";
 import type { ProviderConfig } from "@/lib/providers";
+import { DEFAULT_MODELS } from "@/lib/providers/types";
 import {
   acquireLock,
   releaseLock,
@@ -18,6 +19,25 @@ import {
 // see lib/scan-store.ts for that.
 let cachedScan: { result: Awaited<ReturnType<typeof runFullScan>>; at: number } | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Resolves the unattended cron scan's own server-side provider config —
+ * completely separate from the browser's BYOK key, and never exposed to it.
+ * Checked in this order: Groq first (free — the sensible default for an
+ * unattended job with no cost ceiling of its own), then whichever paid
+ * provider key has actually been configured. SCAN_<PROVIDER>_API_KEY lets the
+ * cron use a different key than any other server-side use of the same
+ * provider; the plain name is the fallback.
+ */
+function resolveServerScanConfig(): ProviderConfig | null {
+  const candidates: ProviderConfig["provider"][] = ["groq", "claude", "gemini", "openai"];
+  for (const provider of candidates) {
+    const envKey = provider.toUpperCase();
+    const apiKey = process.env[`SCAN_${envKey}_API_KEY`] ?? process.env[`${envKey}_API_KEY`];
+    if (apiKey) return { provider, apiKey, model: DEFAULT_MODELS[provider] };
+  }
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -112,11 +132,11 @@ export async function GET(req: NextRequest) {
   }
 
   // Unattended scans use a server-side key — never the browser's BYOK key.
-  const apiKey = process.env.SCAN_ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
+  const scanConfig = resolveServerScanConfig();
+  if (!scanConfig) {
     // Fail safely: the previous successful scan (if any) is untouched, so the
     // site does not go empty just because this env var was never set.
-    console.error("[cron/scan] no server-side AI key configured (ANTHROPIC_API_KEY) — skipping");
+    console.error("[cron/scan] no server-side AI key configured (checked GROQ_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY) — skipping");
     return NextResponse.json(
       { ok: false, reason: "No server-side AI key configured" },
       { status: 503 }
@@ -157,7 +177,7 @@ export async function GET(req: NextRequest) {
     }
 
     const results = await runFullScan(
-      { provider: "claude", apiKey, model: "claude-sonnet-4-5" },
+      scanConfig,
       { minTechnicalScore: 45, minAvgVolume: 200_000, maxPicks: 8 }
     );
     cachedScan = { result: results, at: Date.now() };

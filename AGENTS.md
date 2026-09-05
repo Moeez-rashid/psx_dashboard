@@ -26,6 +26,17 @@ For recent activity, run `git log --oneline -20` — don't trust any hardcoded c
 - `components/AppShell.tsx` (new, now what `app/page.tsx` renders) races a ~2.4s minimum splash against that fetch, then mounts `Dashboard` already hydrated via its new `initialScan` prop — no scan is ever triggered by opening the site.
 - **Server-side AI key is separate from BYOK.** `ANTHROPIC_API_KEY` (or `SCAN_ANTHROPIC_API_KEY` to use a different key than any other server use) drives the unattended cron scan only; the browser's own key (Settings) is untouched and still required for manual scans if no persisted scan exists yet.
 
+## UI overhaul (2026-09-05, PR stacked on the automated-scan PR)
+
+Full frontend pass toward a "professional financial product" feel — no scanner/algorithm changes, no Deep Dive.
+
+- **Icons: `lucide-react`.** Every emoji and ad-hoc Unicode glyph used as a UI icon (📰💼💰📡👁⚙↻⟳✕✦★☆) was replaced. Inline directional text (`Technical Score ↓`, `View all →`) was deliberately left alone — those are typographic conventions, not the emoji problem.
+- **`components/ui/TechnicalScore.tsx`** (new) is now the one place the score renders — always "N/100" plus the literal label "Technical Score", never a bare percentage, never near AI-confidence language. `TechnicalScoreMeter` (Opportunities, prominent) and `TechnicalScoreChip` (Watchlist, compact) share the same scoring→color logic.
+- **`components/WatchlistRow.tsx`** (new) replaces Watchlist's reuse of Opportunities' `StockRow` cards with an actual dense table (desktop) / two-line compact row (mobile) — see DECISIONS.md for why "Watchlist = monitoring, Opportunities = discovery" drove this split.
+- **Deduplication in `StockRow.tsx`'s `StockDetailBody`**: the old narrative-prose generator (`buildTechnicalNarrative`) and the technicals-derived fake "catalysts/risks" (`StockBits.tsx`'s `techCatalysts`/`techRisks`, now deleted) were replaced by one "Key technical reasons" list sourced directly from `TechnicalScore.reasons` — the real deterministic explanation was already being computed and then re-derived three different ways in the UI. AI catalysts/risks now only render when the AI pass actually produced its own (never fabricated from technicals).
+- **`components/ui/primitives.tsx`**: added `EmptyState` and `IconButton` — every hand-rolled emoji-headline empty state (Opportunities/Holdings/Watchlist/News) now shares one component.
+- **Stale-scan indicator**: a small dot next to "Last scan …" (green pulse = today, muted = earlier day) — not a banner. `lib/format.ts` gained `toPKT()` (extracted from `pktNow()`) to support the day-comparison correctly.
+
 ## Open threads
 
 - **Deep Dive page** — planned home for AI reasoning over fundamentals, news, macro, catalysts and risks. Not started; do not add AI-generated scores back into Opportunities.

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, type ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 
 // ─── Signal styling map ─────────────────────────────────────────────────────
 export const SIGNAL_STYLE: Record<string, { pill: string; bar: string; text: string }> = {
@@ -153,4 +154,53 @@ export function ConfirmDelete({ pending, onArm, onConfirm, onCancel }: {
 // ─── Skeleton block ─────────────────────────────────────────────────────────
 export function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`skeleton ${className}`} />;
+}
+
+// ─── Icon-only button — enforces an accessible label at the type level ──────
+export function IconButton({ icon: Icon, label, onClick, active, tone = "default", size = "md", type = "button" }: {
+  icon: LucideIcon;
+  label: string;              // required — becomes title + aria-label, never decoration-only
+  onClick?: () => void;
+  active?: boolean;
+  tone?: "default" | "accent" | "sky" | "danger";
+  size?: "sm" | "md";
+  type?: "button" | "submit";
+}) {
+  const toneClass = {
+    default: active ? "border-line-2 text-ink bg-raised" : "btn",
+    accent: "btn-accent",
+    sky: "btn-sky",
+    danger: "btn-danger",
+  }[tone];
+  const px = size === "sm" ? "p-1.5" : "p-2";
+  return (
+    <button type={type} onClick={onClick} title={label} aria-label={label} className={`${toneClass} ${px}`}>
+      <Icon size={size === "sm" ? 13 : 15} strokeWidth={2} aria-hidden />
+    </button>
+  );
+}
+
+// ─── Empty state — icon + heading + description + optional action ──────────
+export function EmptyState({ icon: Icon, title, description, action, tone = "default" }: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  action?: { label: string; icon?: LucideIcon; onClick: () => void };
+  tone?: "default" | "accent";
+}) {
+  return (
+    <div className="card text-center py-11 px-5">
+      <div className={`inline-flex items-center justify-center w-11 h-11 rounded-full mb-4 ${tone === "accent" ? "bg-up-dim" : "bg-inset"}`}>
+        <Icon size={20} strokeWidth={1.75} className={tone === "accent" ? "text-up-2" : "text-ink-3"} aria-hidden />
+      </div>
+      <div className="text-sm font-semibold text-ink mb-1.5">{title}</div>
+      <p className="text-xs text-ink-3 leading-relaxed max-w-md mx-auto">{description}</p>
+      {action && (
+        <button onClick={action.onClick} className="btn-accent mt-5 px-5 py-2 font-semibold">
+          {action.icon && <action.icon size={14} strokeWidth={2.25} aria-hidden />}
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
 }

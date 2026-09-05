@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Check, Plus, TrendingUp, TrendingDown } from "lucide-react";
 import { fmtVol } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
 import { Skeleton } from "./ui/primitives";
@@ -26,10 +27,11 @@ function MoverRow({ m, onAdd, added }: { m: Mover; onAdd: (t: string) => void; a
       <button
         onClick={() => !added && onAdd(m.symbol)}
         title={added ? "Already in watchlist" : "Add to watchlist"}
-        className={`text-[10px] w-4 text-center leading-none transition-colors cursor-pointer
+        aria-label={added ? "Already in watchlist" : "Add to watchlist"}
+        className={`w-4 flex items-center justify-center leading-none transition-colors cursor-pointer
           ${added ? "text-up-2" : "text-ink-3 hover:text-sky-2 group-hover:text-ink-2"}`}
       >
-        {added ? "✓" : "+"}
+        {added ? <Check size={12} strokeWidth={2.5} /> : <Plus size={12} strokeWidth={2.5} />}
       </button>
       <span className="text-xs font-semibold text-ink truncate">{m.symbol}</span>
       <span className="text-[10px] text-ink-3 truncate flex-1 hidden lg:block">{resolveSectorName(m.sector)}</span>
@@ -63,15 +65,20 @@ function IndexStrip({ data }: { data: MarketData | null }) {
       {k ? (
         <>
           <span className="text-[13px] font-semibold num text-ink">{k.value.toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          <span className={`text-[11px] num ${k.change >= 0 ? "text-up-2" : "text-down-2"}`}>
-            {k.change >= 0 ? "▲ +" : "▼ "}{k.change.toLocaleString("en-PK", { maximumFractionDigits: 2 })} ({k.changePercent >= 0 ? "+" : ""}{k.changePercent.toFixed(2)}%)
+          <span className={`inline-flex items-center gap-0.5 text-[11px] num ${k.change >= 0 ? "text-up-2" : "text-down-2"}`}>
+            {k.change >= 0 ? <TrendingUp size={11} strokeWidth={2.5} /> : <TrendingDown size={11} strokeWidth={2.5} />}
+            {k.change >= 0 ? "+" : ""}{k.change.toLocaleString("en-PK", { maximumFractionDigits: 2 })} ({k.changePercent >= 0 ? "+" : ""}{k.changePercent.toFixed(2)}%)
           </span>
           {b && (
-            <span className="hidden sm:inline text-[10px] text-ink-3 num ml-auto">{b.advancing} ▲ · {b.declining} ▼</span>
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-ink-3 num ml-auto">
+              {b.advancing} <TrendingUp size={10} strokeWidth={2.5} /> · {b.declining} <TrendingDown size={10} strokeWidth={2.5} />
+            </span>
           )}
         </>
       ) : b ? (
-        <span className="text-[11px] num text-ink-2">{b.advancing} <span className="text-up-2">▲</span> · {b.declining} <span className="text-down-2">▼</span></span>
+        <span className="inline-flex items-center gap-1 text-[11px] num text-ink-2">
+          {b.advancing} <TrendingUp size={11} strokeWidth={2.5} className="text-up-2" /> · {b.declining} <TrendingDown size={11} strokeWidth={2.5} className="text-down-2" />
+        </span>
       ) : (
         <Skeleton className="flex-1 h-3.5 max-w-40" />
       )}

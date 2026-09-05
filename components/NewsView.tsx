@@ -1,8 +1,10 @@
 "use client";
 import { useMemo } from "react";
+import { Newspaper, ExternalLink, X, RefreshCw, Radar, Settings as SettingsIcon, Coins, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
 import type { NewsItem } from "@/lib/news-fetcher";
 import MarketStrip from "./MarketStrip";
+import { EmptyState } from "./ui/primitives";
 
 /** Google News search fallback for rows without an article link. */
 const googleNewsUrl = (q: string) =>
@@ -125,14 +127,14 @@ function SentimentChart({ history }: { history: SentimentPoint[] }) {
 function SectorRow({ sec, onFilter }: { sec: NewsAnalysis["affectedSectors"][0]; onFilter: (name: string) => void }) {
   const tone: Tone = sec.impact === "POSITIVE" ? "up" : sec.impact === "NEGATIVE" ? "down" : "sky";
   const t = TONE[tone];
-  const icon = sec.impact === "POSITIVE" ? "▲" : sec.impact === "NEGATIVE" ? "▼" : "–";
+  const Icon = sec.impact === "POSITIVE" ? TrendingUp : sec.impact === "NEGATIVE" ? TrendingDown : Minus;
   return (
     <button
       onClick={() => onFilter(sec.sectorName)}
       className="group w-full flex items-start gap-2.5 py-2 text-left cursor-pointer"
       title={`Filter opportunities to ${sec.sectorName}`}
     >
-      <span className={`${t.text} text-[13px] leading-5 shrink-0 w-3.5 text-center`}>{icon}</span>
+      <span className={`${t.text} shrink-0 w-3.5 pt-0.5 flex justify-center`}><Icon size={13} strokeWidth={2.25} aria-hidden /></span>
       <span className="flex-1 min-w-0">
         <span className={`text-xs font-semibold ${t.text}`}>{sec.sectorName}</span>
         <span className="text-[11px] text-ink-2 leading-snug"> — {sec.reason}</span>
@@ -188,8 +190,9 @@ function FeedRow({ item, onOpenTicker }: { item: FeedItem; onOpenTicker: (t: str
           target="_blank" rel="noopener noreferrer"
           onClick={e => e.stopPropagation()}
           title="Search this story online"
-          className="text-[11px] text-ink-3 hover:text-sky-2 shrink-0 self-center px-1"
-        >↗</a>
+          aria-label="Search this story online"
+          className="text-ink-3 hover:text-sky-2 shrink-0 self-center px-1"
+        ><ExternalLink size={12} strokeWidth={2} /></a>
         <span className="text-[10px] text-ink-3 shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity">›</span>
       </button>
     );
@@ -204,7 +207,9 @@ function FeedRow({ item, onOpenTicker }: { item: FeedItem; onOpenTicker: (t: str
     >
       {badge}
       {body}
-      <span className="text-[11px] text-ink-3 shrink-0 self-center opacity-60 group-hover:opacity-100 group-hover:text-sky-2 transition-opacity">↗</span>
+      <span className="text-ink-3 shrink-0 self-center opacity-60 group-hover:opacity-100 group-hover:text-sky-2 transition-opacity">
+        <ExternalLink size={12} strokeWidth={2} />
+      </span>
     </a>
   );
 }
@@ -284,28 +289,24 @@ export default function NewsView({
   // Market movers below stay live either way (they need no AI key).
   const statusCard = !na ? (
     scanning ? (
-      <div className="card text-center py-10 px-5">
-        <div className="flex justify-center gap-1.5 mb-4">
-          {[0, 1, 2].map(i => (
-            <span key={i} className="w-2 h-2 rounded-full bg-up animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
-          ))}
+      <div className="card py-8 px-5 text-center">
+        <div className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-up-dim mb-4">
+          <RefreshCw size={16} strokeWidth={2.25} className="text-up-2 animate-spin" aria-hidden />
         </div>
         <div className="text-xs text-ink mb-1">Building today&rsquo;s briefing…</div>
         <div className="text-[11px] text-ink-3">Fetching RSS news and running AI analysis — usually 30–90 seconds.</div>
       </div>
     ) : (
-      <div className="card text-center py-10 px-5">
-        <div className="text-3xl mb-3">📰</div>
-        <div className="text-sm font-medium text-ink mb-1.5">No briefing yet</div>
-        <p className="text-xs text-ink-3 leading-relaxed max-w-md mx-auto">
-          {hasKey
-            ? "Run a full scan to generate today's market briefing, sector watch and latest headlines."
-            : "Add an AI key in Settings, then run a scan to generate today's briefing. The news feed is built from the same free RSS sources the scanner reads."}
-        </p>
-        <button onClick={onRunScan} className="btn-accent mt-5 px-5 py-2 font-semibold">
-          {hasKey ? "↗ Run Full Scan" : "⚙ Set API Key"}
-        </button>
-      </div>
+      <EmptyState
+        icon={Newspaper}
+        title="No briefing yet"
+        description={hasKey
+          ? "Run a full scan to generate today's market briefing, sector watch and latest headlines."
+          : "Add an AI key in Settings, then run a scan to generate today's briefing. The news feed is built from the same free RSS sources the scanner reads."}
+        action={hasKey
+          ? { label: "Run Full Scan", icon: Radar, onClick: onRunScan }
+          : { label: "Set API Key", icon: SettingsIcon, onClick: onRunScan }}
+      />
     )
   ) : null;
 
@@ -320,7 +321,7 @@ export default function NewsView({
         <div className="flex items-center gap-2 text-xs text-ink-2">
           <span>Showing news for</span>
           <span className="font-semibold text-sky-2">{filterTicker}</span>
-          <button onClick={onClearFilter} className="btn text-[10px] px-2 py-0.5">Clear ✕</button>
+          <button onClick={onClearFilter} className="btn text-[10px] px-2 py-0.5"><X size={11} strokeWidth={2.5} aria-hidden />Clear</button>
         </div>
       )}
 
@@ -338,7 +339,8 @@ export default function NewsView({
             {updatedAt && <span className="text-[9px] text-ink-3 bg-raised px-2 py-px rounded-full num">updated {updatedAt}</span>}
             {hasKey && (
               <button onClick={onRefreshNews} disabled={scanning} className="btn text-[10px] px-2 py-0.5" title="Re-analyse today's news without re-scoring every stock">
-                {scanning ? "⟳ Refreshing…" : "↻ Refresh"}
+                <RefreshCw size={10} strokeWidth={2.25} className={scanning ? "animate-spin" : ""} aria-hidden />
+                {scanning ? "Refreshing…" : "Refresh"}
               </button>
             )}
             <SentimentBadge na={na} />
@@ -405,7 +407,7 @@ export default function NewsView({
         )}
         {/* Dividends — yields we already track + the official announcements page */}
         <div className="flex items-center gap-2 flex-wrap pt-3 mt-1 border-t border-line">
-          <span className="text-[11px] shrink-0">💰</span>
+          <Coins size={12} strokeWidth={2} className="text-ink-3 shrink-0" aria-hidden />
           <span className="label shrink-0">Dividends</span>
           {dividendPayers.length > 0 ? (
             dividendPayers.map(d => (
