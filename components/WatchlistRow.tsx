@@ -19,20 +19,22 @@ function badgeLabel(signal?: string): string {
   return BADGE_SHORT[u] ?? u.replace("_", " ");
 }
 
-// Same column order as Opportunities' StockRow: ticker → Technical Score →
-// sparkline → price+change (grouped, one stat) → signal → chevron. Keeping
-// the two tables' reading order identical is what makes Watchlist feel like
-// a compact version of the same product instead of a different layout.
-const ROW_GRID = "grid-cols-[24px_minmax(0,1.2fr)_92px_44px_76px_84px_14px]";
+// A fixed-width ticker column (not a flexible fr track) is what keeps the
+// Technical Score sitting right next to the ticker instead of floating far
+// away — exactly the same trick Opportunities' StockRow uses. All the
+// flexible space lives in one dedicated spacer column instead, which pushes
+// price/sparkline/signal/chevron into a tight cluster at the end.
+const ROW_GRID = "grid-cols-[24px_148px_104px_minmax(0,1fr)_72px_56px_80px_14px]";
 
 export function WatchlistHeader() {
   return (
     <div className={`hidden sm:grid ${ROW_GRID} gap-x-3 items-center px-3.5 py-1.5`}>
       <span />
       <span className="label">Ticker</span>
-      <span className="label">Technical Score</span>
+      <span className="label whitespace-nowrap">Technical Score</span>
       <span />
       <span className="label text-right">Price</span>
+      <span />
       <span className="label">Signal</span>
       <span />
     </div>
@@ -68,7 +70,7 @@ export function WatchlistRow({
         aria-expanded={open}
         onClick={onToggle}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
-        className="cursor-pointer select-none grid grid-cols-[minmax(0,1fr)_20px] sm:grid-cols-[24px_minmax(0,1.2fr)_92px_44px_76px_84px_14px] gap-x-2 sm:gap-x-3 items-center px-3 py-2.5 sm:py-2"
+        className="cursor-pointer select-none grid grid-cols-[minmax(0,1fr)_20px] sm:grid-cols-[24px_148px_104px_minmax(0,1fr)_72px_56px_80px_14px] gap-x-2 sm:gap-x-3 items-center px-3.5 py-3"
       >
         {/* Desktop: star in its own column */}
         <span className="hidden sm:inline-flex justify-center">
@@ -93,7 +95,7 @@ export function WatchlistRow({
                 <Star size={12} strokeWidth={2} fill="currentColor" />
               </button>
             </span>
-            <span className="text-[13px] font-bold tracking-tight truncate">{ticker}</span>
+            <span className="text-[13px] font-bold tracking-tight shrink-0">{ticker}</span>
             {sector && <span className="hidden sm:inline text-[10px] text-ink-3 truncate min-w-0">{sector}</span>}
             <span className={`sm:hidden shrink-0 inline-flex items-center rounded border px-1 py-px text-[8px] font-bold tracking-wide ${hue.text} ${hue.border}`}>
               {badgeLabel(signal ?? undefined)}
@@ -115,8 +117,10 @@ export function WatchlistRow({
           </div>
         </div>
 
-        {/* Desktop-only columns — same left-to-right order as Opportunities:
-            score, sparkline, then price+change as one grouped stat. */}
+        {/* Desktop-only columns: score sits right after the ticker (fixed-width
+            ticker column keeps them close); price, sparkline, signal and the
+            chevron are bunched together at the end with no flexible space
+            between them, so the sparkline reads as adjacent to the signal. */}
         <span className="hidden sm:block min-w-0">
           {technicalScore != null ? (
             <TechnicalScoreChip score={technicalScore} />
@@ -128,15 +132,16 @@ export function WatchlistRow({
             <span className="text-[11px] text-ink-3">—</span>
           )}
         </span>
-        <span className="hidden sm:flex justify-center">
-          {spark && spark.length >= 5 && <Sparkline data={spark} width={36} height={16} color={hue.stroke} opacity={0.6} />}
-        </span>
+        <span />
         <div className="hidden sm:block text-right leading-tight">
           <div className="text-[12px] font-medium num">{price !== undefined ? price.toFixed(2) : "—"}</div>
           {change !== undefined && (
             <div className={`text-[10px] num ${change >= 0 ? "text-up-2" : "text-down-2"}`}>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</div>
           )}
         </div>
+        <span className="hidden sm:flex justify-center">
+          {spark && spark.length >= 5 && <Sparkline data={spark} width={52} height={24} color={hue.stroke} opacity={0.7} />}
+        </span>
         <span className="hidden sm:block">
           <span className={`inline-flex items-center justify-center rounded-md border bg-transparent text-[9px] font-bold tracking-wide px-1.5 py-0.5 ${hue.text} ${hue.border}`}>
             {badgeLabel(signal ?? undefined)}
