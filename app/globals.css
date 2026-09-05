@@ -47,6 +47,15 @@ body {
   background: color-mix(in srgb, var(--color-up) 35%, transparent);
 }
 
+/* Splash screen — indeterminate loading bar (no fake progress percentage) */
+@keyframes splash-bar-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.animate-splash-bar {
+  animation: splash-bar-slide 1.3s ease-in-out infinite;
+}
+
 @layer components {
   .card {
     @apply bg-card border border-line rounded-xl p-4 transition-colors;

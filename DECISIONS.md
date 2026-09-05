@@ -2,6 +2,20 @@
 
 Reasoning behind significant choices, newest first. This is *why*, not *what* — for what changed, read `git log`.
 
+## Automated daily scan: Redis, not Postgres; EOD-date freshness check, not a holiday calendar (2026-09-05)
+
+**Persistence: Upstash Redis over Postgres**, despite no database existing yet to constrain the choice. The access pattern is write-once-daily / read-"give-me-latest"-many-times with no relational queries — a key-value shape, not a relational one. Redis also gives an atomic `SET NX EX` lock for free (Vercel's own cron docs recommend exactly this for preventing overlapping invocations), which a plain object store (Vercel Blob) cannot do atomically. Postgres would be the right call instead if cross-scan analytics (e.g. charting one ticker's score over 30 days) becomes an actual near-term goal — flagged, not built.
+
+**Env var names are resolved, not assumed.** Vercel's own docs (checked live) explicitly decline to commit to one fixed naming scheme for third-party Redis marketplace integrations, and a legacy Vercel-KV-migrated-to-Upstash store literally uses different names (`KV_REST_API_URL`/`TOKEN`) than a fresh Upstash-for-Redis install (`UPSTASH_REDIS_REST_URL`/`TOKEN`). `lib/scan-store.ts` checks both rather than guessing one.
+
+**Freshness check is one EOD probe fetch, not a holiday calendar.** Before running the expensive ~90-call full scan, the cron path fetches ONE ticker's latest EOD bar and compares its date to the last successful scan's `scanDate`. If unchanged, it skips (market holiday, or Vercel redelivering the same cron invocation twice — both documented as real occurrences, not edge cases). This deliberately does NOT try to detect "unchanged prices but genuinely new news" — a hardcoded PSX holiday list was explicitly rejected as unnecessary complexity for a first version, and the EOD-date check already covers the two situations that actually matter (holidays, duplicate delivery) without needing one. A probe-fetch failure is treated as ambiguous and the scan proceeds anyway — never silently skip on an error with no explanation.
+
+**A failed scan never touches `scan:latest`.** Success and failure are written to different keys (`scan:latest` only ever moves forward on success; `scan:by-date:{date}` records every outcome including failed/skipped) specifically so a broken Tuesday cron run can't erase Monday's still-valid results. `GET /api/scan/latest` only ever reads `scan:latest`, so a failed scan is structurally incapable of being served to the frontend as "the latest scan" — this isn't a runtime check, it's which key gets written.
+
+**Manual scans persist too, sharing the same lock as cron**, so a "Rerun Full Scan" click and a scheduled 9am run can never overlap and burn AI budget on two simultaneous expensive scans. Without Redis configured, the lock degrades to "always proceeds" rather than blocking every scan forever — documented as a real behavior change, not silently ignored.
+
+**Splash screen mounts Dashboard once, already hydrated**, rather than mounting it empty and updating it after an async fetch resolves. `AppShell.tsx` waits for both the minimum splash duration AND `/api/scan/latest` before ever rendering `<Dashboard/>`, passing the result as an `initialScan` prop consumed only via `useState`/`useRef` lazy initializers — no post-mount effect re-hydrates state, so there's no risk of `scanTickersRef` and `scanResult` ever disagreeing about whether real data has arrived yet.
+
 ## Opportunities ranks on a deterministic Technical Score, not AI confidence (2026-07-10)
 
 **Decided:** Opportunities displays and ranks by a 0–100 **Technical Score** computed only from price and volume in `lib/technicals.ts`. No LLM, news, sentiment or fundamentals (P/E, EPS, ROE) touch it. The file imports exactly one thing — a *type* — so the dependency is structurally impossible, not merely avoided.
