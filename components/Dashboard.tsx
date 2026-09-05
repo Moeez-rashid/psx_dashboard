@@ -5,7 +5,7 @@ import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
 import type { NewsItem } from "@/lib/news-fetcher";
 import type { StockQuote } from "@/lib/psx";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
-import { isPKTOpen, pktNow } from "@/lib/format";
+import { isPKTOpen, pktNow, toPKT } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
 import { ErrorBanner, Skeleton } from "./ui/primitives";
 import { toast, Toaster } from "./ui/Toast";
@@ -16,10 +16,51 @@ import NewsView, { deriveSentiment, SentimentBadge, type SentimentPoint } from "
 import { StockRow, StockDetailBody, firstClause, buildTechnicalNarrative, type SignalDetail, type Tier2 } from "./StockRow";
 import HoldingsOverview, { type Holding } from "./HoldingsOverview";
 import { techCatalysts, techRisks, volLabel, type StockTech } from "./StockBits";
+import type { PersistedScan } from "@/lib/scan-store";
+import type { ScanResult } from "@/lib/scanner";
 
 // ─── Local types ────────────────────────────────────────────────────────────
 interface WatchItem { ticker: string; name: string; }
 const DEFAULT_HOLDINGS: Holding[] = [];
+
+/** Opportunities tickers to poll prices for, mirroring the post-scan logic below:
+ *  prefer the AI-ranked signals, fall back to the top technical picks when AI failed. */
+function initialScanTickers(r: ScanResult | null): string[] {
+  if (!r) return [];
+  if (r.signals.length > 0) return r.signals.map((s) => s.ticker);
+  return r.technicalData.slice(0, 8).map((t) => t.symbol);
+}
+
+/** "Last scan 09:04 PKT" today, or "Last scan Sep 5, 09:04 PKT" if the persisted
+ *  scan is from an earlier day — e.g. today's scheduled scan failed and this is
+ *  still showing yesterday's result. Communicates staleness without an error state. */
+function formatScanTimestamp(iso: string): string {
+  const scanPKT = toPKT(new Date(iso));
+  const nowPKT = pktNow();
+  const time = scanPKT.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" });
+  if (scanPKT.toDateString() === nowPKT.toDateString()) return `Last scan ${time} PKT`;
+  const date = scanPKT.toLocaleDateString("en-PK", { month: "short", day: "numeric" });
+  return `Last scan ${date}, ${time} PKT`;
+}
+
+/** Matches the scanResult state shape used after a live scan — `fundamentals`
+ *  is intentionally excluded here; it's hydrated separately into askAnalystData below. */
+function toScanResultState(r: ScanResult) {
+  return {
+    signals: r.signals,
+    newsAnalysis: r.newsAnalysis,
+    expandedSectors: r.expandedSectors,
+    totalScanned: r.totalScanned,
+    passedTechnicals: r.passedTechnicals,
+    timestamp: r.timestamp,
+    technicalData: r.technicalData,
+    newsHeadlines: r.newsHeadlines,
+    newsSources: r.newsSources,
+    newsFromCache: r.newsFromCache,
+    newsItems: r.newsItems,
+    aiError: r.aiError,
+  };
+}
 
 // ─── PKT clock ──────────────────────────────────────────────────────────────
 function PKTClock() {
@@ -70,7 +111,11 @@ function buildExpandedNarrative(analysis: NewsAnalysis): string {
 }
 
 // ─── Main Dashboard ─────────────────────────────────────────────────────────
-export default function Dashboard() {
+export default function Dashboard({ initialScan }: { initialScan?: PersistedScan | null }) {
+  // initialScan comes from AppShell (GET /api/scan/latest, resolved before Dashboard
+  // ever mounts — see AppShell.tsx), so seeding state directly here is safe: there is
+  // no server-rendered Dashboard HTML this could ever mismatch against.
+  const initialResults = initialScan?.results ?? null;
   // Persistence — state starts empty and loads from localStorage after mount,
   // so the server-rendered HTML always matches the first client render (no hydration mismatch).
   const [holdings, setHoldings] = useState<Holding[]>(DEFAULT_HOLDINGS);
@@ -84,7 +129,7 @@ export default function Dashboard() {
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
-  const scanTickersRef = useRef<string[]>([]);
+  const scanTickersRef = useRef<string[]>(initialScanTickers(initialResults));
 
   // Scanner
   const [scanResult, setScanResult] = useState<{
@@ -100,7 +145,7 @@ export default function Dashboard() {
     newsFromCache: boolean;
     newsItems: NewsItem[];
     aiError?: string;
-  } | null>(null);
+  } | null>(() => (initialResults ? toScanResultState(initialResults) : null));
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [scanPhase, setScanPhase] = useState("");
@@ -114,7 +159,9 @@ export default function Dashboard() {
   const [loadingWatchTech, setLoadingWatchTech] = useState(false);
 
   // AskAnalyst fundamentals — null = attempted but no data; undefined = never tried
-  const [askAnalystData, setAskAnalystData] = useState<Record<string, AskAnalystFundamentals | null>>({});
+  const [askAnalystData, setAskAnalystData] = useState<Record<string, AskAnalystFundamentals | null>>(
+    () => initialResults?.fundamentals ?? {}
+  );
 
   // Sparklines (30d EOD closes per ticker)
   const [sparks, setSparks] = useState<Record<string, number[]>>({});
@@ -867,7 +914,7 @@ export default function Dashboard() {
               </button>
               {scanResult && (
                 <span className="text-[10px] text-ink-3">
-                  Last scan {new Date(scanResult.timestamp).toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" })} PKT
+                  {formatScanTimestamp(scanResult.timestamp)}
                   · {scanResult.totalScanned} scanned · {scanResult.passedTechnicals} passed technicals
                   {scanResult.expandedSectors.length > 0 && ` · expanded: ${scanResult.expandedSectors.join(", ")}`}
                 </span>

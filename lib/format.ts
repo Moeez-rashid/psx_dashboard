@@ -20,9 +20,14 @@ export function fmtPct(v: number, digits = 2): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
 }
 
+/** Reinterpret any Date's wall-clock fields as Asia/Karachi time. */
+export function toPKT(d: Date): Date {
+  return new Date(d.toLocaleString("en-US", { timeZone: "Asia/Karachi" }));
+}
+
 /** Current time in PKT, e.g. "06:38 pm" */
 export function pktNow(): Date {
-  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Karachi" }));
+  return toPKT(new Date());
 }
 
 /** True while the PSX regular session is open (Mon–Thu 09:30–15:30, Fri split session). */

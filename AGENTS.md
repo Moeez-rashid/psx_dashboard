@@ -16,9 +16,18 @@ Also live: the full "compact rows" redesign shipped in PR #1 — two-tier collap
 
 For recent activity, run `git log --oneline -20` — don't trust any hardcoded changelog here to stay current.
 
+## Automated daily scan (2026-09-05, PR stacked on the Technical Score PR)
+
+**Implemented in code, NOT yet operational** — it requires Vercel/Redis configuration that has not been done yet (see DECISIONS.md for the exact checklist). Do not tell Moeez the automated scan is "live" until he confirms that setup.
+
+- `lib/scan-store.ts` persists scans to Redis (Upstash via Vercel Marketplace) — `scan:latest`, `scan:by-date:{date}` (45-day TTL), `scan:lock` (distributed lock, 240s TTL). Completely separate from `lib/scanner.ts`, which still has no idea who calls it (cron, browser, anything).
+- `app/api/scan/route.ts` GET (the existing cron handler `vercel.json` already pointed at `0 4 * * 1-5` = 9am PKT) now: checks `CRON_SECRET`, checks a server-side `ANTHROPIC_API_KEY`, acquires the lock, probes EOD freshness (skips if no new trading day since the last success — see DECISIONS.md, this is deliberately simple), runs `runFullScan()`, persists. POST (manual/BYOK) now persists on success too and shares the same lock.
+- `GET /api/scan/latest` (new) returns the latest **successful** scan only, fast, no AI key, no secrets — `{ scan: null }` when none exists or the store isn't configured.
+- `components/AppShell.tsx` (new, now what `app/page.tsx` renders) races a ~2.4s minimum splash against that fetch, then mounts `Dashboard` already hydrated via its new `initialScan` prop — no scan is ever triggered by opening the site.
+- **Server-side AI key is separate from BYOK.** `ANTHROPIC_API_KEY` (or `SCAN_ANTHROPIC_API_KEY` to use a different key than any other server use) drives the unattended cron scan only; the browser's own key (Settings) is untouched and still required for manual scans if no persisted scan exists yet.
+
 ## Open threads
 
-- **Scheduled/background scans**: undecided. Client-side scheduling is impossible (browser must be open); an email digest was proposed and **rejected**. The viable design (Vercel Cron + KV storage + server-side Groq key) was offered to Moeez — awaiting his decision. Don't build it unprompted.
 - **Deep Dive page** — planned home for AI reasoning over fundamentals, news, macro, catalysts and risks. Not started; do not add AI-generated scores back into Opportunities.
 - `redesign/compact-bo-fundamentals` branch is merged and can be deleted.
 
