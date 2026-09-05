@@ -52,18 +52,33 @@ function badgeLabel(signal?: string): string {
   return BADGE_SHORT[u] ?? u.replace("_", " ");
 }
 
-// ─── Left-aligned labeled stat + bar (P&L, holdings only — score has its own component) ──
-function StatBar({ label, value, valueClass, barClass, pct }: {
-  label: string; value: string; valueClass: string; barClass: string; pct: number;
-}) {
+// ─── P&L meter (holdings only) — diverging bar centered on breakeven ────────
+// A raw |pnlPct| used directly as a 0-100% bar width made every realistic
+// P&L (rarely more than a few percent) look like an almost-empty sliver with
+// no sense of direction or scale. This instead anchors a center "breakeven"
+// tick and grows a bar left (loss) or right (gain) from it, scaled against a
+// ±20% swing — big enough that everyday P&L reads clearly, capped so no
+// single extreme position can visually dominate the row.
+const PNL_METER_SCALE = 20;
+function PnLMeter({ pnlPct }: { pnlPct: number }) {
+  const isUp = pnlPct >= 0;
+  const magnitude = Math.min(100, (Math.abs(pnlPct) / PNL_METER_SCALE) * 100);
   return (
     <div className="text-left">
       <div className="flex items-baseline gap-1">
-        <span className={`text-[13px] font-medium num leading-none ${valueClass}`}>{value}</span>
-        <span className="text-[8px] uppercase tracking-[0.08em] text-ink-3 leading-none">{label}</span>
+        <span className={`text-[13px] font-medium num leading-none ${isUp ? "text-up-2" : "text-down-2"}`}>
+          {isUp ? "+" : ""}{pnlPct.toFixed(1)}%
+        </span>
+        <span className="text-[8px] uppercase tracking-[0.08em] text-ink-3 leading-none">P&L</span>
       </div>
-      <div className="h-[3px] bg-line-2/70 rounded-full overflow-hidden mt-1.5">
-        <div className={`h-full rounded-full ${barClass} opacity-90`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+      <div className="relative h-[3px] rounded-full mt-1.5 flex overflow-hidden bg-line-2/70">
+        <div className="w-1/2 h-full flex justify-end">
+          {!isUp && <div className="h-full bg-down rounded-full opacity-90" style={{ width: `${magnitude}%` }} />}
+        </div>
+        <div className="w-1/2 h-full flex justify-start">
+          {isUp && <div className="h-full bg-up rounded-full opacity-90" style={{ width: `${magnitude}%` }} />}
+        </div>
+        <div className="absolute left-1/2 -translate-x-px top-0 bottom-0 w-px bg-ink-3/70" />
       </div>
     </div>
   );
@@ -303,7 +318,7 @@ export function StockRow({
               technicalScore !== undefined ? <TechnicalScoreMeter score={technicalScore} size="sm" /> : null
             ) : (
               pnlPct !== null && pnlPct !== undefined
-                ? <StatBar label="P&L" value={`${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%`} valueClass={pnlPct >= 0 ? "text-up-2" : "text-down-2"} barClass={pnlPct >= 0 ? "bg-up" : "bg-down"} pct={Math.abs(pnlPct)} />
+                ? <PnLMeter pnlPct={pnlPct} />
                 : <span className="text-[11px] text-ink-3">—</span>
             )}
           </div>

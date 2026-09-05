@@ -47,13 +47,13 @@ body {
   background: color-mix(in srgb, var(--color-up) 35%, transparent);
 }
 
-/* Splash screen — indeterminate loading bar (no fake progress percentage) */
-@keyframes splash-bar-slide {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(400%); }
+/* Splash screen — the mark breathes gently instead of showing any progress indicator */
+@keyframes splash-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.82; }
 }
-.animate-splash-bar {
-  animation: splash-bar-slide 1.3s ease-in-out infinite;
+.animate-splash-breathe {
+  animation: splash-breathe 2.4s ease-in-out infinite;
 }
 
 @layer components {

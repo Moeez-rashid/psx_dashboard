@@ -137,21 +137,25 @@ export default function HoldingsOverview({ holdings, prices }: {
             );
           })}
 
-          {/* Total row */}
-          <div className={`${GRID} h-8 border-t border-line mt-1`}>
-            <span />
-            <span className="text-[11px] font-bold text-ink">Total</span>
-            <span />
-            <span className="hidden sm:block" />
-            <span className="text-[10px] text-ink-2 num text-right hidden sm:block">PKR {fmtPKR(totalCost)}</span>
-            <span className={`text-[11px] font-bold num text-right ${pnlTone(totalPnl)}`}>
-              {totalPnl >= 0 ? "+" : "-"}PKR {fmtPKR(totalPnl)}
-            </span>
-            <span className={`text-[10px] font-bold num text-right ${pnlTone(totalPct)}`}>
-              {totalPct >= 0 ? "+" : ""}{totalPct.toFixed(1)}%
-            </span>
-            <span className="hidden sm:block" />
-          </div>
+          {/* Total row — with a single holding this would just restate that
+              row's own numbers verbatim, so it only earns its place once
+              there's an actual sum to show. */}
+          {rows.length > 1 && (
+            <div className={`${GRID} h-8 border-t border-line mt-1`}>
+              <span />
+              <span className="text-[11px] font-bold text-ink">Total</span>
+              <span />
+              <span className="hidden sm:block" />
+              <span className="text-[10px] text-ink-2 num text-right hidden sm:block">PKR {fmtPKR(totalCost)}</span>
+              <span className={`text-[11px] font-bold num text-right ${pnlTone(totalPnl)}`}>
+                {totalPnl >= 0 ? "+" : "-"}PKR {fmtPKR(totalPnl)}
+              </span>
+              <span className={`text-[10px] font-bold num text-right ${pnlTone(totalPct)}`}>
+                {totalPct >= 0 ? "+" : ""}{totalPct.toFixed(1)}%
+              </span>
+              <span className="hidden sm:block" />
+            </div>
+          )}
 
           {/* Sectors */}
           {sectors.length > 0 && (
