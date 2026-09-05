@@ -23,7 +23,7 @@ import {
   SECTOR_NAME_TO_CODE,
   type StockQuote,
 } from "./psx";
-import { scoreStock, type TechnicalScore } from "./technicals";
+import { scoreStock, compareByTechnicalScore, type TechnicalScore } from "./technicals";
 import {
   getNewsAnalysis,
   getStockSignals,
@@ -47,6 +47,7 @@ export interface ScanResult {
   newsFromCache: boolean;       // true when AI analysis was reused (news unchanged)
   newsItems: NewsItem[];        // structured headlines w/ article links (for the News page)
   fundamentals: Record<string, import("./askanalyst").AskAnalystFundamentals>; // keyed by ticker
+  aiError?: string;             // set when the AI narrative pass failed; technicals are still valid
 }
 
 // ─── Sector-rep tickers for fundamentals context injected into AI prompt ──
@@ -198,8 +199,8 @@ async function fetchAndScore(
   }
 
   return results
-    .filter((s) => s.compositeScore >= minScore)
-    .sort((a, b) => b.compositeScore - a.compositeScore);
+    .filter((s) => s.technicalScore >= minScore)
+    .sort(compareByTechnicalScore);
 }
 
 /** Build the stock context string fed to the AI in Pass 2. */
@@ -218,7 +219,7 @@ function buildStockContext(
       const sectorName = SECTOR_CODES[q?.sector ?? ""] ?? q?.sector ?? "n/a";
       const lines = [
         `${s.symbol} (${sectorName}) — PKR ${price} (${chg >= 0 ? "+" : ""}${chg.toFixed(2)}% today)`,
-        `  Technical score: ${s.compositeScore}/100 [${s.technicalSignal}]`,
+        `  Technical score: ${s.technicalScore}/100 [${s.technicalSignal}]`,
         `  RSI: ${s.rsi} | EMA20: ${s.ema20} | EMA50: ${s.ema50}`,
         `  Volume: ${s.volumeRatio}x 20d avg (${(s.avgVolume20d / 1000).toFixed(0)}K avg/day)`,
         `  Crossover: ${s.crossoverSignal} | Price vs EMA20: ${s.priceVsEma20} | vs EMA50: ${s.priceVsEma50}`,
@@ -269,13 +270,26 @@ export async function runFullScan(
   let newsItems: NewsItem[] = [];
   let newsFromCache = false;
 
+  let newsError: string | undefined;
+
   if (!skipNewsPass) {
-    const newsResult = await getNewsAnalysisWithCache(providerConfig);
-    newsAnalysis = newsResult.newsAnalysis;
-    newsHeadlines = newsResult.newsHeadlines;
-    newsSources = newsResult.newsSources;
-    newsItems = newsResult.newsItems;
-    newsFromCache = newsResult.fromCache;
+    try {
+      const newsResult = await getNewsAnalysisWithCache(providerConfig);
+      newsAnalysis = newsResult.newsAnalysis;
+      newsHeadlines = newsResult.newsHeadlines;
+      newsSources = newsResult.newsSources;
+      newsItems = newsResult.newsItems;
+      newsFromCache = newsResult.fromCache;
+    } catch (err) {
+      // Pass 1 is AI-dependent; the technical scan that follows is not.
+      // Degrade to "no news context" rather than failing the whole scan.
+      newsError = err instanceof Error ? err.message : "News analysis unavailable";
+      newsAnalysis = {
+        summary: "News analysis unavailable — technical scan ran without news context.",
+        affectedSectors: [],
+        globalFactors: [],
+      };
+    }
   }
 
   // Determine sector expansion
@@ -341,14 +355,32 @@ export async function runFullScan(
   const stockContext = buildStockContext(scoredStocks, quotes, fundamentalsMap);
   const newsContext = buildNewsContext(newsAnalysis);
 
+  // The AI writes the narrative (reason / catalysts / risks / headline) for the
+  // slate. It does NOT score or rank it: Opportunities is ordered by the
+  // deterministic Technical Score, so the same market data always produces the
+  // same ordering whichever provider is configured. AI confidence is retained
+  // on the signal for the future Deep Dive page but is deliberately unused here.
+  const rankOf = new Map(scoredStocks.map((s, i) => [s.symbol.toUpperCase(), i]));
+  const byTechnicalRank = (a: AISignal, b: AISignal) => {
+    const ra = rankOf.get(a.ticker.toUpperCase()) ?? Number.MAX_SAFE_INTEGER;
+    const rb = rankOf.get(b.ticker.toUpperCase()) ?? Number.MAX_SAFE_INTEGER;
+    return ra !== rb ? ra - rb : a.ticker.localeCompare(b.ticker);
+  };
+
   let signals: AISignal[] = [];
+  let aiError: string | undefined;
   if (scoredStocks.length > 0) {
-    signals = await getStockSignals(providerConfig, stockContext, newsContext);
-    // Cap at maxPicks and sort by confidence
-    signals = signals
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, maxPicks);
+    try {
+      const raw = await getStockSignals(providerConfig, stockContext, newsContext);
+      signals = raw.sort(byTechnicalRank).slice(0, maxPicks);
+    } catch (err) {
+      // An AI outage must not take the technical scanner down with it — the
+      // caller still gets technicalData and can render a deterministic slate.
+      aiError = err instanceof Error ? err.message : "AI analysis unavailable";
+      signals = [];
+    }
   }
+  if (newsError) aiError = aiError ? `${newsError}; ${aiError}` : newsError;
 
   // Convert fundamentals map to plain record for JSON serialization
   const fundamentalsRecord: Record<string, import("./askanalyst").AskAnalystFundamentals> = {};
@@ -369,6 +401,7 @@ export async function runFullScan(
     newsFromCache,
     newsItems,
     fundamentals: fundamentalsRecord,
+    aiError,
   };
 }
 

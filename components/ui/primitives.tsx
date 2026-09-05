@@ -33,20 +33,6 @@ export function Pill({ signal, small, onClick }: { signal?: string; small?: bool
   );
 }
 
-// ─── Confidence bar ─────────────────────────────────────────────────────────
-export function ConfBar({ pct, signal, label }: { pct: number; signal?: string; label?: string }) {
-  const s = signalStyle(signal);
-  return (
-    <div className="flex items-center gap-2 mt-2">
-      <span className="text-[10px] text-ink-3 whitespace-nowrap">{label ?? "AI confidence"}</span>
-      <div className="flex-1 h-1 bg-line-2 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-700 ${s.bar}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
-      </div>
-      <span className="text-[10px] text-ink-2 num min-w-7 text-right">{pct}%</span>
-    </div>
-  );
-}
-
 // ─── Stat chip (label + value) ──────────────────────────────────────────────
 export function Chip({ label, value, tone = "text-ink-2" }: { label: string; value: string; tone?: string }) {
   return (

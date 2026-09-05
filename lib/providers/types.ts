@@ -3,7 +3,13 @@
 export interface AISignal {
   ticker: string;
   signal: "BUY" | "STRONG_BUY" | "WATCH" | "HOLD" | "SELL" | "AVOID";
-  confidence: number;       // 0-100
+  /**
+   * The model's own stated conviction, 0-100.
+   * NOT used to score, rank or display anything in Opportunities — that is the
+   * deterministic Technical Score from lib/technicals.ts. Retained here for the
+   * planned Deep Dive page, where AI reasoning is the point.
+   */
+  confidence: number;
   reason: string;           // max ~15 words
   newsHeadline: string;     // latest relevant headline or "No recent news"
   catalysts: string[];      // 1-3 bullet points: why now
