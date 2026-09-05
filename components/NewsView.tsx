@@ -1,6 +1,6 @@
 "use client";
 import { useMemo } from "react";
-import { Newspaper, ExternalLink, X, RefreshCw, Radar, Settings as SettingsIcon, Coins } from "lucide-react";
+import { Newspaper, ExternalLink, X, RefreshCw, Radar, Settings as SettingsIcon, Coins, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
 import type { NewsItem } from "@/lib/news-fetcher";
 import MarketStrip from "./MarketStrip";
@@ -127,14 +127,14 @@ function SentimentChart({ history }: { history: SentimentPoint[] }) {
 function SectorRow({ sec, onFilter }: { sec: NewsAnalysis["affectedSectors"][0]; onFilter: (name: string) => void }) {
   const tone: Tone = sec.impact === "POSITIVE" ? "up" : sec.impact === "NEGATIVE" ? "down" : "sky";
   const t = TONE[tone];
-  const icon = sec.impact === "POSITIVE" ? "▲" : sec.impact === "NEGATIVE" ? "▼" : "–";
+  const Icon = sec.impact === "POSITIVE" ? TrendingUp : sec.impact === "NEGATIVE" ? TrendingDown : Minus;
   return (
     <button
       onClick={() => onFilter(sec.sectorName)}
       className="group w-full flex items-start gap-2.5 py-2 text-left cursor-pointer"
       title={`Filter opportunities to ${sec.sectorName}`}
     >
-      <span className={`${t.text} text-[13px] leading-5 shrink-0 w-3.5 text-center`}>{icon}</span>
+      <span className={`${t.text} shrink-0 w-3.5 pt-0.5 flex justify-center`}><Icon size={13} strokeWidth={2.25} aria-hidden /></span>
       <span className="flex-1 min-w-0">
         <span className={`text-xs font-semibold ${t.text}`}>{sec.sectorName}</span>
         <span className="text-[11px] text-ink-2 leading-snug"> — {sec.reason}</span>

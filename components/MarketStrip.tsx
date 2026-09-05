@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, TrendingUp, TrendingDown } from "lucide-react";
 import { fmtVol } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
 import { Skeleton } from "./ui/primitives";
@@ -65,15 +65,20 @@ function IndexStrip({ data }: { data: MarketData | null }) {
       {k ? (
         <>
           <span className="text-[13px] font-semibold num text-ink">{k.value.toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          <span className={`text-[11px] num ${k.change >= 0 ? "text-up-2" : "text-down-2"}`}>
-            {k.change >= 0 ? "▲ +" : "▼ "}{k.change.toLocaleString("en-PK", { maximumFractionDigits: 2 })} ({k.changePercent >= 0 ? "+" : ""}{k.changePercent.toFixed(2)}%)
+          <span className={`inline-flex items-center gap-0.5 text-[11px] num ${k.change >= 0 ? "text-up-2" : "text-down-2"}`}>
+            {k.change >= 0 ? <TrendingUp size={11} strokeWidth={2.5} /> : <TrendingDown size={11} strokeWidth={2.5} />}
+            {k.change >= 0 ? "+" : ""}{k.change.toLocaleString("en-PK", { maximumFractionDigits: 2 })} ({k.changePercent >= 0 ? "+" : ""}{k.changePercent.toFixed(2)}%)
           </span>
           {b && (
-            <span className="hidden sm:inline text-[10px] text-ink-3 num ml-auto">{b.advancing} ▲ · {b.declining} ▼</span>
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-ink-3 num ml-auto">
+              {b.advancing} <TrendingUp size={10} strokeWidth={2.5} /> · {b.declining} <TrendingDown size={10} strokeWidth={2.5} />
+            </span>
           )}
         </>
       ) : b ? (
-        <span className="text-[11px] num text-ink-2">{b.advancing} <span className="text-up-2">▲</span> · {b.declining} <span className="text-down-2">▼</span></span>
+        <span className="inline-flex items-center gap-1 text-[11px] num text-ink-2">
+          {b.advancing} <TrendingUp size={11} strokeWidth={2.5} className="text-up-2" /> · {b.declining} <TrendingDown size={11} strokeWidth={2.5} className="text-down-2" />
+        </span>
       ) : (
         <Skeleton className="flex-1 h-3.5 max-w-40" />
       )}

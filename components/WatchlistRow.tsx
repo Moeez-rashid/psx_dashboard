@@ -1,5 +1,5 @@
 "use client";
-import { Star, ChevronDown } from "lucide-react";
+import { Star, ChevronDown, RefreshCw, Sparkles } from "lucide-react";
 import { hueOf, StockDetailBody, type SignalDetail } from "./StockRow";
 import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreChip } from "./ui/TechnicalScore";
@@ -50,6 +50,9 @@ export function WatchlistRow({
   onOpenNews?: (ticker: string) => void;
 }) {
   const hue = hueOf(signal ?? undefined);
+  // Neither a technical score nor an AI signal has arrived yet for this
+  // ticker — freshly added, or its data hasn't finished loading.
+  const hasData = technicalScore != null || signal != null;
 
   return (
     <div className="bg-card border border-line rounded-lg overflow-hidden transition-colors data-[open=true]:border-line-2" data-open={open}>
@@ -96,9 +99,13 @@ export function WatchlistRow({
             {change !== undefined && (
               <span className={change >= 0 ? "text-up-2" : "text-down-2"}>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</span>
             )}
-            {technicalScore != null && (
+            {technicalScore != null ? (
               <span className={hue.text}>Tech {Math.round(technicalScore)}/100</span>
-            )}
+            ) : !hasData ? (
+              <span className="text-ink-3 inline-flex items-center gap-1">
+                <RefreshCw size={9} strokeWidth={2.25} className="animate-spin" aria-hidden />Loading
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -108,7 +115,15 @@ export function WatchlistRow({
           {change !== undefined ? `${change >= 0 ? "+" : ""}${change.toFixed(2)}%` : "—"}
         </span>
         <span className="hidden sm:flex items-center gap-2 min-w-0">
-          {technicalScore != null ? <TechnicalScoreChip score={technicalScore} /> : <span className="text-[11px] text-ink-3">—</span>}
+          {technicalScore != null ? (
+            <TechnicalScoreChip score={technicalScore} />
+          ) : !hasData ? (
+            <span className="text-[10px] text-ink-3 inline-flex items-center gap-1">
+              <RefreshCw size={10} strokeWidth={2.25} className="animate-spin" aria-hidden />Loading…
+            </span>
+          ) : (
+            <span className="text-[11px] text-ink-3">—</span>
+          )}
           {spark && spark.length >= 5 && <Sparkline data={spark} width={40} height={16} color={hue.stroke} opacity={0.6} />}
         </span>
         <span className="hidden sm:block">
@@ -124,7 +139,17 @@ export function WatchlistRow({
 
       {open && (
         <div className="px-3.5 pb-3.5 border-t border-line animate-fade-in">
-          <StockDetailBody detail={detail} onOpenNews={onOpenNews} />
+          {hasData ? (
+            <StockDetailBody detail={detail} onOpenNews={onOpenNews} />
+          ) : (
+            <div className="flex items-center gap-2 text-[11px] text-ink-3 pt-2.5">
+              <RefreshCw size={12} strokeWidth={2.25} className="animate-spin shrink-0" aria-hidden />
+              <span>
+                Loading technicals — use <span className="inline-flex items-center gap-0.5 text-ink-2"><RefreshCw size={10} strokeWidth={2.25} aria-hidden />Refresh</span> to retry
+                or <span className="inline-flex items-center gap-0.5 text-ink-2"><Sparkles size={10} strokeWidth={2.25} aria-hidden />AI Analysis</span> for full signals.
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
