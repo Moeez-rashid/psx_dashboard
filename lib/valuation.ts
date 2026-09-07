@@ -7,8 +7,9 @@
  * to produce them.
  */
 
-import { getStocksBySector, getAllStocks, KMI30_TICKERS, SECTOR_CODES } from "./psx";
-import { getMultipleFundamentals, effectivePE } from "./askanalyst";
+import { getStocksBySector, getAllStocks, KMI30_TICKERS } from "./psx";
+import { resolveSectorName } from "./sectors";
+import { getAskAnalystFundamentals, effectivePE, type AskAnalystFundamentals } from "./askanalyst";
 
 const MIN_SAMPLE = 3; // below this, we don't report a statistic — see getSectorPE
 const MAX_MEANINGFUL_PE = 150; // beyond this a PE is almost always a near-zero-EPS artifact, not a real valuation
@@ -20,6 +21,28 @@ function median(values: number[]): number {
   return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+/** askanalyst starts dropping requests when a whole sector (or the 30-name
+ *  KMI-30 list) is fetched at once, which silently turns a real sector P/E
+ *  into "unavailable". Paced in batches of 6 — the same batch size
+ *  lib/scanner.ts already uses for the PSX history endpoint. Deliberately
+ *  NOT done by changing getMultipleFundamentals(), which the scan pipeline
+ *  shares. */
+const FUNDAMENTALS_BATCH = 6;
+
+async function fetchFundamentalsBatched(
+  symbols: string[]
+): Promise<Map<string, AskAnalystFundamentals>> {
+  const map = new Map<string, AskAnalystFundamentals>();
+  for (let i = 0; i < symbols.length; i += FUNDAMENTALS_BATCH) {
+    const batch = symbols.slice(i, i + FUNDAMENTALS_BATCH);
+    const settled = await Promise.allSettled(batch.map((s) => getAskAnalystFundamentals(s)));
+    settled.forEach((r, j) => {
+      if (r.status === "fulfilled" && r.value) map.set(batch[j].toUpperCase(), r.value);
+    });
+  }
+  return map;
+}
+
 /** Filters a set of (symbol, price) pairs down to usable P/E values, using
  *  each ticker's effective P/E (reported, or price÷EPS for banks). Drops
  *  missing, non-positive (negative-earnings) and implausibly large values —
@@ -28,7 +51,7 @@ async function usablePEs(
   symbols: string[],
   priceOf: (symbol: string) => number | undefined
 ): Promise<{ values: number[]; excludedCount: number }> {
-  const fundMap = await getMultipleFundamentals(symbols);
+  const fundMap = await fetchFundamentalsBatched(symbols);
   const values: number[] = [];
   let excludedCount = 0;
   for (const sym of symbols) {
@@ -66,7 +89,10 @@ export async function getSectorPE(sectorCode: string): Promise<SectorPEResult> {
   const cached = _sectorCache.get(sectorCode);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.result;
 
-  const sectorName = SECTOR_CODES[sectorCode] ?? sectorCode;
+  // lib/sectors.ts has the fuller, verified code->name map (e.g. "Oil & Gas
+  // Exploration" rather than just "Oil & Gas"), so every surface that shows a
+  // sector name shows the same one.
+  const sectorName = resolveSectorName(sectorCode);
   const stocks = await getStocksBySector(sectorCode);
   const symbols = stocks.map((s) => s.symbol.toUpperCase());
 
@@ -168,4 +194,22 @@ export function calcPEG(pe: number | null, epsGrowthPct: number | null): number 
   if (pe === null || pe <= 0) return null;
   if (epsGrowthPct === null || epsGrowthPct < MIN_MEANINGFUL_EPS_GROWTH_PCT) return null;
   return parseFloat((pe / epsGrowthPct).toFixed(2));
+}
+
+/**
+ * Why PEG came back null, in words a UI or an AI prompt can show verbatim —
+ * "unavailable, and here's why" beats a blank cell. Returns null exactly when
+ * `calcPEG` returns a number, so the two can never disagree about whether a
+ * PEG exists (asserted in the Phase 2 validation fixtures).
+ */
+export function pegUnavailableReason(pe: number | null, epsGrowthPct: number | null): string | null {
+  if (pe === null) return "P/E is unavailable";
+  if (pe <= 0) return "P/E is not meaningful (non-positive earnings)";
+  if (epsGrowthPct === null) return "EPS growth is unavailable";
+  if (epsGrowthPct < 0) return "EPS growth is negative — PEG is undefined for shrinking earnings";
+  if (epsGrowthPct === 0) return "EPS growth is zero — PEG is undefined";
+  if (epsGrowthPct < MIN_MEANINGFUL_EPS_GROWTH_PCT) {
+    return `EPS growth is below ${MIN_MEANINGFUL_EPS_GROWTH_PCT}% — PEG would be noise rather than signal`;
+  }
+  return null;
 }
