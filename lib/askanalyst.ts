@@ -64,6 +64,30 @@ export async function getCompanyId(symbol: string): Promise<number | null> {
   return map.get(symbol.toUpperCase())?.id ?? null;
 }
 
+export interface CompanyProfile {
+  symbol: string;
+  /** Registered company name, e.g. "Oil & Gas Development Company Limited". */
+  name: string;
+  /** askanalyst's own sector label (e.g. "PHARMACEUTICALS") — NOT the PSX
+   *  numeric sector code used everywhere else in this app. */
+  sector: string;
+}
+
+/** Company name/sector from the cached company list. Separate from
+ *  `getAskAnalystFundamentals` on purpose: a ticker whose ratios fail to
+ *  parse still has a real name, and Deep Dive needs one to label the page
+ *  and to match company news. Costs nothing — the list is already cached. */
+export async function getCompanyProfile(symbol: string): Promise<CompanyProfile | null> {
+  const map = await getCompanyMap();
+  const entry = map.get(symbol.toUpperCase());
+  if (!entry) return null;
+  return {
+    symbol: symbol.toUpperCase(),
+    name: entry.name ?? symbol.toUpperCase(),
+    sector: entry.sector ?? "",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Fundamentals  (rationew/{id})
 // ---------------------------------------------------------------------------
