@@ -1,11 +1,17 @@
 import { Skeleton } from "@/components/ui/primitives";
 
 /**
- * Shown while the server component gathers price history, fundamentals,
- * sector valuation and news. Mirrors the real page's rhythm — header, then
- * stacked sections — so the layout doesn't jump when the data lands.
+ * Streamed fallback for the slow part of Deep Dive (the full data
+ * aggregation), used as a local <Suspense> boundary inside page.tsx rather
+ * than a route-level loading.tsx — see the comment in page.tsx for why:
+ * a route-level loading.tsx would wrap the ticker-existence check too,
+ * which is exactly the thing that has to resolve BEFORE any response is
+ * sent for a proper 404 to be possible.
+ *
+ * Mirrors the real page's rhythm — header, then stacked sections — so the
+ * layout doesn't jump when the data lands.
  */
-export default function DeepDiveLoading() {
+export default function DeepDiveSkeleton() {
   return (
     <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:py-8">
       <div className="pb-6 border-b border-line">

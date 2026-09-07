@@ -1,7 +1,11 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CircleAlert, Info } from "lucide-react";
 import { buildDeepDiveData } from "@/lib/deepdive";
+import { getAllStocks } from "@/lib/psx";
+import { getCompanyProfile } from "@/lib/askanalyst";
+import DeepDiveSkeleton from "@/components/deepdive/DeepDiveSkeleton";
 import DeepDiveHeader from "@/components/deepdive/DeepDiveHeader";
 import TechnicalSection from "@/components/deepdive/TechnicalSection";
 import ValuationSection from "@/components/deepdive/ValuationSection";
@@ -15,12 +19,46 @@ import AIInterpretationPlaceholder from "@/components/deepdive/AIInterpretationP
 /**
  * Deep Dive route — the research view for one ticker.
  *
- * A server component so the page owns data fetching and the components below
- * stay purely presentational: they receive DeepDiveData and render it, with
- * no fetching, state or knowledge of where the numbers came from. The
- * aggregator is called directly rather than through /api/deepdive to avoid a
- * pointless HTTP hop back into the same process; the API route remains the
- * entry point for any client-side or external consumer.
+ * Split into two async layers on purpose, to get a genuine 404 status code
+ * AND a real streamed loading experience — the two are otherwise mutually
+ * exclusive in the App Router:
+ *
+ *   - Next commits to an HTTP status the moment it flushes the first byte
+ *     of the response. A route-level `loading.tsx` makes Next flush a 200
+ *     with that fallback BEFORE the page component has run at all, so any
+ *     notFound() the page calls afterwards can no longer change the status
+ *     line — the browser already has a 200. That's exactly what shipped in
+ *     Phase 3: verified against a production build, `/stock/ZZZZ9` returned
+ *     HTTP 200 with the correct not-found page rendered inside it.
+ *   - The full data aggregation (buildDeepDiveData, which fans out across a
+ *     sector's constituents for the sector-P/E comparison) can take tens of
+ *     seconds on a cold cache. Waiting for it before sending anything —
+ *     which is the only way to keep the status code correct if the 404
+ *     decision depends on its result — means a blank page for that long.
+ *
+ * The fix: decide 404 from something FAST and cheap (does this ticker
+ * appear anywhere at all — the PSX market-watch listing or askanalyst's
+ * company list) in the outer, un-Suspended `DeepDivePage`. Neither check
+ * hits the slow, uncached parts of the pipeline (the per-ticker EOD-history
+ * fetch, the per-ticker ratios fetch, or the sector fan-out) — `getAllStocks`
+ * is Next-fetch-cached 60s and `getCompanyProfile` reads askanalyst's
+ * 24h in-memory company map, so this resolves quickly even cold. Only once
+ * that's settled does the page return JSX at all, which is what lets Next
+ * commit to the right status line before the first flush. The genuinely
+ * slow work then happens in `DeepDiveBody`, a separate async component
+ * inside a local <Suspense> boundary — exactly the granularity streaming is
+ * for, just scoped below the notFound() decision instead of around it.
+ *
+ * One deliberate, narrow behaviour change this requires: the existence
+ * check is now "is this ticker known to us at all" rather than the old
+ * "did the full pipeline produce usable history or fundamentals" — a ticker
+ * that's listed on PSX but has no price history yet (e.g. freshly IPO'd)
+ * now renders the real page with an honest unavailable state in the
+ * Technical section instead of 404ing. That's a genuine improvement, not a
+ * side effect to route around: it's the same "unavailable, not invented,
+ * not hidden" rule this whole feature is built on, applied to routing. A
+ * ticker unknown to both sources — the only case that matters for a bad
+ * URL — still 404s, and now with the correct status code.
  */
 
 const TICKER_RE = /^[A-Z0-9]{2,10}$/;
@@ -28,6 +66,22 @@ const TICKER_RE = /^[A-Z0-9]{2,10}$/;
 function normalize(raw: string): string | null {
   const t = decodeURIComponent(raw).toUpperCase().trim();
   return TICKER_RE.test(t) ? t : null;
+}
+
+/** Fast existence check — deliberately avoids every slow/uncached call in
+ *  buildDeepDiveData (per-ticker EOD history, per-ticker ratios, the sector
+ *  fan-out) so the notFound() decision can be made before any response is
+ *  sent, without reintroducing the blank-page wait Suspense exists to avoid. */
+async function tickerIsKnown(ticker: string): Promise<boolean> {
+  const [stocksResult, profileResult] = await Promise.allSettled([
+    getAllStocks(),
+    getCompanyProfile(ticker),
+  ]);
+  const listed =
+    stocksResult.status === "fulfilled" &&
+    stocksResult.value.some((s) => s.symbol.toUpperCase() === ticker);
+  const knownToAskAnalyst = profileResult.status === "fulfilled" && profileResult.value !== null;
+  return listed || knownToAskAnalyst;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ ticker: string }> }): Promise<Metadata> {
@@ -43,14 +97,20 @@ export default async function DeepDivePage({ params }: { params: Promise<{ ticke
   const { ticker: raw } = await params;
   const ticker = normalize(raw);
   if (!ticker) notFound();
+  if (!(await tickerIsKnown(ticker))) notFound();
 
+  return (
+    <Suspense fallback={<DeepDiveSkeleton />}>
+      <DeepDiveBody ticker={ticker} />
+    </Suspense>
+  );
+}
+
+/** The slow part: full data aggregation + the actual page content. Isolated
+ *  in its own component so <Suspense> above can stream it in independently
+ *  of the (already-resolved, already-committed) 404 decision. */
+async function DeepDiveBody({ ticker }: { ticker: string }) {
   const data = await buildDeepDiveData(ticker);
-
-  // Neither price history nor fundamentals means this isn't a ticker we can
-  // say anything about — a 404 rather than a page of empty sections.
-  if (data.technical.historySessions === 0 && !data.fundamentals.available) {
-    notFound();
-  }
 
   return (
     <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:py-8">

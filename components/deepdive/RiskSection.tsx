@@ -35,7 +35,13 @@ export default function RiskSection({ risk }: { risk: DeepDiveRisk }) {
         </Unavailable>
       ) : (
         <>
-          <MetricGrid>
+          {/* Entry quality (0-20) is deliberately not repeated here — it's
+              already shown as one of the four Technical Score component bars
+              in the Technical picture section above. Extension vs EMA20 is
+              the raw percentage that feeds that component score, which isn't
+              shown anywhere else, so it earns its place; the score itself
+              would just be the same number twice. */}
+          <MetricGrid cols={3}>
             <Metric
               label="Daily volatility"
               value={fmtPercent(r.dailyVolatilityPct)}
@@ -51,12 +57,7 @@ export default function RiskSection({ risk }: { risk: DeepDiveRisk }) {
               label="Extension vs EMA20"
               value={fmtSignedPercent(r.extensionPct)}
               tone={r.extensionPct !== null && r.extensionPct > 8 ? "text-gold-2" : "text-ink"}
-              hint="Chase risk — how far above trend price has run"
-            />
-            <Metric
-              label="Entry quality"
-              value={r.entryQualityScore !== null ? `${r.entryQualityScore}/20` : DASH}
-              hint="The Technical Score's entry component"
+              hint="Chase risk — how far above trend price has run; scored as Entry quality in the Technical picture above"
             />
           </MetricGrid>
 
