@@ -68,20 +68,59 @@ export async function getCompanyId(symbol: string): Promise<number | null> {
 // Fundamentals  (rationew/{id})
 // ---------------------------------------------------------------------------
 
+/** One reported fiscal year's value for a metric — the fiscal year always
+ *  travels with the number so a caller can never show an annual figure
+ *  without knowing how stale it might be. */
+export interface FundamentalYearPoint {
+  year: string;
+  value: number;
+}
+
 export interface AskAnalystFundamentals {
   symbol: string;
   companyName: string;
   sector: string;
+  /** True when this ticker was parsed against the bank ratio schema
+   *  (Dupont/Profitability/Yields/Efficiency/Solvency sections) rather than
+   *  the standard one (Valuation/Margins/Returns/Health/Activity/Growth).
+   *  Banks don't report several standard-schema fields at all (no PER, no
+   *  Debt/Equity, no margins in the usual sense) — that's a real schema
+   *  difference, not missing data, so callers should expect nulls there
+   *  rather than treating them as a fetch failure. */
+  isBank: boolean;
   fiscalYear: string | null;     // latest reported year, e.g. "2025"
-  pe: number | null;             // PER (Price/Earnings)
+
+  pe: number | null;             // PER (Price/Earnings) — null for banks (see effectivePE)
   pbv: number | null;            // Price/Book
   dividendYield: number | null;  // percent
   roe: number | null;            // Return on Equity, percent
+  roa: number | null;            // Return on Assets, percent
+  roce: number | null;           // Return on Capital Employed, percent (rarely present for banks)
   debtToEquity: number | null;   // x  (null for banks — not meaningful)
   eps: number | null;            // PKR — lets the UI derive a trailing P/E for banks
-  netMargin: number | null;      // percent
+  epsGrowth: number | null;      // percent YoY (label differs: "Dil EPS Growth %" vs bank "EPS Growth")
+  dps: number | null;            // PKR, dividend per share
+  netMargin: number | null;      // percent (not reported for banks under this label)
+  grossMargin: number | null;    // percent (non-bank only)
+  ebitdaMargin: number | null;   // percent (non-bank only)
+  operatingMargin: number | null; // percent (non-bank only)
   revenueGrowth: number | null;  // percent (latest year YoY)
-  payoutRatio: number | null;    // percent
+  payoutRatio: number | null;    // percent (bank schema only — non-banks don't report this label)
+  currentRatio: number | null;   // x (non-bank only)
+  quickRatio: number | null;     // x (non-bank only)
+  interestCoverage: number | null; // x, EBIT / Interest (non-bank only)
+
+  /** Multi-year history (oldest → newest) for the metrics where a trend is
+   *  actually meaningful. Deliberately NOT every field — most ratios are only
+   *  useful as a current snapshot, and carrying 14 years of every metric for
+   *  every ticker would bloat every fundamentals fetch for no reason. */
+  history: {
+    eps: FundamentalYearPoint[];
+    epsGrowth: FundamentalYearPoint[];
+    dps: FundamentalYearPoint[];
+    pe: FundamentalYearPoint[];
+    roe: FundamentalYearPoint[];
+  };
 }
 
 function nullNum(v: unknown): number | null {
@@ -125,6 +164,21 @@ function latest(m: RatioMetric | undefined): { year: string; value: number } | n
   return best;
 }
 
+/** Every parseable year for a metric, oldest → newest. Unlike `latest()`,
+ *  a gap in one recent year doesn't discard the earlier history — Deep Dive
+ *  needs the trend, not just the most current point. */
+function series(m: RatioMetric | undefined): FundamentalYearPoint[] {
+  if (!m || !Array.isArray(m.data)) return [];
+  const out: FundamentalYearPoint[] = [];
+  for (const yv of m.data) {
+    const v = nullNum(yv?.value);
+    const y = parseInt(yv?.year ?? "", 10);
+    if (v === null || isNaN(y)) continue;
+    out.push({ year: yv.year, value: v });
+  }
+  return out.sort((a, b) => parseInt(a.year, 10) - parseInt(b.year, 10));
+}
+
 /** Fetch current fundamental ratios for a single PSX ticker. Returns null if not found. */
 export async function getAskAnalystFundamentals(
   symbol: string
@@ -143,6 +197,14 @@ export async function getAskAnalystFundamentals(
     const sections: RatioSection[] = await res.json();
     if (!Array.isArray(sections) || sections.length === 0) return null;
 
+    // Banks report a completely different set of sections (Dupont Analysis /
+    // Profitability / Yields / Efficiency / Solvency) instead of the standard
+    // Valuation / Margins / Returns / Health / Activity Ratios / Growth —
+    // confirmed by comparing a bank (UBL) against a non-bank (OGDC) response.
+    // "Valuation" only exists in the standard schema, so its absence is a
+    // reliable, cheap discriminator.
+    const isBank = !sections.some((s) => norm(s.section ?? "") === norm("Valuation"));
+
     const idx = indexMetrics(sections);
     // First candidate label that exists wins (handles bank vs non-bank section shapes).
     const pick = (...labels: string[]) => {
@@ -152,18 +214,37 @@ export async function getAskAnalystFundamentals(
       }
       return null;
     };
+    const pickSeries = (...labels: string[]): FundamentalYearPoint[] => {
+      for (const l of labels) {
+        const s = series(idx.get(norm(l)));
+        if (s.length > 0) return s;
+      }
+      return [];
+    };
 
     const pe = pick("PER", "P/E", "PE Ratio");
     const pbv = pick("PBV", "P/BV");
     const div = pick("Div Yield", "Dividend Yield");
     const roe = pick("ROE");
+    const roa = pick("ROA");
+    const roce = pick("ROCE");
     const de = pick("Debt To Equity", "Debt/Equity");
     const eps = pick("EPS");
+    // Non-banks report "Dil EPS Growth %" (Growth section); banks report
+    // plain "EPS Growth" (Efficiency section) — different labels, same metric.
+    const epsGrowth = pick("Dil EPS Growth", "EPS Growth", "Diluted EPS Growth");
+    const dps = pick("DPS");
     const nm = pick("Net Margin", "Net Profit Margin");
+    const gm = pick("Gross Margin");
+    const em = pick("EBITDA Margin");
+    const om = pick("Operating Margin");
     const rev = pick("Revenue Growth");
     const payout = pick("Payout Ratio");
+    const cr = pick("Current Ratio");
+    const qr = pick("Quick Ratio");
+    const ic = pick("EBIT / Interest", "EBIT/Interest", "Interest Coverage");
 
-    const years = [pe, pbv, div, roe, eps].filter(Boolean) as { year: string }[];
+    const years = [pe, pbv, div, roe, eps, epsGrowth, dps].filter(Boolean) as { year: string }[];
     const fiscalYear =
       years.length > 0
         ? years.reduce((a, b) => (parseInt(b.year, 10) > parseInt(a.year, 10) ? b : a)).year
@@ -173,20 +254,40 @@ export async function getAskAnalystFundamentals(
       symbol: symbol.toUpperCase(),
       companyName: entry.name ?? symbol,
       sector: entry.sector ?? "",
+      isBank,
       fiscalYear,
       pe: pe?.value ?? null,
       pbv: pbv?.value ?? null,
       dividendYield: div?.value ?? null,
       roe: roe?.value ?? null,
+      roa: roa?.value ?? null,
+      roce: roce?.value ?? null,
       // askanalyst reports Debt-To-Equity as a percent (e.g. 47.9); store as a ratio (0.48x).
       debtToEquity: de ? de.value / 100 : null,
       eps: eps?.value ?? null,
+      epsGrowth: epsGrowth?.value ?? null,
+      dps: dps?.value ?? null,
       netMargin: nm?.value ?? null,
+      grossMargin: gm?.value ?? null,
+      ebitdaMargin: em?.value ?? null,
+      operatingMargin: om?.value ?? null,
       revenueGrowth: rev?.value ?? null,
       payoutRatio: payout?.value ?? null,
+      currentRatio: cr?.value ?? null,
+      quickRatio: qr?.value ?? null,
+      interestCoverage: ic?.value ?? null,
+      history: {
+        eps: pickSeries("EPS"),
+        epsGrowth: pickSeries("Dil EPS Growth", "EPS Growth", "Diluted EPS Growth"),
+        dps: pickSeries("DPS"),
+        pe: pickSeries("PER", "P/E", "PE Ratio"),
+        roe: pickSeries("ROE"),
+      },
     };
 
-    // If nothing useful parsed, treat as no data.
+    // If nothing useful parsed, treat as no data. Unchanged from before —
+    // still gated on the original five fields so this doesn't loosen or
+    // tighten which tickers were already considered "no data".
     if (out.pe === null && out.pbv === null && out.dividendYield === null && out.roe === null && out.eps === null) {
       return null;
     }
@@ -194,6 +295,22 @@ export async function getAskAnalystFundamentals(
   } catch {
     return null;
   }
+}
+
+/**
+ * Effective P/E: the reported PER when askanalyst has one, otherwise derived
+ * as price ÷ EPS. Banks' ratio schema never reports a PER field at all (see
+ * `isBank` above), so this fallback is the only way a bank ever gets a P/E.
+ * Centralized here so every caller that needs a P/E — fundamentals chips,
+ * sector/market valuation aggregation, Deep Dive — derives it the same way
+ * instead of re-implementing the bank fallback separately.
+ */
+export function effectivePE(f: AskAnalystFundamentals, price?: number): number | null {
+  if (f.pe !== null) return f.pe;
+  if (f.eps !== null && f.eps > 0 && price !== undefined && price > 0) {
+    return parseFloat((price / f.eps).toFixed(2));
+  }
+  return null;
 }
 
 /** Fetch fundamentals for multiple tickers concurrently. */

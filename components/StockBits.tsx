@@ -1,5 +1,5 @@
 "use client";
-import type { AskAnalystFundamentals } from "@/lib/askanalyst";
+import { effectivePE, type AskAnalystFundamentals } from "@/lib/askanalyst";
 import { fmtVol } from "@/lib/format";
 import { Chip } from "./ui/primitives";
 
@@ -42,7 +42,7 @@ export function TechChips({ tech, liveVolume }: { tech: StockTech; liveVolume?: 
 /** Build the P/E · ROE · D/E · Div · PBV chip set from rationew fundamentals.
  *  `price` lets us derive a trailing P/E for banks (which don't report PER). */
 export function fundamentalChips(f: AskAnalystFundamentals, price?: number): [string, string, string][] {
-  const pe = f.pe ?? (f.eps && f.eps > 0 && price ? price / f.eps : null);
+  const pe = effectivePE(f, price);
   const chips: [string, string, string][] = [];
   if (pe !== null && pe > 0)
     chips.push(["P/E", `${pe.toFixed(1)}x`, pe < 8 ? "text-up-2" : pe > 20 ? "text-gold-2" : "text-ink"]);
