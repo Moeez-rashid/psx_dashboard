@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildDeepDiveData } from "@/lib/deepdive";
-import { resolveDeepDiveAnalysis, type DeepDiveAIResult } from "@/lib/deepdive-ai";
+import { resolveDeepDiveAnalysis, sanitizeError, type DeepDiveAIResult } from "@/lib/deepdive-ai";
 
 /**
  * GET /api/deepdive?symbol=OGDC[&ai=1][&refresh=1]
@@ -62,10 +62,13 @@ export async function GET(req: NextRequest) {
     try {
       ai = await resolveDeepDiveAnalysis(data, { generate, forceRefresh });
     } catch (err) {
+      // Should not be reachable — resolveDeepDiveAnalysis already converts
+      // every failure into a status — but if it ever is, the message still
+      // gets the same redaction as every other error path in this layer.
       ai = {
         analysis: null,
         status: "provider-failed",
-        detail: err instanceof Error ? err.message : "AI interpretation failed",
+        detail: `AI interpretation failed: ${sanitizeError(err)}`,
         cached: false,
       };
     }

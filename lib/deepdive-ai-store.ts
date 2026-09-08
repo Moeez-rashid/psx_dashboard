@@ -89,10 +89,15 @@ export async function cacheAnalysis(
 }
 
 /**
- * Drop the cached analysis for one evidence version — the hook a future
- * "Re-analyze" action uses to force a fresh reading of unchanged data.
- * Deliberately explicit: nothing in the normal request path calls this, so a
- * provider failure can never evict a good analysis.
+ * Drop the cached analysis for one evidence version. NOT used by the normal
+ * "Re-analyze" flow in lib/deepdive-ai.ts — that path lets a successful
+ * regeneration overwrite the key directly and leaves a failed one alone, so
+ * a provider failure during a refresh can never destroy the previously-good
+ * analysis (an eager invalidate-then-regenerate here originally, found and
+ * removed during review since it broke exactly that guarantee). Exported as
+ * a standalone utility for a case that genuinely wants unconditional
+ * removal — an admin/debug action, for instance — rather than a
+ * regenerate-or-keep.
  */
 export async function invalidateAnalysis(ticker: string, dataVersion: string): Promise<void> {
   const redis = getClient();
@@ -101,5 +106,53 @@ export async function invalidateAnalysis(ticker: string, dataVersion: string): P
     await redis.del(cacheKey(ticker, dataVersion));
   } catch {
     // Best-effort.
+  }
+}
+
+// ─── Generation lock ─────────────────────────────────────────────────────────
+// Without this, two requests for the same ticker arriving before either has
+// written the cache (two browser tabs, a double-click, a retried fetch) would
+// both see a miss and both call the provider — a real duplicate-paid-call bug
+// caught during review, not a theoretical one. SET NX EX is the same
+// primitive lib/scan-store.ts uses for the cron lock; a fresh key here rather
+// than reusing that one because this locks per ticker+dataVersion, not
+// globally, and the two features must never be able to block each other.
+
+const GENERATION_LOCK_TTL_SECONDS = 60; // one completion call's worst-case latency, with margin
+const generationLockKey = (ticker: string, dataVersion: string) =>
+  `deepdive:ai:lock:${ticker.toUpperCase()}:${dataVersion}`;
+
+/**
+ * True if this request now owns the right to generate. False means another
+ * request already holds it — the caller must NOT call the provider.
+ *
+ * Fails open (returns true) when Redis is unavailable or errors, matching
+ * lib/scan-store.ts's acquireLock: without a working store there is no way
+ * to coordinate at all, and refusing to generate would make AI interpretation
+ * silently depend on Redis being up, which it must not.
+ */
+export async function acquireGenerationLock(ticker: string, dataVersion: string): Promise<boolean> {
+  const redis = getClient();
+  if (!redis) return true;
+  try {
+    const result = await redis.set(generationLockKey(ticker, dataVersion), "1", {
+      nx: true,
+      ex: GENERATION_LOCK_TTL_SECONDS,
+    });
+    return result !== null;
+  } catch {
+    return true; // fail open — see doc comment above
+  }
+}
+
+/** Release promptly on completion (success or failure) rather than waiting
+ *  out the full TTL, so a fast failure doesn't block a legitimate retry. */
+export async function releaseGenerationLock(ticker: string, dataVersion: string): Promise<void> {
+  const redis = getClient();
+  if (!redis) return;
+  try {
+    await redis.del(generationLockKey(ticker, dataVersion));
+  } catch {
+    // Best-effort — the lock self-expires via TTL regardless.
   }
 }
