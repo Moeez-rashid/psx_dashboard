@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { resolveSectorName } from "@/lib/sectors";
 
-export interface SymbolEntry { s: string; sec: string; p: number; }
+export interface SymbolEntry { s: string; sec: string; p: number; name?: string | null; }
 
 // Module-level cache so the symbol list is fetched once per session.
 let symbolsCache: SymbolEntry[] | null = null;
