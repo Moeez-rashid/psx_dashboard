@@ -647,17 +647,32 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
       generatedAt: new Date().toISOString(),
       tradingDate,
       fundamentalsFiscalYear: fundamentals?.fiscalYear ?? null,
+      // Deliberately over-inclusive rather than minimal: this fingerprint is
+      // what Phase 4's AI cache keys on, and a materially changed evidence
+      // set that fails to bump it means a stale interpretation gets served
+      // as current. Two gaps found by review and closed here: market context
+      // (sector/index moves are live, intraday, and change continuously
+      // independent of tradingDate/technical.score — the interpretation
+      // reads them, so they must be in the key) and news identity (a count
+      // alone doesn't change when an old matched article ages out and a
+      // different one takes its place at the same count).
       dataVersion: fingerprint([
         ticker,
         tradingDate,
         fundamentals?.fiscalYear ?? null,
         technical.score,
+        technical.rsi,
+        technical.ema20,
         valuation.pe,
         sector?.medianPE ?? null,
         universe?.medianPE ?? null,
         fundamentalsSection.epsGrowth,
+        fundamentalsSection.roe,
         technical.macd?.trend ?? null,
+        sectorSnapshot?.avgChangePercentToday ?? null,
+        kse100?.changePercent ?? null,
         news.items.length,
+        news.items.map((i) => i.title).join("|"),
       ]),
       limitations,
       degraded,

@@ -112,3 +112,28 @@ newsHeadline: copy a headline verbatim from MACRO CONTEXT only if it directly co
   const text = result.response.text();
   return extractJSON<AISignal[]>(text) ?? [];
 }
+
+/**
+ * Thin JSON-completion transport for Deep Dive's AI interpretation.
+ *
+ * Deliberately carries no prompt of its own: the Deep Dive system prompt and
+ * evidence digest are built once in lib/deepdive-ai.ts and passed in. Those
+ * instructions are the anti-hallucination surface of the feature — four
+ * copies of them across four provider files is exactly how one copy quietly
+ * drifts and starts inventing figures.
+ */
+export async function completeJSON(
+  config: ProviderConfig,
+  system: string,
+  user: string,
+  maxTokens: number
+): Promise<string> {
+  const genai = new GoogleGenerativeAI(config.apiKey);
+  const model = genai.getGenerativeModel({
+    model: config.model ?? "gemini-2.0-flash-lite",
+    systemInstruction: system,
+    generationConfig: { responseMimeType: "application/json", maxOutputTokens: maxTokens },
+  });
+  const result = await model.generateContent(user);
+  return result.response.text();
+}
