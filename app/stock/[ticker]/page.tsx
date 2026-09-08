@@ -10,6 +10,7 @@ import TopNav from "@/components/nav/TopNav";
 import DeepDiveSkeleton from "@/components/deepdive/DeepDiveSkeleton";
 import DeepDiveHeader from "@/components/deepdive/DeepDiveHeader";
 import TechnicalSection from "@/components/deepdive/TechnicalSection";
+import PriceBehaviorSection from "@/components/deepdive/PriceBehaviorSection";
 import ValuationSection from "@/components/deepdive/ValuationSection";
 import FundamentalSection from "@/components/deepdive/FundamentalSection";
 import FundamentalHistorySection from "@/components/deepdive/FundamentalHistorySection";
@@ -146,6 +147,7 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
 
       <div className="mt-6">
         <TechnicalSection technical={data.technical} />
+        <PriceBehaviorSection behavior={data.priceBehavior} priceSeries={data.technical.priceSeries} />
         <ValuationSection valuation={data.valuation} />
         <FundamentalSection fundamentals={data.fundamentals} history={data.fundamentalHistory} />
         <FundamentalHistorySection history={data.fundamentalHistory} />
