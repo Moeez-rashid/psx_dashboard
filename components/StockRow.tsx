@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, type ReactNode } from "react";
-import { Star, X, ChevronDown, Newspaper, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { Star, X, ChevronDown, Newspaper, Telescope, type LucideIcon } from "lucide-react";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreMeter } from "./ui/TechnicalScore";
@@ -31,20 +32,11 @@ export interface Tier2 {
 }
 
 // ─── Single hue per row ─────────────────────────────────────────────────────
-interface Hue { edge: string; text: string; border: string; bar: string; stroke: string }
-const HUE: Record<string, Hue> = {
-  up:   { edge: "var(--color-up)",   text: "text-up-2",   border: "border-up/50",   bar: "bg-up",   stroke: "var(--color-up-2)" },
-  gold: { edge: "var(--color-gold)", text: "text-gold-2", border: "border-gold/50", bar: "bg-gold", stroke: "var(--color-gold-2)" },
-  down: { edge: "var(--color-down)", text: "text-down-2", border: "border-down/50", bar: "bg-down", stroke: "var(--color-down-2)" },
-  sky:  { edge: "var(--color-sky)",  text: "text-sky-2",  border: "border-sky/50",  bar: "bg-sky",  stroke: "var(--color-sky-2)" },
-};
-export function hueOf(signal?: string): Hue {
-  const s = (signal ?? "").toUpperCase();
-  if (s === "BUY" || s === "STRONG_BUY" || s === "STRONG") return HUE.up;
-  if (s === "HOLD") return HUE.gold;
-  if (s === "SELL" || s === "AVOID") return HUE.down;
-  return HUE.sky;
-}
+// The map itself lives in a boundary-agnostic module so Deep Dive's server
+// components can use the same hues; re-exported here because every existing
+// client-side caller already imports it from this file.
+export { hueOf, type Hue } from "./ui/signal-hue";
+import { hueOf } from "./ui/signal-hue";
 
 const BADGE_SHORT: Record<string, string> = { STRONG_BUY: "STRONG", NEUTRAL: "WATCH" };
 function badgeLabel(signal?: string): string {
@@ -235,11 +227,25 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
         </button>
       )}
 
-      {footer && (
-        <div className="text-[10px] text-ink-3 pt-0.5">
-          Fundamentals from askanalyst.com.pk · Technicals from PSX price history · Not financial advice
-        </div>
-      )}
+      {/* Deep Dive — the one route out of a row into the full research view.
+          Lives in the shared detail body so Opportunities, Watchlist and
+          Holdings all get the same affordance in the same place. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap pt-0.5">
+        {footer ? (
+          <span className="text-[10px] text-ink-3 min-w-0">
+            Fundamentals from askanalyst.com.pk · Technicals from PSX price history · Not financial advice
+          </span>
+        ) : <span />}
+        <Link
+          href={`/stock/${ticker}`}
+          onClick={(e) => e.stopPropagation()}
+          className="btn-sky text-[11px] px-3 py-1.5 font-medium shrink-0"
+          title={`Open the full research view for ${ticker}`}
+        >
+          <Telescope size={13} strokeWidth={2} aria-hidden />
+          Deep Dive
+        </Link>
+      </div>
     </div>
   );
 }

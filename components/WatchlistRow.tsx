@@ -1,5 +1,6 @@
 "use client";
-import { Star, ChevronDown, RefreshCw, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { Star, ChevronDown, RefreshCw, Sparkles, Telescope } from "lucide-react";
 import { hueOf, StockDetailBody, type SignalDetail } from "./StockRow";
 import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreChip } from "./ui/TechnicalScore";
@@ -158,12 +159,26 @@ export function WatchlistRow({
           {hasData ? (
             <StockDetailBody detail={detail} onOpenNews={onOpenNews} />
           ) : (
-            <div className="flex items-center gap-2 text-[11px] text-ink-3 pt-2.5">
-              <RefreshCw size={12} strokeWidth={2.25} className="animate-spin shrink-0" aria-hidden />
-              <span>
-                Loading technicals — use <span className="inline-flex items-center gap-0.5 text-ink-2"><RefreshCw size={10} strokeWidth={2.25} aria-hidden />Refresh</span> to retry
-                or <span className="inline-flex items-center gap-0.5 text-ink-2"><Sparkles size={10} strokeWidth={2.25} aria-hidden />AI Analysis</span> for full signals.
-              </span>
+            // No technicals yet — but Deep Dive fetches its own data server-side,
+            // so it stays available here. This is exactly when someone is most
+            // likely to want the full research view.
+            <div className="flex items-center justify-between gap-3 flex-wrap pt-2.5">
+              <div className="flex items-center gap-2 text-[11px] text-ink-3 min-w-0">
+                <RefreshCw size={12} strokeWidth={2.25} className="animate-spin shrink-0" aria-hidden />
+                <span>
+                  Loading technicals — use <span className="inline-flex items-center gap-0.5 text-ink-2"><RefreshCw size={10} strokeWidth={2.25} aria-hidden />Refresh</span> to retry
+                  or <span className="inline-flex items-center gap-0.5 text-ink-2"><Sparkles size={10} strokeWidth={2.25} aria-hidden />AI Analysis</span> for full signals.
+                </span>
+              </div>
+              <Link
+                href={`/stock/${ticker}`}
+                onClick={(e) => e.stopPropagation()}
+                className="btn-sky text-[11px] px-3 py-1.5 font-medium shrink-0"
+                title={`Open the full research view for ${ticker}`}
+              >
+                <Telescope size={13} strokeWidth={2} aria-hidden />
+                Deep Dive
+              </Link>
             </div>
           )}
         </div>
