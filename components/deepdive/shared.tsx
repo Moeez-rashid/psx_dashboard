@@ -281,49 +281,6 @@ export function YearBars({
 }
 
 /**
- * Full-width closing-price line. Deliberately not the shared `Sparkline`
- * primitive: that one is fixed-pixel by design for dense table rows, so a
- * research-view chart built on it overflows its container instead of
- * scaling. Uses a viewBox with non-scaling strokes so the line stays crisp
- * at any container width.
- */
-export function PriceLine({
-  points, height = 80,
-}: {
-  points: Array<{ date: string; close: number }>;
-  height?: number;
-}) {
-  if (points.length < 5) return null;
-
-  const closes = points.map((p) => p.close);
-  const min = Math.min(...closes);
-  const max = Math.max(...closes);
-  const range = max - min || 1;
-  const W = 1000;
-  const step = W / (points.length - 1);
-  const y = (v: number) => ((max - v) / range) * height;
-
-  const line = points.map((p, i) => `${(i * step).toFixed(1)},${y(p.close).toFixed(2)}`).join(" ");
-  const area = `0,${height} ${line} ${W},${height}`;
-  const up = closes[closes.length - 1] >= closes[0];
-  const stroke = up ? "var(--color-up-2)" : "var(--color-down-2)";
-
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" style={{ height }}
-      className="w-full block" role="img"
-      aria-label={`Closing price from ${points[0].date} to ${points[points.length - 1].date}`}
-    >
-      <polygon points={area} fill={stroke} opacity={0.07} />
-      <polyline
-        points={line} fill="none" stroke={stroke} strokeWidth={1.4}
-        strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
-
-/**
  * A value's position inside a low→high band (Bollinger, 52-week closing
  * range). Communicates "where in the range are we" far faster than three
  * separate numbers.

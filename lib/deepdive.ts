@@ -7,6 +7,7 @@
  *
  *   lib/technicals.ts ........ Technical Score (untouched, read-only here)
  *   lib/deepdive-technicals.ts MACD / SMA200 / Bollinger / drawdown / range / liquidity
+ *   lib/price-behavior.ts .... multi-window closing-price ranges + position in them
  *   lib/valuation.ts ......... sector + KMI-30 proxy P/E, premium/discount, PEG
  *   lib/askanalyst.ts ........ annual fundamentals + multi-year history
  *   lib/company-news.ts ...... press mentions filtered from the shared RSS feeds
@@ -60,6 +61,7 @@ import {
   type SectorPEResult,
   type UniversePEResult,
 } from "./valuation";
+import { computePriceBehavior, type PriceBehavior } from "./price-behavior";
 import { getCompanyNews, type CompanyNewsResult } from "./company-news";
 
 // ─── 1. Identity ─────────────────────────────────────────────────────────────
@@ -264,6 +266,10 @@ export interface DeepDiveMeta {
 export interface DeepDiveData {
   identity: DeepDiveIdentity;
   technical: DeepDiveTechnical;
+  /** Closing-price ranges over several session windows — see lib/price-behavior.ts.
+   *  Kept beside `technical` rather than inside it: it is price context, not an
+   *  indicator, and nothing in it feeds the Technical Score. */
+  priceBehavior: PriceBehavior;
   valuation: DeepDiveValuation;
   fundamentals: DeepDiveFundamentals;
   fundamentalHistory: DeepDiveFundamentalHistory;
@@ -595,6 +601,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
   const supp = computeSupplementaryTechnicals(history);
 
   const technical = buildTechnicalSection(tech, supp, history, price);
+  const priceBehavior = computePriceBehavior(history);
   const valuation = buildValuationSection(fundamentals, price, sector, universe);
   const fundamentalsSection = buildFundamentalsSection(fundamentals);
   const fundamentalHistory = buildFundamentalHistorySection(fundamentals);
@@ -637,6 +644,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
       tradingDate,
     },
     technical,
+    priceBehavior,
     valuation,
     fundamentals: fundamentalsSection,
     fundamentalHistory,
@@ -673,6 +681,11 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
         kse100?.changePercent ?? null,
         news.items.length,
         news.items.map((i) => i.title).join("|"),
+        // Range facts move only when a close changes, which normally means a
+        // new tradingDate — but a revision to an older close would shift a
+        // window's low or high while leaving the date alone, and the AI now
+        // interprets these bands, so they key the cache too.
+        priceBehavior.windows.map((w) => `${w.label}:${w.low}-${w.high}`).join(","),
       ]),
       limitations,
       degraded,

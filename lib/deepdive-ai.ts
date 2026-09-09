@@ -151,10 +151,41 @@ export function buildEvidenceDigest(data: DeepDiveData): string {
     L.push(t.bollinger
       ? `Bollinger(20,2): lower ${t.bollinger.lower}, middle ${t.bollinger.middle}, upper ${t.bollinger.upper}, %B ${t.bollinger.percentB ?? UNAVAILABLE}, bandwidth ${t.bollinger.bandwidthPct}%`
       : `Bollinger(20,2): ${UNAVAILABLE}`);
-    L.push(t.closingRange52w
-      ? `52-week CLOSING range (closing prices only, NOT intraday highs/lows, NOT support/resistance): low ${t.closingRange52w.low}, high ${t.closingRange52w.high}, ${t.closingRange52w.distanceFromHighPct}% vs high`
-      : `52-week closing range: ${UNAVAILABLE}`);
-    L.push(`NOTE: MACD, SMA200, Bollinger and the 52-week closing range are SUPPLEMENTARY. They are not inputs to the Technical Score.`);
+    L.push(`NOTE: MACD, SMA200 and Bollinger are SUPPLEMENTARY. They are not inputs to the Technical Score.`);
+  }
+
+  // Closing-price ranges. The 52-week range that used to sit in the TECHNICAL
+  // block above is the 1Y window here — stated once, in the section that
+  // carries the full set of rules about what these numbers are not.
+  L.push(``);
+  L.push(`## PRICE BEHAVIOUR — ranges of CLOSING prices over trailing TRADING SESSIONS`);
+  const pb = data.priceBehavior;
+  if (!pb || !pb.available) {
+    L.push(`${UNAVAILABLE} — ${pb?.unavailableReason ?? "no closing-price ranges could be computed"}`);
+  } else {
+    L.push(`Latest close: ${num(pb.latestClose)} on ${pb.latestDate ?? UNAVAILABLE}`);
+    for (const w of pb.windows) {
+      L.push(
+        `${w.label} window (${w.sessions} sessions, ${w.fromDate} to ${w.toDate}): ` +
+        `low ${w.low}, high ${w.high}, latest close ${w.current}, ` +
+        `position in band ${w.positionPct === null ? "UNDEFINED (the window's low and high are the same price)" : `${w.positionPct}%`}, ` +
+        `band width ${w.widthPct}% of the low, ` +
+        `latest close is ${w.distanceFromLowPct}% above the window low and ${Math.abs(w.distanceFromHighPct)}% below the window high`
+      );
+    }
+    L.push(`Position in band is (latest close − window low) ÷ (window high − window low) × 100. 0% means the latest close IS the lowest close in the window, 100% means it is the highest.`);
+    if (pb.comparison) {
+      L.push(
+        `Recent band vs longer band: the ${pb.comparison.shortLabel} range spans ${pb.comparison.ratioPct}% of the ${pb.comparison.longLabel} range (${pb.comparison.breadth}). ` +
+        `The shorter window is contained inside the longer one, so this is a containment ratio describing the two bands as they stand — it is NOT a trend, a regime call, a volatility forecast, or evidence of a coming move in either direction.`
+      );
+    }
+    L.push(`RULES FOR EVERY FIGURE IN THIS SECTION — these are highs and lows of CLOSING prices only:`);
+    L.push(`  - They are NOT intraday highs or lows. The EOD feed has none, so they cannot be.`);
+    L.push(`  - They are NOT support/resistance levels, floors or ceilings of any kind. Never rename them as such.`);
+    L.push(`  - They are NOT price targets and NOT predictions. Never say or imply price will return to, revisit, retest, bounce off, be rejected at, or be held by any of these values.`);
+    L.push(`  - They describe where the stock HAS traded. Whether that continues is not something this evidence can answer, and saying it will is a fabrication.`);
+    L.push(`  - A buy or sell recommendation must never be derived from a position in one of these bands.`);
   }
 
   L.push(``);
@@ -291,6 +322,7 @@ Absolute rules:
 - Never state a number that does not appear in the EVIDENCE block. Do not compute new figures, ratios, averages, targets or projections.
 - Never produce a score, rating, confidence value, probability, percentage likelihood, or price target. The Technical Score in the evidence is a deterministic calculation that already exists; you interpret it, you never restate it as your own judgement and never propose an alternative.
 - Never claim analysis you have no data for: no ATR, no reward/risk ratios, no candlestick patterns, no intraday support or resistance levels.
+- The closing-price ranges in the evidence say where the stock HAS traded, nothing more. Reading a position within one of those bands is legitimate interpretation; turning a band edge into support, resistance, a floor, a ceiling, a target, or a prediction that price returns to it is a fabrication, and so is deriving a buy or sell call from where price sits inside one.
 - Distinguish carefully between four different kinds of absence, which mean different things:
   UNAVAILABLE = we tried to obtain it and could not.
   NOT_APPLICABLE = the company's reporting schema does not include it (banks). It is absent by design; never call it missing or a gap.
@@ -310,7 +342,7 @@ Respond with valid JSON only.`;
 
 const OUTPUT_SHAPE = `{
   "summary": "3-4 sentences: the overall interpretation of this setup, naming the strongest supporting evidence and the biggest caveat.",
-  "technicalInterpretation": "2-4 sentences on trend, momentum, volume and entry quality, plus what the supplementary indicators (MACD, SMA200, Bollinger, closing range) add or contradict. State clearly that supplementary indicators are not part of the Technical Score.",
+  "technicalInterpretation": "2-4 sentences on trend, momentum, volume and entry quality, plus what the supplementary indicators (MACD, SMA200, Bollinger) and where price sits inside its recent closing-price bands add or contradict. State clearly that supplementary indicators are not part of the Technical Score, and describe the bands as past trading ranges, never as levels.",
   "valuationInterpretation": "2-4 sentences on P/E, the sector comparison, P/B, PEG and dividend yield. If the sector median is unavailable, say the comparison cannot be made rather than substituting the KMI-30 proxy for it.",
   "fundamentalInterpretation": "2-4 sentences on earnings, growth, returns, margins, leverage, liquidity ratios, coverage and dividends. Treat NOT_APPLICABLE fields as absent by design, not missing.",
   "marketInterpretation": "2-3 sentences on today's sector move, the stock against its sector, and the KSE-100's daily move. These are single-session facts only.",
@@ -344,7 +376,8 @@ Reminders before you answer:
 - NOT_APPLICABLE means absent by design (bank schema), not missing.
 - Items under DELIBERATELY NOT COMPUTED must be described that way, not as unavailable.
 - The KMI-30 figure is a valuation proxy, never "the KSE-100 P/E".
-- Company news items are press mentions, never official filings or announcements.`;
+- Company news items are press mentions, never official filings or announcements.
+- Closing-price ranges are where price has been. They are never support, resistance, a target, or a level price will return to.`;
 }
 
 // ─── Validation ──────────────────────────────────────────────────────────────
@@ -360,7 +393,16 @@ const FORBIDDEN_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /\b\d{1,3}\s*%\s*(chance|probability|likelihood|confiden)/i, label: "percentage likelihood" },
   { re: /\b(probability|chance|odds)\s+of\s+(a\s+)?(rise|gain|profit|increase|decline|drop)/i, label: "probability claim" },
   { re: /\bguarantee(d|s)?\b/i, label: "guarantee" },
-  { re: /\bwill\s+(definitely\s+|certainly\s+)?(rise|fall|surge|crash|drop|climb|reach|hit|break out)\b/i, label: "certain prediction" },
+  // Verb list widened when closing-price ranges entered the evidence: with a
+  // real band low and high now quotable, "will return to 451" is a
+  // prediction whose NUMBER is legitimately grounded, so the numeric check
+  // can't catch it — only the phrasing can. Modal set widened alongside it
+  // from just "will" to also "should/could/would": "the price should bounce
+  // off the range low" makes the same forecast with a softer modal, and
+  // these particular verbs (bounce/rebound/retest/recover applied to a
+  // price) don't have an innocent reading the way a bare "should" elsewhere
+  // in hedged writing does.
+  { re: /\b(?:will|should|could|would)\s+(?:definitely\s+|certainly\s+|likely\s+|soon\s+)?(rise|fall|surge|crash|drop|climb|reach|hit|break out|return|revisit|retest|rebound|recover|bounce)\b/i, label: "certain prediction" },
   { re: /\b(price target|target price)\b/i, label: "price target" },
   { re: /\bai confidence\b/i, label: "AI confidence" },
   { re: /\bconfidence (score|level|rating)\b/i, label: "confidence score" },
@@ -381,7 +423,9 @@ const FORBIDDEN_PATTERNS: Array<{ re: RegExp; label: string }> = [
   // "<indicator> <number>" so the model can still correctly SAY that ATR is
   // deliberately not computed — which it should.
   { re: /\b(atr|average true range)\b[^.]{0,20}?\d/i, label: "fabricated ATR value" },
-  { re: /\b(support|resistance)\s+(level\s+)?(at|of|near|around)\s+(pkr\s*)?\d/i, label: "fabricated support/resistance level" },
+  // "Rs." accepted alongside "PKR": the closing-range figures are prices, and
+  // a renamed band edge is just as likely to be written "support at Rs. 425".
+  { re: /\b(support|resistance)\s+(level\s+|zone\s+)?(at|of|near|around)\s+(pkr\s*|rs\.?\s*)?\d/i, label: "fabricated support/resistance level" },
   { re: /\breward[/\s-]*(to[\s-]*)?risk\b[^.]{0,20}?\d\s*(:|to)\s*\d/i, label: "fabricated reward/risk ratio" },
   // Same concept spelled out in prose instead of compact ratio notation —
   // "risking 1 to make 3" is a reward/risk claim wearing different words.
@@ -498,7 +542,69 @@ function findFabricatedRatios(prose: string, evidenceNumbers: number[]): string[
     if (SCORE_SCALE_DENOMINATORS.has(b) && evidenceNumbers.some((e) => Math.abs(e - a) <= 0.5)) {
       continue; // a genuine "<component or total>/<its real scale>" quotation
     }
+    // An "N/M" fraction is the shape a self-assigned rating takes ("57/60",
+    // "8/10"), and grounding alone stopped being enough to catch one once the
+    // closing-range windows put their session counts (5, 20, 30, 60, 120,
+    // 252) into the evidence: "57/60" pairs the real Technical Score with a
+    // real session count and would sail through on grounding while being a
+    // rating this product does not have. Judged on shape instead — the only
+    // legitimate "/" fractions are the four real score scales (handled above)
+    // and indicator-parameter pairs, whose BOTH sides are structural
+    // constants ("MACD 12/26"). Everything else is rejected.
+    if (m[2] === "/" && !(STRUCTURAL_NUMBERS.has(a) && STRUCTURAL_NUMBERS.has(b))) {
+      bad.push(m[0].trim());
+      continue;
+    }
     if (!grounded(a) || !grounded(b)) bad.push(m[0].trim());
+  }
+  return bad;
+}
+
+/**
+ * A closing-range window (5D/20D/30D/60D/120D/1Y) is legitimate to interpret
+ * — "the latest close sits near the top of its 30D range" is exactly the
+ * reading Price Behaviour exists to enable. What it must never become is a
+ * support/resistance LEVEL: the digest is explicit that these are closing
+ * highs and lows, not intraday extremes, and calling a band edge "support"
+ * implies a price floor this data cannot honestly claim.
+ *
+ * This can't be a blanket ban on "support"/"resistance": the Technical
+ * Score's own deterministic reasoning legitimately uses "support" (see
+ * lib/technicals.ts's Entry Quality component, which produces reasons like
+ * "sitting at support, prime entry zone" — verified live on OGDC), and that
+ * language must keep working when the model quotes it back. The two need to
+ * be told apart by CONTEXT, not by the word itself.
+ *
+ * Scoped to one sentence at a time, not the whole prose blob: `prose`
+ * concatenates every field with no shared subject between them, and the
+ * Technical Score's support language belongs in `technicalInterpretation`
+ * while any range-boundary reference belongs in whichever field discusses
+ * Price Behaviour — checking the full blob would let one field's legitimate
+ * "support" trip a rejection over an unrelated field's range mention. A
+ * sentence is the smallest unit where "acting as support" and "the 30D low"
+ * being in the same breath is actually a claim connecting them.
+ */
+const RANGE_BOUNDARY_RE = /\b(?:5D|20D|30D|60D|120D|1Y)\s+(?:low|high)\b|\b(?:closing[- ]?range|trading range)\b|\brange\s+(?:low|high)\b|\bband\s+(?:low|high)\b/i;
+const SUPPORT_RESISTANCE_WORD_RE = /\b(support|resistance)\b/i;
+// A negation cue ahead of the word, within the same clause, means the
+// sentence is DENYING the label rather than asserting it — exactly the
+// framing the digest itself uses ("NOT support/resistance levels") and which
+// the model must be free to state, per spec: "The AI may explicitly state
+// that the range is not support/resistance." Without this, the disclaimer
+// the feature requires would be indistinguishable from the claim it forbids.
+const NEGATED_LEVEL_CLAIM_RE = /\b(?:not|isn'?t|aren'?t|is\s+not|are\s+not|never|no|nor|without)\b(?:(?!\.).){0,40}\b(?:support|resistance)\b/i;
+
+function findRangeReinterpretedAsLevel(prose: string): string[] {
+  // Split on sentence terminators AND newlines: `prose` joins list fields
+  // (confluence, risks, whatToWatch, …) with "\n", and a bullet often has no
+  // trailing period, so a terminator-only split would merge two unrelated
+  // bullets into one "sentence" for this check.
+  const sentences = prose.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  const bad: string[] = [];
+  for (const sentence of sentences) {
+    if (!RANGE_BOUNDARY_RE.test(sentence) || !SUPPORT_RESISTANCE_WORD_RE.test(sentence)) continue;
+    if (NEGATED_LEVEL_CLAIM_RE.test(sentence)) continue; // denying the label, not asserting it
+    bad.push(sentence.length > 160 ? sentence.slice(0, 160) + "…" : sentence);
   }
   return bad;
 }
@@ -638,6 +744,19 @@ export function validateAnalysis(
     return {
       analysis: null,
       rejection: `Model output used forbidden certainty/score language: ${[...new Set(violations)].join(", ")}.`,
+      warnings,
+    };
+  }
+
+  // Price Behaviour's closing-range windows reinterpreted as support/resistance
+  // levels. Checked separately from FORBIDDEN_PATTERNS above (which has no
+  // per-sentence context) because "support"/"resistance" is legitimate
+  // elsewhere — only naming it in the same breath as a range boundary is not.
+  const reinterpretedLevels = findRangeReinterpretedAsLevel(prose);
+  if (reinterpretedLevels.length > 0) {
+    return {
+      analysis: null,
+      rejection: `Model output reinterpreted a closing-price range boundary as support/resistance: ${reinterpretedLevels.join(" | ")}.`,
       warnings,
     };
   }
