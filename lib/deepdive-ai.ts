@@ -396,8 +396,13 @@ const FORBIDDEN_PATTERNS: Array<{ re: RegExp; label: string }> = [
   // Verb list widened when closing-price ranges entered the evidence: with a
   // real band low and high now quotable, "will return to 451" is a
   // prediction whose NUMBER is legitimately grounded, so the numeric check
-  // can't catch it — only the phrasing can.
-  { re: /\bwill\s+(definitely\s+|certainly\s+|likely\s+|soon\s+)?(rise|fall|surge|crash|drop|climb|reach|hit|break out|return|revisit|retest|rebound|recover|bounce)\b/i, label: "certain prediction" },
+  // can't catch it — only the phrasing can. Modal set widened alongside it
+  // from just "will" to also "should/could/would": "the price should bounce
+  // off the range low" makes the same forecast with a softer modal, and
+  // these particular verbs (bounce/rebound/retest/recover applied to a
+  // price) don't have an innocent reading the way a bare "should" elsewhere
+  // in hedged writing does.
+  { re: /\b(?:will|should|could|would)\s+(?:definitely\s+|certainly\s+|likely\s+|soon\s+)?(rise|fall|surge|crash|drop|climb|reach|hit|break out|return|revisit|retest|rebound|recover|bounce)\b/i, label: "certain prediction" },
   { re: /\b(price target|target price)\b/i, label: "price target" },
   { re: /\bai confidence\b/i, label: "AI confidence" },
   { re: /\bconfidence (score|level|rating)\b/i, label: "confidence score" },
@@ -555,6 +560,55 @@ function findFabricatedRatios(prose: string, evidenceNumbers: number[]): string[
   return bad;
 }
 
+/**
+ * A closing-range window (5D/20D/30D/60D/120D/1Y) is legitimate to interpret
+ * — "the latest close sits near the top of its 30D range" is exactly the
+ * reading Price Behaviour exists to enable. What it must never become is a
+ * support/resistance LEVEL: the digest is explicit that these are closing
+ * highs and lows, not intraday extremes, and calling a band edge "support"
+ * implies a price floor this data cannot honestly claim.
+ *
+ * This can't be a blanket ban on "support"/"resistance": the Technical
+ * Score's own deterministic reasoning legitimately uses "support" (see
+ * lib/technicals.ts's Entry Quality component, which produces reasons like
+ * "sitting at support, prime entry zone" — verified live on OGDC), and that
+ * language must keep working when the model quotes it back. The two need to
+ * be told apart by CONTEXT, not by the word itself.
+ *
+ * Scoped to one sentence at a time, not the whole prose blob: `prose`
+ * concatenates every field with no shared subject between them, and the
+ * Technical Score's support language belongs in `technicalInterpretation`
+ * while any range-boundary reference belongs in whichever field discusses
+ * Price Behaviour — checking the full blob would let one field's legitimate
+ * "support" trip a rejection over an unrelated field's range mention. A
+ * sentence is the smallest unit where "acting as support" and "the 30D low"
+ * being in the same breath is actually a claim connecting them.
+ */
+const RANGE_BOUNDARY_RE = /\b(?:5D|20D|30D|60D|120D|1Y)\s+(?:low|high)\b|\b(?:closing[- ]?range|trading range)\b|\brange\s+(?:low|high)\b|\bband\s+(?:low|high)\b/i;
+const SUPPORT_RESISTANCE_WORD_RE = /\b(support|resistance)\b/i;
+// A negation cue ahead of the word, within the same clause, means the
+// sentence is DENYING the label rather than asserting it — exactly the
+// framing the digest itself uses ("NOT support/resistance levels") and which
+// the model must be free to state, per spec: "The AI may explicitly state
+// that the range is not support/resistance." Without this, the disclaimer
+// the feature requires would be indistinguishable from the claim it forbids.
+const NEGATED_LEVEL_CLAIM_RE = /\b(?:not|isn'?t|aren'?t|is\s+not|are\s+not|never|no|nor|without)\b(?:(?!\.).){0,40}\b(?:support|resistance)\b/i;
+
+function findRangeReinterpretedAsLevel(prose: string): string[] {
+  // Split on sentence terminators AND newlines: `prose` joins list fields
+  // (confluence, risks, whatToWatch, …) with "\n", and a bullet often has no
+  // trailing period, so a terminator-only split would merge two unrelated
+  // bullets into one "sentence" for this check.
+  const sentences = prose.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  const bad: string[] = [];
+  for (const sentence of sentences) {
+    if (!RANGE_BOUNDARY_RE.test(sentence) || !SUPPORT_RESISTANCE_WORD_RE.test(sentence)) continue;
+    if (NEGATED_LEVEL_CLAIM_RE.test(sentence)) continue; // denying the label, not asserting it
+    bad.push(sentence.length > 160 ? sentence.slice(0, 160) + "…" : sentence);
+  }
+  return bad;
+}
+
 function asStringArray(v: unknown, max: number, maxLen: number): string[] | null {
   if (!Array.isArray(v)) return null;
   const out = v
@@ -690,6 +744,19 @@ export function validateAnalysis(
     return {
       analysis: null,
       rejection: `Model output used forbidden certainty/score language: ${[...new Set(violations)].join(", ")}.`,
+      warnings,
+    };
+  }
+
+  // Price Behaviour's closing-range windows reinterpreted as support/resistance
+  // levels. Checked separately from FORBIDDEN_PATTERNS above (which has no
+  // per-sentence context) because "support"/"resistance" is legitimate
+  // elsewhere — only naming it in the same breath as a range boundary is not.
+  const reinterpretedLevels = findRangeReinterpretedAsLevel(prose);
+  if (reinterpretedLevels.length > 0) {
+    return {
+      analysis: null,
+      rejection: `Model output reinterpreted a closing-price range boundary as support/resistance: ${reinterpretedLevels.join(" | ")}.`,
       warnings,
     };
   }
