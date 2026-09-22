@@ -148,3 +148,31 @@ newsHeadline: copy a headline verbatim from MACRO CONTEXT only if it directly co
   if (parsed && "signals" in parsed && Array.isArray(parsed.signals)) return parsed.signals;
   return [];
 }
+
+/**
+ * Thin JSON-completion transport for Deep Dive's AI interpretation.
+ *
+ * Deliberately carries no prompt of its own: the Deep Dive system prompt and
+ * evidence digest are built once in lib/deepdive-ai.ts and passed in. Those
+ * instructions are the anti-hallucination surface of the feature — four
+ * copies of them across four provider files is exactly how one copy quietly
+ * drifts and starts inventing figures.
+ */
+export async function completeJSON(
+  config: ProviderConfig,
+  system: string,
+  user: string,
+  maxTokens: number
+): Promise<string> {
+  const client = new OpenAI({ apiKey: config.apiKey, baseURL: GROQ_BASE });
+  const resp = await client.chat.completions.create({
+    model: config.model ?? "openai/gpt-oss-120b",
+    max_tokens: maxTokens,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  });
+  return resp.choices[0]?.message?.content ?? "";
+}
