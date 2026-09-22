@@ -30,6 +30,20 @@ export function pktNow(): Date {
   return toPKT(new Date());
 }
 
+/** Calendar date in PKT as "YYYY-MM-DD", matching the shape PSX EOD dates and
+ *  PersistedScan.scanDate already use throughout this app. Defaults to now;
+ *  pass an existing Date (already PKT-adjusted or not) to stamp a specific
+ *  moment. Used wherever a "which trading day is this" fallback is computed,
+ *  so those fallbacks agree with the rest of the freshness model instead of
+ *  drifting by the UTC/PKT offset (5h) near the UTC day boundary. */
+export function pktDateStr(d: Date = new Date()): string {
+  const pkt = toPKT(d);
+  const y = pkt.getFullYear();
+  const m = String(pkt.getMonth() + 1).padStart(2, "0");
+  const day = String(pkt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /** True while the PSX regular session is open (Mon–Thu 09:30–15:30, Fri split session). */
 export function isPKTOpen(): boolean {
   const pkt = pktNow();

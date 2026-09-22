@@ -85,6 +85,25 @@ export async function getLatestScan(): Promise<PersistedScan | null> {
   }
 }
 
+/**
+ * The attempt record for one date, whatever its status — success, failed, or
+ * skipped. Distinct from getLatestScan() (success-only, by design): this is
+ * how a caller answers "did today's scheduled attempt happen, and did it
+ * work" independently of how old the last GOOD scan is, which is exactly
+ * the distinction lib/scan-freshness.ts needs to tell "stale" apart from
+ * "stale AND today's cron already tried and failed." Never throws.
+ */
+export async function getScanAttempt(dateStr: string): Promise<PersistedScan | null> {
+  const redis = getClient();
+  if (!redis) return null;
+  try {
+    return (await redis.get<PersistedScan>(byDateKey(dateStr))) ?? null;
+  } catch (err) {
+    console.error("[scan-store] getScanAttempt failed", err);
+    return null;
+  }
+}
+
 export async function saveSuccess(params: {
   id: string; startedAt: string; scanDate: string; trigger: ScanTrigger; results: ScanResult;
 }): Promise<void> {

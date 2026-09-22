@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
   TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
-  Radar, X, Pencil, Sparkles, CircleAlert,
+  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert,
 } from "lucide-react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
@@ -24,6 +24,7 @@ import HoldingsOverview, { type Holding } from "./HoldingsOverview";
 import { volLabel, type StockTech } from "./StockBits";
 import type { PersistedScan } from "@/lib/scan-store";
 import type { ScanResult } from "@/lib/scanner";
+import { freshnessFromScanDate, type ScanFreshness } from "@/lib/scan-freshness";
 
 // ─── Local types ────────────────────────────────────────────────────────────
 interface WatchItem { ticker: string; name: string; }
@@ -49,16 +50,18 @@ function formatScanTimestamp(iso: string): string {
   return `Last scan ${date}, ${time} PKT`;
 }
 
-/** True when the persisted scan is from a day before today (PKT) — used only
- *  for a quiet status dot, never a banner. See PHASE 13 in the overhaul brief:
- *  communicate staleness without making it visually dominant. */
-function isScanStale(iso: string): boolean {
-  return toPKT(new Date(iso)).toDateString() !== pktNow().toDateString();
+/** "Sep 8" from a YYYY-MM-DD PSX trading-date string (PersistedScan.scanDate /
+ *  ScanResult.scanDate) — the SAME short style formatScanTimestamp uses for an
+ *  older execution day, so the two read as one family of date, not two. Parsed
+ *  at UTC noon so no browser-locale UTC offset can shift it to an adjacent
+ *  calendar day; this string has no time-of-day component of its own. */
+function formatMarketDate(scanDate: string): string {
+  return new Date(`${scanDate}T12:00:00Z`).toLocaleDateString("en-PK", { month: "short", day: "numeric" });
 }
 
 /** Matches the scanResult state shape used after a live scan — `fundamentals`
  *  is intentionally excluded here; it's hydrated separately into askAnalystData below. */
-function toScanResultState(r: ScanResult) {
+function toScanResultState(r: ScanResult, scanDate?: string) {
   return {
     signals: r.signals,
     newsAnalysis: r.newsAnalysis,
@@ -66,6 +69,7 @@ function toScanResultState(r: ScanResult) {
     totalScanned: r.totalScanned,
     passedTechnicals: r.passedTechnicals,
     timestamp: r.timestamp,
+    scanDate,
     technicalData: r.technicalData,
     newsHeadlines: r.newsHeadlines,
     newsSources: r.newsSources,
@@ -124,7 +128,12 @@ function buildExpandedNarrative(analysis: NewsAnalysis): string {
 }
 
 // ─── Main Dashboard ─────────────────────────────────────────────────────────
-export default function Dashboard({ initialScan }: { initialScan?: PersistedScan | null }) {
+export default function Dashboard({
+  initialScan, initialFreshness,
+}: {
+  initialScan?: PersistedScan | null;
+  initialFreshness?: ScanFreshness | null;
+}) {
   // initialScan comes from AppShell (GET /api/scan/latest, resolved before Dashboard
   // ever mounts — see AppShell.tsx), so seeding state directly here is safe: there is
   // no server-rendered Dashboard HTML this could ever mismatch against.
@@ -152,13 +161,20 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
     totalScanned: number;
     passedTechnicals: number;
     timestamp: string;
+    /** PSX trading date this scan's technicals reflect — distinct from
+     *  `timestamp` (when the scan code ran). See lib/scan-freshness.ts. */
+    scanDate?: string;
     technicalData: StockTech[];
     newsHeadlines: string[];
     newsSources: string[];
     newsFromCache: boolean;
     newsItems: NewsItem[];
     aiError?: string;
-  } | null>(() => (initialResults ? toScanResultState(initialResults) : null));
+  } | null>(() => (initialResults ? toScanResultState(initialResults, initialScan?.scanDate) : null));
+  // Whether TODAY's scheduled (cron) attempt already failed, from the initial
+  // page load only — a fresh manual scan naturally supersedes this (scanDate
+  // becomes today, so the stale-gated banner below stops showing regardless).
+  const todayScheduledScanFailed = initialFreshness?.todayAttemptFailed ?? false;
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [scanPhase, setScanPhase] = useState("");
@@ -333,6 +349,7 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
         totalScanned: data.totalScanned ?? 0,
         passedTechnicals: data.passedTechnicals ?? 0,
         timestamp: data.timestamp,
+        scanDate: data.scanDate,
         technicalData: data.technicalData ?? [],
         newsHeadlines: data.newsHeadlines ?? [],
         newsSources: data.newsSources ?? [],
@@ -929,19 +946,40 @@ export default function Dashboard({ initialScan }: { initialScan?: PersistedScan
                     ? <><RefreshCw size={14} strokeWidth={2.25} aria-hidden />Rerun Full Scan</>
                     : <><Radar size={14} strokeWidth={2.25} aria-hidden />Run First Scan</>}
               </button>
-              {scanResult && !scanning && (
-                <span className="flex items-center gap-1.5 text-[10px] text-ink-3">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${isScanStale(scanResult.timestamp) ? "bg-ink-3" : "bg-up animate-pulse"}`}
-                    title={isScanStale(scanResult.timestamp) ? "Showing an earlier scan" : "Fresh scan"}
-                  />
-                  {formatScanTimestamp(scanResult.timestamp)}
-                  <span className="hidden sm:inline">
-                    · {scanResult.totalScanned} scanned · {scanResult.passedTechnicals} passed technicals
-                    {scanResult.expandedSectors.length > 0 && ` · expanded: ${scanResult.expandedSectors.join(", ")}`}
-                  </span>
-                </span>
-              )}
+              {scanResult && !scanning && (() => {
+                const { status, tradingSessionsBehind } = freshnessFromScanDate(scanResult.scanDate ?? null);
+                const stale = status === "stale";
+                const marketDate = scanResult.scanDate ? formatMarketDate(scanResult.scanDate) : null;
+                const execDate = toPKT(new Date(scanResult.timestamp)).toLocaleDateString("en-PK", { month: "short", day: "numeric" });
+                // Only worth stating separately when the two actually differ —
+                // a scan that ran today reflecting today's session doesn't
+                // need "Market data" repeating the date already shown.
+                const showMarketDate = marketDate !== null && marketDate !== execDate;
+                return (
+                  <div className="flex flex-col gap-1">
+                    <span className="flex items-center gap-1.5 text-[10px] text-ink-3 flex-wrap">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${stale ? "bg-gold" : "bg-up animate-pulse"}`}
+                        title={stale ? "Data may be out of date" : "Current"}
+                      />
+                      {formatScanTimestamp(scanResult.timestamp)}
+                      {showMarketDate && <span>· Market data {marketDate}</span>}
+                      <span className="hidden sm:inline">
+                        · {scanResult.totalScanned} scanned · {scanResult.passedTechnicals} passed technicals
+                        {scanResult.expandedSectors.length > 0 && ` · expanded: ${scanResult.expandedSectors.join(", ")}`}
+                      </span>
+                    </span>
+                    {stale && (
+                      <span className="flex items-center gap-1.5 text-[10px] text-gold-2">
+                        <TriangleAlert size={11} strokeWidth={2} aria-hidden />
+                        {tradingSessionsBehind !== null
+                          ? `Showing data from ${tradingSessionsBehind} trading session${tradingSessionsBehind === 1 ? "" : "s"} ago${todayScheduledScanFailed ? " — today's scheduled scan failed" : ""}.`
+                          : "This scan's trading date is unknown — treat it as potentially out of date."}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <ErrorBanner msg={scanError} onDismiss={() => setScanError("")} />
