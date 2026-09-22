@@ -247,9 +247,20 @@ function buildNewsContext(news: NewsAnalysis): string {
   ].join("\n");
 }
 
-/** Main scanner entry point. */
+/**
+ * Main scanner entry point.
+ *
+ * `providerConfig` is nullable so a caller with no AI provider available
+ * (the scheduled cron, when no server-side key is configured) can still run
+ * this and get a fully valid, current, deterministic Technical-Score slate —
+ * the same "no AI narrative" degradation this function already applies when
+ * a CONFIGURED provider's call fails mid-run (see the try/catches below),
+ * just triggered up front instead of by a thrown error. Nothing about the
+ * Technical Score or the ranking changes either way — AI never scores or
+ * orders this slate, configured or not.
+ */
 export async function runFullScan(
-  providerConfig: ProviderConfig,
+  providerConfig: ProviderConfig | null,
   options: ScanOptions = {}
 ): Promise<ScanResult> {
   const {
@@ -272,7 +283,13 @@ export async function runFullScan(
 
   let newsError: string | undefined;
 
-  if (!skipNewsPass) {
+  if (!skipNewsPass && !providerConfig) {
+    newsAnalysis = {
+      summary: "News analysis unavailable — no AI provider configured for this scan.",
+      affectedSectors: [],
+      globalFactors: [],
+    };
+  } else if (!skipNewsPass && providerConfig) {
     try {
       const newsResult = await getNewsAnalysisWithCache(providerConfig);
       newsAnalysis = newsResult.newsAnalysis;
@@ -369,7 +386,7 @@ export async function runFullScan(
 
   let signals: AISignal[] = [];
   let aiError: string | undefined;
-  if (scoredStocks.length > 0) {
+  if (scoredStocks.length > 0 && providerConfig) {
     try {
       const raw = await getStockSignals(providerConfig, stockContext, newsContext);
       signals = raw.sort(byTechnicalRank).slice(0, maxPicks);
@@ -379,6 +396,10 @@ export async function runFullScan(
       aiError = err instanceof Error ? err.message : "AI analysis unavailable";
       signals = [];
     }
+  } else if (scoredStocks.length > 0 && !providerConfig) {
+    // No provider configured at all — same deterministic-slate outcome as an
+    // AI call failing above, reached without ever attempting a network call.
+    aiError = "No AI provider configured — showing deterministic technical ranking only.";
   }
   if (newsError) aiError = aiError ? `${newsError}; ${aiError}` : newsError;
 
