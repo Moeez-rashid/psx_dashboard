@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
   TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
-  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert,
+  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert, ChevronDown,
 } from "lucide-react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
@@ -224,10 +224,10 @@ export default function Dashboard({
   // A card's catalyst strip → News tab, headline feed filtered to that ticker.
   const openNewsFor = (ticker: string) => { setNewsFilterTicker(ticker); setTab("news"); };
   // A News sector-watch row → Buy Opportunities filtered to that sector.
-  const filterOppsBySector = (sectorName: string) => { setOppSectorFilter(sectorName); setTab("opportunities"); };
+  const filterOppsBySector = (sectorName: string) => { setOppSectorFilter(sectorName); setOppExpanded(true); setTab("opportunities"); };
   // A News headline row → the stock's own expanded card on whichever tab holds it.
   const openTickerCard = (ticker: string) => {
-    if (scanResult?.signals.some(s => s.ticker === ticker)) { setTab("opportunities"); setExpanded(prev => new Set(prev).add(`opp:${ticker}`)); }
+    if (scanResult?.signals.some(s => s.ticker === ticker)) { setTab("opportunities"); setOppExpanded(true); setExpanded(prev => new Set(prev).add(`opp:${ticker}`)); }
     else if (watching.some(w => w.ticker === ticker)) { setTab("watching"); setExpanded(prev => new Set(prev).add(`watch:${ticker}`)); }
     else if (holdings.some(h => h.ticker === ticker)) { setTab("holdings"); setExpanded(prev => new Set(prev).add(`hold:${ticker}`)); }
     else { setTab("opportunities"); }
@@ -259,6 +259,11 @@ export default function Dashboard({
 
   // UI state
   const [tab, setTab] = useState<"opportunities" | "holdings" | "watching" | "news">("opportunities");
+  // Opportunities starts collapsed to a compact ticker/price preview — expanding
+  // reveals the existing detailed cards unchanged. Navigating in from News (a
+  // specific ticker, or a sector filter) always force-opens it, since the row
+  // or filtered list being navigated to needs to actually be visible.
+  const [oppExpanded, setOppExpanded] = useState(false);
   // News page: ticker to filter the headline feed to (set when arriving from a card's catalyst strip)
   const [newsFilterTicker, setNewsFilterTicker] = useState<string | null>(null);
   // Buy Opportunities: sector to filter the list to (set when arriving from the News sector watch)
@@ -853,6 +858,20 @@ export default function Dashboard({
   const watchingSet = new Set(watching.map(w => w.ticker));
   const na = scanResult?.newsAnalysis;
 
+  // Opportunities collapsed-state preview: ticker + price only, same ordering
+  // and AI-signals-else-top-technicals fallback as the detailed list below —
+  // no new data, just the same list reduced to its two most essential fields.
+  const oppPreviewList: { ticker: string; price?: number }[] = scanResult
+    ? scanResult.signals.length > 0
+      ? sortedOpps(scanResult.signals).map((sig) => {
+          const sigTech = scanResult.technicalData.find(t => t.symbol === sig.ticker);
+          return { ticker: sig.ticker, price: prices[sig.ticker]?.currentPrice ?? sigTech?.currentPrice };
+        })
+      : scanResult.technicalData.slice(0, 8).map((tech) => ({
+          ticker: tech.symbol, price: prices[tech.symbol]?.currentPrice ?? tech.currentPrice,
+        }))
+    : [];
+
   // Dividend payers among tickers we already hold fundamentals for (yield ≥ 2%)
   const dividendPayers = Object.entries(askAnalystData)
     .filter((e): e is [string, AskAnalystFundamentals] => !!e[1] && (e[1].dividendYield ?? 0) >= 2)
@@ -1033,6 +1052,46 @@ export default function Dashboard({
               </div>
             )}
 
+            {/* Opportunities — starts as one compact ticker/price preview;
+                expanding reveals the existing detailed cards unchanged below. */}
+            {scanResult && !scanning && (
+              <div className="card p-0 overflow-hidden mb-3">
+                <button
+                  onClick={() => setOppExpanded(v => !v)}
+                  aria-expanded={oppExpanded}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left cursor-pointer"
+                >
+                  <span className="text-sm font-semibold text-ink">Opportunities</span>
+                  <span className="flex items-center gap-2 text-ink-3 shrink-0">
+                    <span className="text-[10px] num">
+                      {oppPreviewList.length} pick{oppPreviewList.length === 1 ? "" : "s"}
+                    </span>
+                    <ChevronDown
+                      size={15} strokeWidth={2.25}
+                      className={`transition-transform duration-200 ${oppExpanded ? "rotate-180" : ""}`}
+                      aria-hidden
+                    />
+                  </span>
+                </button>
+                {!oppExpanded && (
+                  oppPreviewList.length > 0 ? (
+                    <div className="px-4 pb-4 pt-0.5 border-t border-line divide-y divide-line">
+                      {oppPreviewList.map((item) => (
+                        <div key={item.ticker} className="flex items-center justify-between py-2.5">
+                          <span className="text-[13px] font-semibold text-ink">{item.ticker}</span>
+                          <span className="text-[13px] num text-ink-2">{item.price !== undefined ? item.price.toFixed(2) : "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="px-4 pb-4 pt-0.5 text-xs text-ink-3 border-t border-line">No opportunities from this scan.</p>
+                  )
+                )}
+              </div>
+            )}
+
+            {scanResult && oppExpanded && !scanning && <>
+
             {/* Sort */}
             {scanResult && scanResult.signals.length > 1 && (
               <div className="flex items-center gap-2 mb-3">
@@ -1148,6 +1207,8 @@ export default function Dashboard({
                 );
               })}
             </div>
+
+            </>}
 
           </div>
         )}

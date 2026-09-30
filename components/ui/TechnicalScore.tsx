@@ -36,7 +36,7 @@ export function TechnicalScoreMeter({ score, size = "md" }: { score: number; siz
       <div className={`${big ? "text-[8px] mt-1" : "text-[7px] mt-0.5"} uppercase tracking-[0.09em] text-ink-3 leading-none`}>
         Technical Score
       </div>
-      <div className={`h-[3px] bg-line-2/70 rounded-full overflow-hidden ${big ? "mt-1.5 w-full" : "mt-1 w-16"}`}>
+      <div className={`h-[3px] bg-line-2/70 rounded-full overflow-hidden w-full ${big ? "mt-1.5" : "mt-1"}`}>
         <div className={`h-full rounded-full ${tone.bar} opacity-90`} style={{ width: `${Math.min(100, Math.max(0, score))}%` }} />
       </div>
     </div>
@@ -47,9 +47,9 @@ export function TechnicalScoreMeter({ score, size = "md" }: { score: number; siz
 export function TechnicalScoreChip({ score }: { score: number }) {
   const tone = TONE[toneOf(score)];
   return (
-    <div className="inline-flex items-center gap-1.5 min-w-[64px]" title={`Technical Score ${Math.round(score)}/100 — a deterministic technical setup assessment, not a probability`}>
+    <div className="inline-flex items-center gap-1.5 min-w-[84px]" title={`Technical Score ${Math.round(score)}/100 — a deterministic technical setup assessment, not a probability`}>
       <span className={`text-[13px] font-bold num tabular-nums ${tone.text}`}>{Math.round(score)}</span>
-      <div className="h-[3px] w-9 bg-line-2/70 rounded-full overflow-hidden shrink-0">
+      <div className="h-[3px] w-14 bg-line-2/70 rounded-full overflow-hidden shrink-0">
         <div className={`h-full rounded-full ${tone.bar} opacity-90`} style={{ width: `${Math.min(100, Math.max(0, score))}%` }} />
       </div>
     </div>
