@@ -88,6 +88,18 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
   };
 }
 
+/** Every known company's name, for the Deep Dive search-by-company-name
+ *  experience. Reads the same 24h-cached map as getCompanyProfile — no
+ *  extra network calls beyond what Deep Dive already triggers. */
+export async function getAllCompanyProfiles(): Promise<CompanyProfile[]> {
+  const map = await getCompanyMap();
+  return Array.from(map.values()).map((entry) => ({
+    symbol: entry.symbol.toUpperCase(),
+    name: entry.name ?? entry.symbol.toUpperCase(),
+    sector: entry.sector ?? "",
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Fundamentals  (rationew/{id})
 // ---------------------------------------------------------------------------

@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
   TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
-  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert,
+  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert, Telescope,
 } from "lucide-react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
@@ -905,7 +906,7 @@ export default function Dashboard({
         </div>
 
         {/* Tabs */}
-        <nav className="max-w-5xl mx-auto px-4 flex">
+        <nav className="max-w-5xl mx-auto px-4 flex overflow-x-auto">
           {TABS.map(t => (
             <button
               key={t.id}
@@ -914,7 +915,7 @@ export default function Dashboard({
                 if (t.id === "opportunities") setOppSectorFilter(null);
                 setTab(t.id);
               }}
-              className={`relative flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium transition-colors cursor-pointer
+              className={`relative flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium transition-colors cursor-pointer shrink-0
                 ${tab === t.id ? "text-ink" : "text-ink-3 hover:text-ink-2"}`}
             >
               <t.icon size={13} strokeWidth={2} aria-hidden />
@@ -928,6 +929,16 @@ export default function Dashboard({
               {tab === t.id && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-up rounded-full" />}
             </button>
           ))}
+          {/* Deep Dive is a dedicated route, not view state like the tabs above —
+              this is a real navigation, not a tab switch, so it's a Link. */}
+          <Link
+            href="/deep-dive"
+            className="relative flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium transition-colors text-ink-3 hover:text-ink-2 shrink-0"
+          >
+            <Telescope size={13} strokeWidth={2} aria-hidden />
+            <span className="hidden sm:inline">Deep Dive</span>
+            <span className="sm:hidden">Deep Dive</span>
+          </Link>
         </nav>
       </header>
 

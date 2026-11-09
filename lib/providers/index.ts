@@ -27,6 +27,31 @@ export async function getNewsAnalysis(
   }
 }
 
+/**
+ * Generic structured-JSON completion, used by Deep Dive's AI interpretation
+ * (lib/deepdive-ai.ts). Unlike the two functions above, this one owns no
+ * prompt: the caller supplies both the system instructions and the evidence,
+ * so Deep Dive's grounding rules live in exactly one place regardless of
+ * which provider the user has configured.
+ *
+ * Returns raw model text — parsing and validation are the caller's job, and
+ * for Deep Dive they are deliberately strict.
+ */
+export async function completeJSON(
+  config: ProviderConfig,
+  system: string,
+  user: string,
+  maxTokens: number
+): Promise<string> {
+  switch (config.provider) {
+    case "claude":  return claude.completeJSON(config, system, user, maxTokens);
+    case "gemini":  return gemini.completeJSON(config, system, user, maxTokens);
+    case "openai":  return openai.completeJSON(config, system, user, maxTokens);
+    case "groq":    return groq.completeJSON(config, system, user, maxTokens);
+    default: throw new Error(`Unknown provider: ${config.provider}`);
+  }
+}
+
 /** Pass 2: Technical data + news context → final buy/watch picks. */
 export async function getStockSignals(
   config: ProviderConfig,
