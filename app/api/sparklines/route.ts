@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getHistory } from "@/lib/psx";
 import { HISTORY_SESSIONS } from "@/lib/psx-eod";
 
+// A cold instance may need to load the session store before answering.
+export const maxDuration = 60;
+
 /** GET /api/sparklines?symbols=OGDC,LUCK,FFC
  *  Returns the last 30 EOD closes per symbol (oldest first) for mini charts.
  *  Served from the shared session store (lib/psx-eod), so this stays cheap.

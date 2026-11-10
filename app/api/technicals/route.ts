@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getHistory } from "@/lib/psx";
 import { scoreStock } from "@/lib/technicals";
 
+// A cold instance may need to load the session store before answering.
+export const maxDuration = 60;
+
 /** GET /api/technicals?symbol=FCCL
  *  Returns TechnicalScore for a single symbol.
  *  Used by the Watchlist to fetch EMA/RSI/volume data per ticker.

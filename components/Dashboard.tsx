@@ -1,10 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import Link from "next/link";
 import {
   RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
   TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
-  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert, Telescope, ChevronDown,
+  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert, ChevronDown,
 } from "lucide-react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
@@ -14,7 +13,11 @@ import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { isPKTOpen, pktNow, toPKT } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
 import { ErrorBanner, Skeleton, EmptyState, IconButton } from "./ui/primitives";
-import { toast, Toaster } from "./ui/Toast";
+import { toast } from "./ui/Toast";
+import { BrandMark, GlobalActions, NavRow } from "./nav/TopNav";
+import { isDashboardTab, type DashboardTab } from "@/lib/nav";
+import { SET_TAB_EVENT } from "./CommandPalette";
+import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
 import MarketStrip from "./MarketStrip";
 import MetricsGuide from "./MetricsGuide";
@@ -259,7 +262,14 @@ export default function Dashboard({
   };
 
   // UI state
-  const [tab, setTab] = useState<"opportunities" | "holdings" | "watching" | "news">("opportunities");
+  const [tab, setTab] = useState<DashboardTab>("opportunities");
+  /** Switch tab from the nav row: clears the filters a fresh visit shouldn't inherit and keeps the URL shareable. */
+  const goTab = (t: DashboardTab) => {
+    if (t === "news") setNewsFilterTicker(null);
+    if (t === "opportunities") setOppSectorFilter(null);
+    setTab(t);
+    window.history.replaceState(null, "", t === "opportunities" ? "/" : `/?tab=${t}`);
+  };
   // Opportunities starts collapsed to a compact ticker/price preview — expanding
   // reveals the existing detailed cards unchanged. Navigating in from News (a
   // specific ticker, or a sector filter) always force-opens it, since the row
@@ -601,10 +611,28 @@ export default function Dashboard({
     if (h.length) setHoldings(h);
     if (w.length) setWatching(w);
     setSettings(loadSettings());
+    const urlTab = new URLSearchParams(window.location.search).get("tab");
+    if (isDashboardTab(urlTab)) setTab(urlTab);
     storageLoadedRef.current = true;
     const all = [...new Set([...w.map(x => x.ticker), ...h.map(x => x.ticker)])];
     if (all.length > 0) fetchAskAnalystBatch(all);
   }, []); // eslint-disable-line — intentional one-time load
+
+  // Changes made outside this component: the command palette switching tab,
+  // and watchlist edits from the palette, Market or Screener.
+  useEffect(() => {
+    const onTab = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail;
+      if (isDashboardTab(t)) { setTab(t); window.history.replaceState(null, "", t === "opportunities" ? "/" : `/?tab=${t}`); }
+    };
+    const onWatch = () => {
+      const next = readWatchlist();
+      setWatching((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    };
+    window.addEventListener(SET_TAB_EVENT, onTab);
+    window.addEventListener(WATCH_EVENT, onWatch);
+    return () => { window.removeEventListener(SET_TAB_EVENT, onTab); window.removeEventListener(WATCH_EVENT, onWatch); };
+  }, []);
 
   // Auto-fetch tech + fundamentals when tab changes
   const prevTabRef = useRef<string>("");
@@ -871,85 +899,45 @@ export default function Dashboard({
     .sort((a, b) => b.yieldPct - a.yieldPct)
     .slice(0, 6);
 
-  const TABS = [
-    { id: "opportunities" as const, label: "Buy Opportunities", short: "Signals", icon: TrendingUp, count: scanResult?.signals.length },
-    { id: "holdings" as const, label: "My Holdings", short: "Holdings", icon: Briefcase, count: holdings.length || undefined },
-    { id: "watching" as const, label: "Watchlist", short: "Watchlist", icon: Eye, count: watching.length || undefined },
-    { id: "news" as const, label: "News", short: "News", icon: NewspaperIcon, count: undefined },
-  ];
 
   return (
     <div className="min-h-screen flex flex-col text-[13px]">
 
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line">
-        <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between py-2.5">
-          <div className="flex items-center gap-3">
+        <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between gap-2 py-2.5">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2">
-              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden className="rounded-md">
-                <rect width="24" height="24" rx="6" fill="var(--color-up-dim)" />
-                <polyline points="4,16 9,11 13,14 20,7" fill="none" stroke="var(--color-up-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <polyline points="15,7 20,7 20,12" fill="none" stroke="var(--color-up-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span className="text-sm font-bold tracking-tight">PSX Scanner</span>
+              <BrandMark />
+              <span className="text-sm font-bold tracking-tight whitespace-nowrap">PSX Scanner</span>
             </div>
             {serverOnline === false && (
-              <span className="text-[10px] text-down-2 bg-down-dim border border-down/40 px-2 py-0.5 rounded-full">offline</span>
+              <span className="text-[10px] text-down-2 bg-down-dim border border-down/40 px-2 py-0.5 rounded-full" title="PSX price data didn't load — showing the last values received">data delayed</span>
             )}
             {loadingPrices && <span className="hidden sm:inline text-[10px] text-ink-3 animate-pulse">refreshing…</span>}
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="hidden md:block mr-2"><PKTClock /></div>
-            <IconButton icon={RefreshCw} label="Refresh prices" onClick={fetchPrices} />
+            <div className="hidden lg:block mr-2"><PKTClock /></div>
+            <GlobalActions />
             <IconButton icon={Clipboard} label="Copy full snapshot for AI analysis (Claude, ChatGPT, …)" tone="sky" onClick={exportForClaude} />
-            <button onClick={() => setShowMetricsGuide(true)} className="btn px-2.5 hidden sm:inline-flex" title="Metrics guide">
-              <HelpCircle size={14} strokeWidth={2} aria-hidden /><span className="hidden sm:inline">Guide</span>
+            <button onClick={() => setShowMetricsGuide(true)} className="btn p-2 hidden md:inline-flex" title="Metrics guide" aria-label="Metrics guide">
+              <HelpCircle size={15} strokeWidth={2} aria-hidden />
             </button>
             <button
               onClick={() => setShowSettings(true)}
               className={`btn px-2.5 ${hasKey ? "border-up/50 text-up-2" : "border-gold/50 text-gold-2"}`}
               title="Settings"
             >
-              <SettingsIcon size={14} strokeWidth={2} aria-hidden /><span className="hidden sm:inline">{hasKey ? settings.provider : "Set API Key"}</span>
+              <SettingsIcon size={14} strokeWidth={2} aria-hidden /><span className="hidden md:inline">{hasKey ? settings.provider : "Set API Key"}</span>
             </button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <nav className="max-w-5xl mx-auto px-4 flex overflow-x-auto">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => {
-                if (t.id === "news") setNewsFilterTicker(null);
-                if (t.id === "opportunities") setOppSectorFilter(null);
-                setTab(t.id);
-              }}
-              className={`relative flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium transition-colors cursor-pointer shrink-0
-                ${tab === t.id ? "text-ink" : "text-ink-3 hover:text-ink-2"}`}
-            >
-              <t.icon size={13} strokeWidth={2} aria-hidden />
-              <span className="hidden sm:inline">{t.label}</span>
-              <span className="sm:hidden">{t.short}</span>
-              {t.count !== undefined && (
-                <span className={`ml-0.5 text-[9px] px-1.5 py-px rounded-full num ${tab === t.id ? "bg-up-dim text-up-2" : "bg-raised text-ink-3"}`}>
-                  {t.count}
-                </span>
-              )}
-              {tab === t.id && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-up rounded-full" />}
-            </button>
-          ))}
-          {/* Deep Dive is a dedicated route, not view state like the tabs above —
-              this is a real navigation, not a tab switch, so it's a Link. */}
-          <Link
-            href="/deep-dive"
-            className="relative flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium transition-colors text-ink-3 hover:text-ink-2 shrink-0"
-          >
-            <Telescope size={13} strokeWidth={2} aria-hidden />
-            <span className="hidden sm:inline">Deep Dive</span>
-            <span className="sm:hidden">Deep Dive</span>
-          </Link>
-        </nav>
+        <NavRow
+          active={tab}
+          counts={{ opportunities: scanResult?.signals.length || scanResult?.technicalData.slice(0, 8).length, holdings: holdings.length, watching: watching.length }}
+          onTab={(item) => item.tab && goTab(item.tab)}
+        />
       </header>
 
       {/* ── MAIN ── */}
@@ -1552,7 +1540,6 @@ export default function Dashboard({
 
       <Settings open={showSettings} onClose={() => setShowSettings(false)} onSave={s => { setSettings(s); setShowSettings(false); }} />
       <MetricsGuide open={showMetricsGuide} onClose={() => setShowMetricsGuide(false)} />
-      <Toaster />
     </div>
   );
 }

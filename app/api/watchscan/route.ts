@@ -13,6 +13,9 @@ import { scoreStock } from "@/lib/technicals";
 import { fetchPakistanNews } from "@/lib/news-fetcher";
 import { getNewsAnalysis, getStockSignals, type ProviderConfig } from "@/lib/providers";
 
+// A cold instance may need to load the session store before answering.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

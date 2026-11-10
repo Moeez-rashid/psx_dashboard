@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import GlobalClient from "@/components/GlobalClient";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,9 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  applicationName: "PSX Scanner",
+  appleWebApp: { capable: true, title: "PSX Scanner", statusBarStyle: "black-translucent" },
   title: "PSX Scanner — Pakistan Stock Market Dashboard",
   description:
-    "Live PSX market overview, AI-powered buy signals for KMI-30 Shariah stocks, portfolio P&L tracking, and technical analysis — RSI, EMA, volume.",
+    "PSX market overview, full-market stock screener with Shariah filter, technical setups for KMI-30 stocks, portfolio tracking, company announcements and price alerts.",
   keywords: ["PSX", "Pakistan Stock Exchange", "KSE-100", "KMI-30", "stock scanner", "Shariah stocks"],
   openGraph: {
     title: "PSX Scanner",
@@ -42,7 +45,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <GlobalClient />
+      </body>
     </html>
   );
 }

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getQuotes } from "@/lib/psx";
 
+// A cold instance may need to load the session store before answering.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const { symbols } = await req.json() as { symbols: string[] };
