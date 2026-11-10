@@ -1,7 +1,24 @@
 /**
- * PSX Data Client — fetches live market data from dps.psx.com.pk
- * Runs server-side only (Next.js API routes), no CORS issues.
+ * PSX data facade — the functions the rest of the app calls for market data.
+ * Runs server-side only (route handlers / server components).
+ *
+ * Sources (all public pages or published files on dps.psx.com.pk):
+ *   lib/psx-snapshot.ts  /screener ............ price, day change, valuation, index membership
+ *   lib/psx-eod.ts       /download/mkt_summary  daily OHLCV for every equity → history
+ *   lib/psx-market.ts    /indices, /trading-panel, /circuit-breakers
+ *   lib/psx-company.ts   /company/SYMBOL ...... full quote, limits, financials, announcements
+ *
+ * History: until Sept 2026 this file read /market-watch and
+ * /timeseries/eod/SYMBOL. PSX then put those feeds behind a page token and
+ * they began answering 404 to everything else — see DECISIONS.md.
  */
+
+import { getSnapshot, getIndexConstituents, type SnapshotRow } from "./psx-snapshot";
+import { getEodHistory, getLatestSession, HISTORY_SESSIONS, type EODPoint, type EodDay } from "./psx-eod";
+import { getIndices, type IndexSnapshot } from "./psx-market";
+
+export type { EODPoint } from "./psx-eod";
+export type { IndexSnapshot } from "./psx-market";
 
 export interface StockQuote {
   symbol: string;
@@ -14,214 +31,145 @@ export interface StockQuote {
   currentPrice: number;
   change: number;
   changePercent: number;
+  /** Volume of the session named by `sessionDate` (the latest published session). */
   volume: number;
+  // ── Added with the public-page data layer (absent only in EOD-only fallback) ──
+  name?: string;
+  /** Session the open/high/low/volume figures belong to (YYYY-MM-DD). */
+  sessionDate?: string;
+  marketCap?: number;
+  pe?: number;
+  dividendYield?: number;
+  change1y?: number;
+  avgVolume30d?: number;
+  /** KMI All Share constituent, per PSX. Undefined when membership is unknown. */
+  shariah?: boolean;
+  /** XD / XB / XR markers from the latest session file. */
+  flags?: string[];
 }
 
-export interface EODPoint {
-  timestamp: number;
-  date: string;
-  price: number;        // close
-  open: number;
-  volume: number;
-}
-
-const BASE = "https://dps.psx.com.pk";
-
-const HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
-  Accept: "application/json, text/html, */*",
-};
-
-function parseNum(s: string): number {
-  if (!s || s === "-") return 0;
-  return parseFloat(s.replace(/[^\d.-]/g, "")) || 0;
-}
-
-function parseInt2(s: string): number {
-  if (!s || s === "-") return 0;
-  return parseInt(s.replace(/[^\d]/g, ""), 10) || 0;
-}
-
-/** Fetch all stocks from PSX market watch. Tries JSON first, falls back to HTML scrape. */
-export async function getAllStocks(): Promise<StockQuote[]> {
-  const res = await fetch(`${BASE}/market-watch`, {
-    headers: HEADERS,
-    next: { revalidate: 60 }, // cache 60s in Next.js
-  });
-
-  if (!res.ok) throw new Error(`PSX market-watch ${res.status}`);
-
-  const text = await res.text();
-
-  // Try JSON first (PSX sometimes returns JSON for API consumers)
-  try {
-    const json = JSON.parse(text);
-    const arr = Array.isArray(json) ? json : json.data || json.result || [];
-    if (arr.length > 0) return arr.map(normalizeJsonStock);
-  } catch {
-    // Not JSON — parse as HTML below
-  }
-
-  // HTML scrape path
-  return parseMarketWatchHTML(text);
-}
-
-function normalizeJsonStock(s: Record<string, unknown>): StockQuote {
+function fromSnapshot(r: SnapshotRow, day: EodDay | null): StockQuote {
+  const ldcp = r.changePercent > -100 ? r.price / (1 + r.changePercent / 100) : r.price;
+  const eod = day?.rows.get(r.symbol);
+  // Session figures only describe this price when the file's close matches it;
+  // otherwise the snapshot is ahead of the last published session.
+  const sameSession = !!eod && Math.abs(eod.close - r.price) / r.price < 0.0005;
   return {
-    symbol: String(s.symbol || s.SYMBOL || ""),
-    sector: String(s.sector || s.SECTOR || ""),
-    listedIn: String(s.listed_in || s.LISTED_IN || ""),
-    ldcp: Number(s.ldcp || s.LDCP || 0),
-    open: Number(s.open || s.open_price || s.OPEN || 0),
-    high: Number(s.high || s.high_price || s.HIGH || 0),
-    low: Number(s.low || s.low_price || s.LOW || 0),
-    currentPrice: Number(s.current_price || s.close || s.CURRENT || 0),
-    change: Number(s.change || s.CHANGE || 0),
-    changePercent: Number(s.change_percent || s.CHANGE_PERCENT || 0),
-    volume: Number(s.volume || s.VOLUME || 0),
+    symbol: r.symbol,
+    sector: r.sector,
+    listedIn: r.indices.join(","),
+    ldcp: Number(ldcp.toFixed(2)),
+    open: sameSession ? eod.open : 0,
+    high: sameSession ? eod.high : 0,
+    low: sameSession ? eod.low : 0,
+    currentPrice: r.price,
+    change: Number((r.price - ldcp).toFixed(2)),
+    changePercent: r.changePercent,
+    volume: eod?.volume ?? 0,
+    name: r.name,
+    sessionDate: day?.date,
+    marketCap: r.marketCap,
+    pe: r.pe,
+    dividendYield: r.dividendYield,
+    change1y: r.change1y,
+    avgVolume30d: r.avgVolume30d,
+    shariah: r.shariah,
+    flags: eod?.flags ?? [],
   };
 }
 
-function parseMarketWatchHTML(html: string): StockQuote[] {
-  // Extract table rows using regex — avoids needing cheerio server-side
-  const tableMatch = html.match(/<table[^>]*>([\s\S]*?)<\/table>/i);
-  if (!tableMatch) throw new Error("No table found in PSX HTML response");
-
-  const rows = tableMatch[1].match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
-  const stocks: StockQuote[] = [];
-
-  for (let i = 1; i < rows.length; i++) {
-    const cells = (rows[i].match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []).map(
-      (td) => td.replace(/<[^>]+>/g, "").trim()
-    );
-    if (cells.length < 9) continue;
-    stocks.push({
-      symbol: cells[0],
-      sector: cells[1],
-      listedIn: cells[2],
-      ldcp: parseNum(cells[3]),
-      open: parseNum(cells[4]),
-      high: parseNum(cells[5]),
-      low: parseNum(cells[6]),
-      currentPrice: parseNum(cells[7]),
-      change: parseNum(cells[8]),
-      changePercent: cells.length > 9 ? parseNum(cells[9]) : 0,
-      volume: cells.length > 10 ? parseInt2(cells[10]) : 0,
-    });
-  }
-
-  return stocks.filter((s) => s.symbol.length > 0);
+function fromEodOnly(day: EodDay): StockQuote[] {
+  return [...day.rows.values()].map((e) => ({
+    symbol: e.symbol,
+    sector: e.sector,
+    listedIn: "",
+    ldcp: e.ldcp,
+    open: e.open,
+    high: e.high,
+    low: e.low,
+    currentPrice: e.close,
+    change: e.ldcp > 0 ? Number((e.close - e.ldcp).toFixed(2)) : 0,
+    changePercent: e.ldcp > 0 ? Number((((e.close - e.ldcp) / e.ldcp) * 100).toFixed(2)) : 0,
+    volume: e.volume,
+    name: e.name,
+    sessionDate: day.date,
+    flags: e.flags,
+  }));
 }
 
-/** Get EOD history for a symbol (up to 5 years). */
-export async function getHistory(symbol: string): Promise<EODPoint[]> {
-  const res = await fetch(`${BASE}/timeseries/eod/${symbol.toUpperCase()}`, {
-    headers: HEADERS,
-    next: { revalidate: 3600 }, // cache 1h — history doesn't change intraday
-  });
-
-  if (!res.ok) throw new Error(`PSX EOD ${symbol} ${res.status}`);
-
-  const data = await res.json();
-  const raw: unknown[][] = Array.isArray(data)
-    ? data
-    : (data?.data ?? data?.result ?? []);
-
-  return raw
-    .filter((item) => Array.isArray(item) && item.length >= 3)
-    .map((item) => {
-      const ts = Number(item[0]);
-      return {
-        timestamp: ts,
-        date: new Date(ts * 1000).toISOString().slice(0, 10),
-        price: Number(item[1]),
-        volume: Number(item[2]),
-        open: item.length >= 4 ? Number(item[3]) : Number(item[1]),
-      };
-    })
-    .sort((a, b) => b.timestamp - a.timestamp); // newest first
+/**
+ * Every listed equity. Built from the screener snapshot, enriched with the
+ * latest session file. The two sources are independent, so either one alone
+ * still yields a usable list — only both failing throws.
+ */
+export async function getAllStocks(): Promise<StockQuote[]> {
+  const [snap, day] = await Promise.allSettled([getSnapshot(), getLatestSession()]);
+  const latest = day.status === "fulfilled" ? day.value : null;
+  if (snap.status === "fulfilled") return snap.value.value.map((r) => fromSnapshot(r, latest));
+  if (latest) return fromEodOnly(latest);
+  throw snap.reason instanceof Error ? snap.reason : new Error("PSX market data unavailable");
 }
 
-export interface IndexSnapshot {
-  value: number;          // current index points
-  change: number;
-  changePercent: number;
+/** EOD history for a symbol, newest first. Default depth suits the Technical Score. */
+export async function getHistory(
+  symbol: string,
+  sessions: number = HISTORY_SESSIONS.technicals
+): Promise<EODPoint[]> {
+  return getEodHistory(symbol, sessions);
 }
 
-/** KSE-100 snapshot scraped from the dps.psx.com.pk indices table.
- *  Columns are mapped by header name so a column reorder can't silently
- *  misread values. Returns null on any failure — callers treat it as optional. */
+/** KSE-100 snapshot, or null on any failure — callers treat it as optional. */
 export async function getKSE100(): Promise<IndexSnapshot | null> {
   try {
-    const res = await fetch(`${BASE}/indices`, {
-      headers: HEADERS,
-      next: { revalidate: 60 },
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-
-    const headBlock = html.match(/<thead[^>]*>([\s\S]*?)<\/thead>/i)?.[1] ?? "";
-    const headers = [...headBlock.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)]
-      .map((m) => m[1].replace(/<[^>]+>/g, "").trim().toLowerCase());
-    const col = (name: string) => headers.findIndex((h) => h.includes(name));
-    const iCur = col("current"), iChg = col("change"), iPct = col("%");
-    if (iCur < 0 || iChg < 0) return null;
-
-    for (const row of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
-      const cells = [...row[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
-        .map((m) => m[1].replace(/<[^>]+>/g, "").trim());
-      if (!/^KSE\s?100$/i.test(cells[0] ?? "")) continue;
-      return {
-        value: parseNum(cells[iCur]),
-        change: parseNum(cells[iChg]),
-        changePercent: iPct >= 0 ? parseNum(cells[iPct]) : 0,
-      };
-    }
-    return null;
+    const row = (await getIndices()).value.find((r) => r.code === "KSE100");
+    return row ? { value: row.value, change: row.change, changePercent: row.changePercent } : null;
   } catch {
     return null;
   }
 }
 
-/** Get quotes for multiple symbols in one market-watch fetch. */
-export async function getQuotes(
-  symbols: string[]
-): Promise<Record<string, StockQuote>> {
+/** Quotes for specific symbols, keyed by upper-case symbol. */
+export async function getQuotes(symbols: string[]): Promise<Record<string, StockQuote>> {
   const all = await getAllStocks();
-  const upper = new Set(symbols.map((s) => s.toUpperCase()));
+  const want = new Set(symbols.map((s) => s.toUpperCase()));
   const result: Record<string, StockQuote> = {};
-  for (const stock of all) {
-    if (upper.has(stock.symbol.toUpperCase())) {
-      result[stock.symbol.toUpperCase()] = stock;
-    }
-  }
+  for (const stock of all) if (want.has(stock.symbol)) result[stock.symbol] = stock;
   return result;
 }
 
-/** Get all stocks in a sector (by PSX numeric code or name alias). */
-export async function getStocksBySector(
-  sectorCode: string
-): Promise<StockQuote[]> {
+/** All stocks in a sector (PSX numeric code). */
+export async function getStocksBySector(sectorCode: string): Promise<StockQuote[]> {
   const all = await getAllStocks();
-  return all.filter(
-    (s) =>
-      s.sector === sectorCode ||
-      s.sector.toLowerCase().includes(sectorCode.toLowerCase())
-  );
+  return all.filter((s) => s.sector === sectorCode);
 }
 
-// KMI-30 constituents (Shariah-compliant, updated periodically)
-export const KMI30_TICKERS = [
-  "MEBL", "HBL",  "UBL",  "MCB",  "BAHL",
-  "OGDC", "PPL",  "PSO",  "MARI", "POL",
-  "LUCK", "MLCF", "CHCC", "DGKC", "PIOC",
-  "ENGRO","EFERT","FFC",  "FATIMA","NRL",
-  "HUBC", "KAPCO","KEL",  "NCPL", "PKGP",
-  "SYS",  "TRG",  "AVN",  "COLG", "EPCL",
+/**
+ * KMI-30 constituents as of 2026-11-10, used ONLY when live index membership
+ * can't be read. Prefer getKmi30Tickers(): the index is recomposed twice a
+ * year and a hardcoded list silently goes wrong (the previous one had 17 of
+ * 30 names that were no longer — or never — in the index).
+ */
+export const KMI30_FALLBACK = [
+  "AIRLINK", "ATRL", "CPHL", "DGKC", "EFERT", "ENGROH", "FCCL", "FFC", "FFL", "GAL",
+  "GHNI", "HCAR", "HUBC", "LUCK", "MARI", "MEBL", "MLCF", "NML", "NRL", "OGDC",
+  "PAEL", "PPL", "PRL", "PSO", "SAZEW", "SEARL", "SNGP", "SSGC", "SYS", "TREET",
 ];
 
-// PSX sector code → human name mapping
+/** Live KMI-30 constituents from PSX, falling back to the dated list above. */
+export async function getKmi30Tickers(): Promise<string[]> {
+  try {
+    const live = await getIndexConstituents("KMI30");
+    if (live.length >= 20) return live;
+  } catch { /* fall through */ }
+  return KMI30_FALLBACK;
+}
+
+/** Symbols PSX currently lists in the KMI All Share (Shariah-compliant) index. */
+export async function getShariahSymbols(): Promise<Set<string>> {
+  return new Set(await getIndexConstituents("KMIALLSHR"));
+}
+
+// PSX sector code → short name used in AI prompts
 export const SECTOR_CODES: Record<string, string> = {
   "0801": "Automobile",
   "0804": "Cement",
@@ -255,31 +203,62 @@ export const SECTOR_NAME_TO_CODE: Record<string, string> = {
   chemicals: "0805",
   banking: "0807",
   bank: "0807",
+  banks: "0807",
+  "commercial banks": "0807",
   engineering: "0808",
+  steel: "0808",
   fertilizer: "0809",
   fertilizers: "0809",
+  fertiliser: "0809",
   food: "0810",
+  "food & beverages": "0810",
+  "food and beverages": "0810",
+  "food & personal care": "0810",
   insurance: "0812",
   modaraba: "0819",
   "oil & gas": "0820",
   "oil and gas": "0820",
+  "oil & gas exploration": "0820",
   energy: "0820",
   oil: "0820",
   gas: "0820",
   omc: "0821",
+  "oil & gas marketing": "0821",
+  "oil marketing": "0821",
   packaging: "0822",
   pharma: "0823",
   pharmaceutical: "0823",
+  pharmaceuticals: "0823",
   power: "0824",
+  "power generation": "0824",
   refinery: "0825",
   refineries: "0825",
   sugar: "0826",
   technology: "0828",
   tech: "0828",
   telecom: "0828",
+  "technology & communication": "0828",
   textile: "0829",
   textiles: "0829",
   transport: "0833",
   reit: "0836",
   "real estate": "0838",
 };
+
+/**
+ * Resolve an AI-described sector to a PSX code. The NAME is trusted over any
+ * code the model supplies: models routinely attach a plausible-looking but
+ * wrong code (observed: "Banking" tagged 0801, which is Automobile), and a
+ * wrong code silently expands the scan into the wrong sector.
+ */
+export function resolveSectorCode(sectorName: string, suppliedCode?: string): string | null {
+  const byName = SECTOR_NAME_TO_CODE[sectorName.trim().toLowerCase()];
+  if (byName) return byName;
+  if (suppliedCode && /^08\d\d$/.test(suppliedCode)) {
+    // Accept a supplied code only when its own name agrees with what the model called the sector.
+    const canonical = SECTOR_CODES[suppliedCode]?.toLowerCase();
+    const said = sectorName.toLowerCase();
+    if (canonical && (said.includes(canonical) || canonical.includes(said))) return suppliedCode;
+  }
+  return null;
+}

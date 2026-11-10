@@ -404,16 +404,6 @@ export default function Dashboard({
     setScanning(false); setScanPhase("");
   };
 
-  // KMI-30 list for Shariah auto-detection (client-side)
-  const KMI30 = new Set([
-    "MEBL","HBL","UBL","MCB","BAHL",
-    "OGDC","PPL","PSO","MARI","POL",
-    "LUCK","MLCF","CHCC","DGKC","PIOC",
-    "ENGRO","EFERT","FFC","FATIMA","NRL",
-    "HUBC","KAPCO","KEL","NCPL","PKGP",
-    "SYS","TRG","AVN","COLG","EPCL",
-  ]);
-
   /** Validate ticker exists on PSX by calling the prices API. */
   async function validateTicker(symbol: string): Promise<{ valid: boolean; quote?: StockQuote }> {
     try {
@@ -447,7 +437,8 @@ export default function Dashboard({
       setHoldingError(`"${t}" not found on PSX. Check the ticker symbol and try again.`);
       return;
     }
-    const isShariah = KMI30.has(t);
+    // Shariah status comes from PSX's own KMI All Share membership, not a local list.
+    const isShariah = quote?.shariah ?? false;
     if (quote) setPrices(prev => ({ ...prev, [t]: quote }));
     setHoldings(prev => [...prev.filter(h => h.ticker !== t), {
       ticker: t,
@@ -733,7 +724,7 @@ export default function Dashboard({
         if (e.inHoldings) tags.push("HOLDING");
         if (e.inSignals) tags.push("BUY SIGNAL");
         if (e.inWatching) tags.push("WATCHING");
-        lines.push(`\n${i + 1}. ${ticker}${e.shariah ? " [KMI-30]" : ""} [${tags.join(" · ")}] — ${e.name}`);
+        lines.push(`\n${i + 1}. ${ticker}${e.shariah ? " [Shariah]" : ""} [${tags.join(" · ")}] — ${e.name}`);
 
         const live = prices[ticker];
         if (live) lines.push(`   Price: PKR ${live.currentPrice.toFixed(2)}  (${live.changePercent >= 0 ? "+" : ""}${live.changePercent.toFixed(2)}% today)`);

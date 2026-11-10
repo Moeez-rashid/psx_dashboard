@@ -202,18 +202,17 @@ export async function releaseLock(): Promise<void> {
 }
 
 /**
- * Lightweight freshness probe: one EOD history fetch instead of the full
- * scan, used to detect "no new trading data since the last successful scan"
- * (market holiday, or a duplicate cron delivery on the same day). Returns
- * null on any failure — callers must treat null as "ambiguous, run anyway"
- * rather than as "no new data," since silently skipping on a fetch error
- * would leave the site stuck without ever explaining why.
+ * Lightweight freshness probe: the date of the newest session PSX has
+ * published, used to detect "no new trading data since the last successful
+ * scan" (market holiday, or a duplicate cron delivery on the same day).
+ * Returns null on any failure — callers must treat null as "ambiguous, run
+ * anyway" rather than as "no new data," since silently skipping on a fetch
+ * error would leave the site stuck without ever explaining why.
  */
-export async function getLatestTradingDate(probeSymbol = "MEBL"): Promise<string | null> {
+export async function getLatestTradingDate(): Promise<string | null> {
   try {
-    const { getHistory } = await import("./psx");
-    const history = await getHistory(probeSymbol);
-    return history[0]?.date ?? null; // getHistory() returns newest-first
+    const { getLatestSessionDate } = await import("./psx-eod");
+    return await getLatestSessionDate();
   } catch (err) {
     console.error("[scan-store] getLatestTradingDate probe failed", err);
     return null;

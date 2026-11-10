@@ -34,6 +34,7 @@ import {
   type IndexSnapshot,
   type StockQuote,
 } from "./psx";
+import { HISTORY_SESSIONS } from "./psx-eod";
 import { resolveSectorName } from "./sectors";
 import { scoreStock, type TechnicalComponents, type TechnicalScore } from "./technicals";
 import {
@@ -541,7 +542,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
 
   // Stage 1 — everything that doesn't depend on knowing the sector yet.
   const [historyR, stocksR, fundamentalsR, profileR, kseR] = await Promise.allSettled([
-    getHistory(ticker),
+    getHistory(ticker, HISTORY_SESSIONS.deepDive),
     getAllStocks(),
     getAskAnalystFundamentals(ticker),
     getCompanyProfile(ticker),

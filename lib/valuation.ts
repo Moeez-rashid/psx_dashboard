@@ -7,7 +7,7 @@
  * to produce them.
  */
 
-import { getStocksBySector, getAllStocks, KMI30_TICKERS } from "./psx";
+import { getStocksBySector, getAllStocks, getKmi30Tickers } from "./psx";
 import { resolveSectorName } from "./sectors";
 import { getAskAnalystFundamentals, effectivePE, type AskAnalystFundamentals } from "./askanalyst";
 
@@ -158,7 +158,7 @@ let _universeCache: { result: UniversePEResult; at: number } | null = null;
 export async function getUniversePE(): Promise<UniversePEResult> {
   if (_universeCache && Date.now() - _universeCache.at < CACHE_TTL_MS) return _universeCache.result;
 
-  const symbols = KMI30_TICKERS;
+  const symbols = await getKmi30Tickers();
   const allStocks = await getAllStocks();
   const priceMap = new Map(allStocks.map((s) => [s.symbol.toUpperCase(), s.currentPrice]));
   const { values, excludedCount } = await usablePEs(symbols, (s) => priceMap.get(s));
