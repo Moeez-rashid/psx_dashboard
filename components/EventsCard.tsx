@@ -31,17 +31,20 @@ export default function EventsCard({ tickers, title }: { tickers: string[]; titl
   const [result, setResult] = useState<{ key: string; events: Announcement[] | null; failed: boolean } | null>(null);
   const [all, setAll] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // Collapsed to its header by default: the feed is reference material, not
+  // something that should push the user's own rows down the page.
+  const [open, setOpen] = useState(false);
   const key = [...tickers].sort().join(",");
 
   useEffect(() => {
-    if (!key) return;
+    if (!key || !open) return;
     let alive = true;
     fetch(`/api/events?symbols=${key}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: { events: Announcement[] }) => { if (alive) setResult({ key, events: d.events, failed: false }); })
       .catch(() => { if (alive) setResult({ key, events: null, failed: true }); });
     return () => { alive = false; };
-  }, [key]);
+  }, [key, open]);
 
   const current = result?.key === key ? result : null;
   const events = current?.events ?? null;
@@ -54,14 +57,25 @@ export default function EventsCard({ tickers, title }: { tickers: string[]; titl
 
   return (
     <section className="card p-0 overflow-hidden mb-4">
-      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 border-b border-line">
-        <h2 className="flex items-center gap-1.5 label"><CalendarClock size={12} strokeWidth={2} aria-hidden />{title}</h2>
-        <button onClick={() => setAll((v) => !v)} aria-pressed={all}
-          className="text-[10px] text-ink-3 hover:text-ink-2 cursor-pointer" title="Include routine notices such as director disclosures">
-          {all ? "Key events only" : "Show all notices"}
+      <div className={`flex items-center justify-between gap-3 ${open ? "border-b border-line" : ""}`}>
+        <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
+          className="flex-1 flex items-center gap-2 px-3.5 py-3 text-left cursor-pointer min-w-0">
+          <CalendarClock size={13} strokeWidth={2} className="text-ink-3 shrink-0" aria-hidden />
+          <span className="label truncate">{title}</span>
+          {open && events && <span className="text-[10px] text-ink-3 num shrink-0">· {list.length}</span>}
+          <span className="flex-1" />
+          {!open && <span className="text-[10px] text-ink-3 shrink-0 hidden sm:inline">dividends, results, board meetings</span>}
+          <ChevronDown size={14} strokeWidth={2.25} className={`text-ink-3 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} aria-hidden />
         </button>
+        {open && (
+          <button onClick={() => setAll((v) => !v)} aria-pressed={all}
+            className="text-[10px] text-ink-3 hover:text-ink-2 cursor-pointer pr-3.5 shrink-0" title="Include routine notices such as director disclosures">
+            {all ? "Key events only" : "Show all notices"}
+          </button>
+        )}
       </div>
 
+      {open && <>
       {!events && !failed && <div className="p-3.5 space-y-2"><Skeleton className="h-3.5 w-full" /><Skeleton className="h-3.5 w-4/5" /><Skeleton className="h-3.5 w-3/5" /></div>}
       {failed && <p className="text-[11px] text-ink-3 px-3.5 py-3">Announcements couldn&apos;t be loaded from PSX right now.</p>}
       {events && list.length === 0 && <p className="text-[11px] text-ink-3 px-3.5 py-3">No recent {all ? "announcements" : "dividend, results or board announcements"} for these stocks.</p>}
@@ -92,6 +106,7 @@ export default function EventsCard({ tickers, title }: { tickers: string[]; titl
           <ChevronDown size={11} strokeWidth={2.5} className={`transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden />
         </button>
       )}
+      </>}
     </section>
   );
 }

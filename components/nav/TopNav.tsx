@@ -1,6 +1,9 @@
 "use client";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Search, Bell, Calculator } from "lucide-react";
+import { ACTIVE_EVENT, getActiveResearch } from "@/lib/recent-research";
 import { NAV_ITEMS, OPEN_ALERTS_EVENT, OPEN_PALETTE_EVENT, OPEN_TOOLS_EVENT, type NavItem } from "@/lib/nav";
 
 /** Brand mark shared by both headers. */
@@ -52,6 +55,17 @@ export function NavRow({ active, counts, onTab }: {
   counts?: Partial<Record<NavItem["id"], number>>;
   onTab?: (item: NavItem) => void;
 }) {
+  // Deep Dive returns to the stock in progress; from a stock page itself it
+  // goes to the search screen, so there is always a way to pick another.
+  const pathname = usePathname();
+  const activeTicker = useSyncExternalStore(
+    (cb) => { window.addEventListener(ACTIVE_EVENT, cb); return () => window.removeEventListener(ACTIVE_EVENT, cb); },
+    getActiveResearch,
+    () => ""
+  );
+  const hrefFor = (item: NavItem) =>
+    item.id === "deep-dive" && activeTicker && !pathname.startsWith("/stock/") ? `/stock/${activeTicker}` : item.href;
+
   return (
     <nav className="max-w-5xl mx-auto px-2 sm:px-4 flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Primary">
       {NAV_ITEMS.map((item) => {
@@ -74,7 +88,7 @@ export function NavRow({ active, counts, onTab }: {
         return item.tab && onTab ? (
           <button key={item.id} onClick={() => onTab(item)} className={cls} aria-current={isActive ? "page" : undefined}>{inner}</button>
         ) : (
-          <Link key={item.id} href={item.href} className={cls} aria-current={isActive ? "page" : undefined}>{inner}</Link>
+          <Link key={item.id} href={hrefFor(item)} className={cls} aria-current={isActive ? "page" : undefined}>{inner}</Link>
         );
       })}
     </nav>

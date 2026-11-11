@@ -1227,7 +1227,6 @@ export default function Dashboard({
         {tab === "holdings" && (
           <div>
             <HoldingsOverview holdings={holdings} prices={prices} />
-            <EventsCard tickers={holdings.map(h => h.ticker)} title="Announcements for your holdings" />
 
             {holdings.length === 0 && (
               <div className="mb-4">
@@ -1368,6 +1367,12 @@ export default function Dashboard({
             </div>
 
             <ErrorBanner msg={holdingError} onDismiss={() => setHoldingError("")} />
+
+            {holdings.length > 0 && (
+              <div className="mt-3 -mb-1">
+                <EventsCard tickers={holdings.map(h => h.ticker)} title="Announcements for your holdings" />
+              </div>
+            )}
 
             {/* Add holding */}
             <div className="card mt-3 py-3">
