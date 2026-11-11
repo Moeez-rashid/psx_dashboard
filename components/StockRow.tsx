@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
-import { Star, X, ChevronDown, Newspaper, Telescope, type LucideIcon } from "lucide-react";
+import { Star, X, ChevronDown, Newspaper, Telescope, Bell, type LucideIcon } from "lucide-react";
+import { openAlertFor } from "./AlertsCenter";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreMeter } from "./ui/TechnicalScore";
@@ -236,15 +237,25 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
             Fundamentals from askanalyst.com.pk · Technicals from PSX price history · Not financial advice
           </span>
         ) : <span />}
-        <Link
-          href={`/stock/${ticker}`}
-          onClick={(e) => e.stopPropagation()}
-          className="btn-sky text-[11px] px-3 py-1.5 font-medium shrink-0"
-          title={`Open the full research view for ${ticker}`}
-        >
-          <Telescope size={13} strokeWidth={2} aria-hidden />
-          Deep Dive
-        </Link>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); openAlertFor(ticker, currentPrice); }}
+            className="btn text-[11px] px-2.5 py-1.5"
+            title={`Set a price alert for ${ticker}`}
+          >
+            <Bell size={12} strokeWidth={2} aria-hidden />
+            Alert
+          </button>
+          <Link
+            href={`/stock/${ticker}`}
+            onClick={(e) => e.stopPropagation()}
+            className="btn-sky text-[11px] px-3 py-1.5 font-medium"
+            title={`Open the full research view for ${ticker}`}
+          >
+            <Telescope size={13} strokeWidth={2} aria-hidden />
+            Deep Dive
+          </Link>
+        </div>
       </div>
     </div>
   );

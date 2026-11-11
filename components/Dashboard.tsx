@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
   TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
@@ -25,6 +26,7 @@ import NewsView, { deriveSentiment, SentimentBadge, type SentimentPoint } from "
 import { StockRow, StockDetailBody, type SignalDetail, type Tier2 } from "./StockRow";
 import { WatchlistHeader, WatchlistRow } from "./WatchlistRow";
 import HoldingsOverview, { type Holding } from "./HoldingsOverview";
+import EventsCard from "./EventsCard";
 import { volLabel, type StockTech } from "./StockBits";
 import type { PersistedScan } from "@/lib/scan-store";
 import type { ScanResult } from "@/lib/scanner";
@@ -1013,10 +1015,10 @@ export default function Dashboard({
             {!scanResult && !scanning && (
               <EmptyState
                 icon={Radar}
-                title={hasKey ? "Ready to scan KMI-30 + Shariah stocks" : "AI scanner — bring your own key"}
+                title={hasKey ? "Ready to scan KMI-30 + Shariah stocks" : "No scan yet"}
                 description={hasKey
                   ? "The scanner fetches live prices, computes RSI/EMA/volume for all KMI-30 stocks, expands into news-relevant sectors, and returns the best 1–8 setups. A scan also runs automatically every trading morning."
-                  : "Add a free Groq key (or Claude / Gemini / OpenAI) in Settings to unlock AI buy signals with news catalysts, entries and risks. The live market data above works without any key."}
+                  : "A scan runs automatically every trading morning. To run one yourself with AI commentary, add a free Groq key (or Claude / Gemini / OpenAI) in Settings. Market, Screener and Deep Dive work without any key."}
                 action={hasKey
                   ? { label: "Run First Scan", icon: Radar, onClick: runFullScan }
                   : { label: "Set API Key", icon: SettingsIcon, onClick: () => setShowSettings(true) }}
@@ -1042,9 +1044,27 @@ export default function Dashboard({
               </div>
             )}
 
+            {/* A scan that scored nothing is a data problem, not a verdict on the
+                market — say so instead of showing an empty slate as if it were one. */}
+            {scanResult && !scanning && scanResult.technicalData.length === 0 && (
+              <div className="flex items-start gap-2.5 bg-gold-dim border border-gold/40 rounded-lg px-3.5 py-3 mb-3">
+                <TriangleAlert size={14} strokeWidth={2} className="text-gold-2 shrink-0 mt-0.5" aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-[12px] text-gold-2 font-medium">This scan has no technical results</p>
+                  <p className="text-[11px] text-ink-2 leading-relaxed mt-0.5">
+                    {scanResult.passedTechnicals === 0 && scanResult.totalScanned > 0
+                      ? "It could not score any stock — most likely PSX price history was unavailable when it ran. It says nothing about the market."
+                      : "No stock was scored."}{" "}
+                    The <Link href="/screener" className="text-sky-2 underline underline-offset-2">Screener</Link> shows live Technical Scores for the whole market
+                    {hasKey ? ", or rerun the scan above." : "; the next scheduled scan will replace this one."}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Opportunities — starts as one compact ticker/price preview;
                 expanding reveals the existing detailed cards unchanged below. */}
-            {scanResult && !scanning && (
+            {scanResult && !scanning && oppPreviewList.length > 0 && (
               <div className="card p-0 overflow-hidden mb-3">
                 <button
                   onClick={() => setOppExpanded(v => !v)}
@@ -1207,6 +1227,7 @@ export default function Dashboard({
         {tab === "holdings" && (
           <div>
             <HoldingsOverview holdings={holdings} prices={prices} />
+            <EventsCard tickers={holdings.map(h => h.ticker)} title="Announcements for your holdings" />
 
             {holdings.length === 0 && (
               <div className="mb-4">
@@ -1245,7 +1266,7 @@ export default function Dashboard({
                 };
                 const sectorLine = [
                   sectorOf(h.ticker) ?? (h.name.includes(" · ") ? h.name.split(" · ").slice(1).join(" · ") : null),
-                  h.shariah ? "Shariah" : null,
+                  (p?.shariah ?? h.shariah) ? "Shariah" : null,
                 ].filter(Boolean).join(" · ") || undefined;
 
                 const positionBlock = (
@@ -1381,7 +1402,7 @@ export default function Dashboard({
         {tab === "watching" && (
           <div>
             <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-              <span className="label">Watchlist · KMI-30 / Shariah tickers</span>
+              <span className="label">Watchlist</span>
               {watching.length > 0 && (
                 <div className="flex gap-2 items-center">
                   <button
@@ -1476,6 +1497,12 @@ export default function Dashboard({
                     />
                   );
                 })}
+              </div>
+            )}
+
+            {watching.length > 0 && (
+              <div className="mt-4">
+                <EventsCard tickers={watching.map(w => w.ticker)} title="Announcements for your watchlist" />
               </div>
             )}
 

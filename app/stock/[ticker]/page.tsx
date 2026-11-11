@@ -19,6 +19,8 @@ import CompanyNewsSection from "@/components/deepdive/CompanyNewsSection";
 import RiskSection from "@/components/deepdive/RiskSection";
 import AIInterpretationSection from "@/components/deepdive/AIInterpretationSection";
 import RecordResearchVisit from "@/components/deepdive/RecordResearchVisit";
+import PsxFactsSection from "@/components/deepdive/PsxFactsSection";
+import StockActions from "@/components/StockActions";
 
 /**
  * Deep Dive route — the research view for one ticker.
@@ -127,6 +129,13 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
     <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:py-8">
       <RecordResearchVisit ticker={data.identity.ticker} name={data.identity.companyName} />
       <DeepDiveHeader identity={data.identity} technical={data.technical} />
+      <div className="mt-4">
+        <StockActions
+          ticker={data.identity.ticker}
+          price={data.identity.currentPrice}
+          label={data.identity.sectorName ? `${data.identity.ticker} · ${data.identity.sectorName}` : data.identity.ticker}
+        />
+      </div>
 
       {/* Something upstream degraded — say which, rather than rendering a
           silently thinner page. */}
@@ -147,6 +156,11 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
 
       <div className="mt-6">
         <TechnicalSection technical={data.technical} />
+        {/* Own boundary: PSX's company page is a separate upstream, and a slow
+            or failed fetch there must not hold back the rest of the page. */}
+        <Suspense fallback={null}>
+          <PsxFactsSection ticker={data.identity.ticker} />
+        </Suspense>
         <PriceBehaviorSection behavior={data.priceBehavior} priceSeries={data.technical.priceSeries} />
         <ValuationSection valuation={data.valuation} />
         <FundamentalSection fundamentals={data.fundamentals} history={data.fundamentalHistory} />

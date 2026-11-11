@@ -166,7 +166,7 @@ export default function PriceBehaviorSection({
 
           <p className="text-[10px] text-ink-3 mt-3 leading-relaxed">
             Highs and lows of <strong className="text-ink-2 font-medium">closing prices</strong> over the last {selected.sessions} trading
-            sessions ({fmtDate(selected.fromDate)} – {fmtDate(selected.toDate)}). The PSX end-of-day feed carries no daily high or low,
+            sessions ({fmtDate(selected.fromDate)} – {fmtDate(selected.toDate)}). This view deliberately uses closing prices only,
             so these are not intraday extremes and are not support or resistance levels. They describe where the stock has traded;
             they are not targets and say nothing about where it trades next.
           </p>

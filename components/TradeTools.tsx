@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { Modal, ModalHeader } from "@/components/ui/primitives";
 import { OPEN_TOOLS_EVENT } from "@/lib/nav";
-import { DEFAULT_COST_PREFS, readCostPrefs, saveCostPrefs, type CostPrefs } from "@/lib/local-store";
+import { saveCostPrefs, type CostPrefs } from "@/lib/local-store";
+import { useCostPrefs } from "@/lib/use-local";
 
 const num = (s: string) => { const n = parseFloat(s); return Number.isFinite(n) ? n : 0; };
 const pkr = (n: number) => `PKR ${Math.round(n).toLocaleString("en-PK")}`;
@@ -39,7 +40,7 @@ function Out({ label, value, tone = "text-ink" }: { label: string; value: string
  */
 export default function TradeTools() {
   const [open, setOpen] = useState(false);
-  const [prefs, setPrefs] = useState<CostPrefs>(DEFAULT_COST_PREFS);
+  const prefs = useCostPrefs();
   const [capital, setCapital] = useState("");
   const [riskPct, setRiskPct] = useState("1");
   const [entry, setEntry] = useState("");
@@ -50,7 +51,6 @@ export default function TradeTools() {
   useEffect(() => {
     const onOpen = (e: Event) => {
       const d = (e as CustomEvent<{ entry?: number } | undefined>).detail;
-      setPrefs(readCostPrefs());
       if (d?.entry) setEntry(d.entry.toFixed(2));
       setOpen(true);
     };
@@ -61,8 +61,7 @@ export default function TradeTools() {
   if (!open) return null;
 
   const setPref = (k: keyof CostPrefs, v: string) => {
-    const next = { ...prefs, [k]: Math.min(100, num(v)) };
-    setPrefs(next); saveCostPrefs(next);
+    saveCostPrefs({ ...prefs, [k]: Math.min(100, num(v)) });
   };
 
   const e = num(entry), s = num(stop), t = num(target);

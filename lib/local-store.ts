@@ -16,6 +16,7 @@ export const ALERTS_KEY = "psx_alerts";
 export const PREFS_KEY = "psx_prefs";
 export const WATCH_EVENT = "psx:watch-changed";
 export const ALERTS_EVENT = "psx:alerts-changed";
+export const PREFS_EVENT = "psx:prefs-changed";
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -116,7 +117,7 @@ export function readCostPrefs(): CostPrefs {
 }
 
 export function saveCostPrefs(p: CostPrefs): void {
-  write(PREFS_KEY, p);
+  write(PREFS_KEY, p, PREFS_EVENT);
 }
 
 // ─── Backup / restore ───────────────────────────────────────────────────────
@@ -152,5 +153,6 @@ export function restoreBackup(raw: unknown): number {
   }
   window.dispatchEvent(new Event(WATCH_EVENT));
   window.dispatchEvent(new Event(ALERTS_EVENT));
+  window.dispatchEvent(new Event(PREFS_EVENT));
   return n;
 }

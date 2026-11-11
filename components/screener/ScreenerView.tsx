@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, Star, X, ArrowUp, ArrowDown, RefreshCw, SlidersHorizontal, Check } from "lucide-react";
 import { fmtPKR, fmtVol } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
-import { addToWatchlist, readWatchlist, removeFromWatchlist, WATCH_EVENT } from "@/lib/local-store";
+import { addToWatchlist, removeFromWatchlist } from "@/lib/local-store";
+import { useWatchSet } from "@/lib/use-local";
 import { Skeleton, EmptyState } from "@/components/ui/primitives";
 import { TechnicalScoreChip } from "@/components/ui/TechnicalScore";
 import { toast } from "@/components/ui/Toast";
@@ -62,39 +63,30 @@ function HeaderCell({ label, k, sort, dir, onSort, right = true }: {
   );
 }
 
-export default function ScreenerView() {
+export default function ScreenerView({ initialSector = "" }: { initialSector?: string }) {
   const [rows, setRows] = useState<ScreenerRow[] | null>(null);
   const [technicals, setTechnicals] = useState(true);
   const [sessionDate, setSessionDate] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  const [f, setF] = useState<Filters>(EMPTY);
+  const [f, setF] = useState<Filters>({ ...EMPTY, sector: initialSector });
   const [sort, setSort] = useState<SortKey>("mc");
   const [dir, setDir] = useState<1 | -1>(-1);
   const [preset, setPreset] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [more, setMore] = useState(false);
-  const [watching, setWatching] = useState<Set<string>>(new Set());
+  const watching = useWatchSet();
 
-  const load = () => {
-    setFailed(false);
+  const fetchRows = useCallback(() =>
     fetch("/api/screener")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: { rows: ScreenerRow[]; technicals: boolean; sessionDate: string | null }) => {
-        setRows(d.rows); setTechnicals(d.technicals); setSessionDate(d.sessionDate);
+        setRows(d.rows); setTechnicals(d.technicals); setSessionDate(d.sessionDate); setFailed(false);
       })
-      .catch(() => setFailed(true));
-  };
+      .catch(() => setFailed(true)), []);
 
-  useEffect(() => {
-    load();
-    // Deep link from the Market page's sector tiles.
-    const sector = new URLSearchParams(window.location.search).get("sector");
-    if (sector && /^08\d\d$/.test(sector)) setF((prev) => ({ ...prev, sector }));
-    const sync = () => setWatching(new Set(readWatchlist().map((w) => w.ticker)));
-    sync();
-    window.addEventListener(WATCH_EVENT, sync);
-    return () => window.removeEventListener(WATCH_EVENT, sync);
-  }, []);
+  const load = () => { setFailed(false); fetchRows(); };
+
+  useEffect(() => { fetchRows(); }, [fetchRows]);
 
   const sectors = useMemo(() => {
     const codes = [...new Set((rows ?? []).map((r) => r.sec).filter(Boolean))];

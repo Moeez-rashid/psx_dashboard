@@ -5,7 +5,8 @@ import { Modal, ModalHeader } from "@/components/ui/primitives";
 import TickerInput from "@/components/ui/TickerInput";
 import { toast } from "@/components/ui/Toast";
 import { OPEN_ALERTS_EVENT } from "@/lib/nav";
-import { addAlert, ALERTS_EVENT, readAlerts, saveAlerts, type PriceAlert } from "@/lib/local-store";
+import { addAlert, readAlerts, saveAlerts, type PriceAlert } from "@/lib/local-store";
+import { useAlerts } from "@/lib/use-local";
 import { timeAgo } from "@/lib/format";
 
 const POLL_MS = 60_000;
@@ -22,18 +23,17 @@ export function openAlertFor(ticker: string, price?: number) {
  */
 export default function AlertsCenter() {
   const [open, setOpen] = useState(false);
-  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const alerts = useAlerts();
   const [ticker, setTicker] = useState("");
   const [direction, setDirection] = useState<PriceAlert["direction"]>("above");
   const [price, setPrice] = useState("");
   const [error, setError] = useState("");
-  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
+    () => (typeof Notification === "undefined" ? "unsupported" : Notification.permission)
+  );
   const checking = useRef(false);
 
   useEffect(() => {
-    const sync = () => setAlerts(readAlerts());
-    sync();
-    setPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
     const onOpen = (e: Event) => {
       const d = (e as CustomEvent<{ ticker?: string; price?: number } | undefined>).detail;
       if (d?.ticker) {
@@ -43,9 +43,8 @@ export default function AlertsCenter() {
       setError("");
       setOpen(true);
     };
-    window.addEventListener(ALERTS_EVENT, sync);
     window.addEventListener(OPEN_ALERTS_EVENT, onOpen);
-    return () => { window.removeEventListener(ALERTS_EVENT, sync); window.removeEventListener(OPEN_ALERTS_EVENT, onOpen); };
+    return () => window.removeEventListener(OPEN_ALERTS_EVENT, onOpen);
   }, []);
 
   const check = useCallback(async () => {

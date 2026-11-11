@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { TrendingUp, TrendingDown, Plus, Check, ChevronDown, ArrowUpToLine, ArrowDownToLine, RefreshCw } from "lucide-react";
 import { fmtPKR, fmtVol, timeAgo } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
-import { addToWatchlist, readWatchlist, WATCH_EVENT } from "@/lib/local-store";
+import { addToWatchlist } from "@/lib/local-store";
+import { useWatchSet } from "@/lib/use-local";
 import { Skeleton, EmptyState } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/Toast";
 import type { MarketMover, SectorPerformance } from "@/app/api/market/route";
@@ -108,25 +109,23 @@ export default function MarketView() {
   const [loading, setLoading] = useState(false);
   const [shariahOnly, setShariahOnly] = useState(false);
   const [allIndices, setAllIndices] = useState(false);
-  const [watching, setWatching] = useState<Set<string>>(new Set());
+  const watching = useWatchSet();
 
-  const load = () => {
-    setLoading(true);
+  // Only ever sets state from the fetch callbacks, never synchronously.
+  const fetchMarket = useCallback(() =>
     fetch("/api/market")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: MarketData) => { setData(d); setFailed(false); })
       .catch(() => setFailed(true))
-      .finally(() => setLoading(false));
-  };
+      .finally(() => setLoading(false)), []);
+
+  const load = () => { setLoading(true); fetchMarket(); };
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 90_000);
-    const sync = () => setWatching(new Set(readWatchlist().map((w) => w.ticker)));
-    sync();
-    window.addEventListener(WATCH_EVENT, sync);
-    return () => { clearInterval(id); window.removeEventListener(WATCH_EVENT, sync); };
-  }, []);
+    fetchMarket();
+    const id = setInterval(fetchMarket, 90_000);
+    return () => clearInterval(id);
+  }, [fetchMarket]);
 
   const onAdd = (m: MarketMover) => {
     if (addToWatchlist(m.symbol, `${m.symbol} · ${resolveSectorName(m.sector)}`)) toast(`${m.symbol} added to watchlist`);
@@ -225,7 +224,7 @@ export default function MarketView() {
       <section>
         <div className="flex items-baseline justify-between mb-2 gap-3">
           <h2 className="label">Sectors</h2>
-          <span className="text-[10px] text-ink-3">market-cap-weighted day change · tap a sector to screen it</span>
+          <span className="text-[10px] text-ink-3 text-right">cap-weighted day change<span className="hidden sm:inline"> · tap a sector to screen it</span></span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           {data

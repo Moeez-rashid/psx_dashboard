@@ -4,7 +4,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Search, Bell, Calculator, Plus, Check, CornerDownLeft, type LucideIcon } from "lucide-react";
 import { loadSymbols, type SymbolEntry } from "@/components/ui/TickerInput";
 import { NAV_ITEMS, OPEN_ALERTS_EVENT, OPEN_PALETTE_EVENT, OPEN_TOOLS_EVENT } from "@/lib/nav";
-import { addToWatchlist, readWatchlist } from "@/lib/local-store";
+import { addToWatchlist } from "@/lib/local-store";
+import { useWatchSet } from "@/lib/use-local";
 import { resolveSectorName } from "@/lib/sectors";
 import { toast } from "@/components/ui/Toast";
 
@@ -27,15 +28,7 @@ function matchStocks(symbols: SymbolEntry[], q: string): SymbolEntry[] {
  * the header search button.
  */
 export default function CommandPalette() {
-  const router = useRouter();
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [hi, setHi] = useState(0);
-  const [symbols, setSymbols] = useState<SymbolEntry[]>([]);
-  const [watching, setWatching] = useState<Set<string>>(new Set());
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const show = () => setOpen(true);
@@ -49,16 +42,21 @@ export default function CommandPalette() {
     return () => { window.removeEventListener(OPEN_PALETTE_EVENT, show); window.removeEventListener("keydown", onKey); };
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    setQuery(""); setHi(0);
-    setWatching(new Set(readWatchlist().map((w) => w.ticker)));
-    loadSymbols().then(setSymbols);
-    const id = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => clearTimeout(id);
-  }, [open]);
+  // Mounted only while open, so every opening starts from a clean query.
+  return open ? <PaletteDialog close={() => setOpen(false)} /> : null;
+}
 
-  const close = () => setOpen(false);
+function PaletteDialog({ close }: { close: () => void }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [query, setQuery] = useState("");
+  const [hi, setHi] = useState(0);
+  const [symbols, setSymbols] = useState<SymbolEntry[]>([]);
+  const watching = useWatchSet();
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { loadSymbols().then(setSymbols); }, []);
+
 
   const actions: Action[] = useMemo(() => [
     ...NAV_ITEMS.map((n) => ({
@@ -85,8 +83,6 @@ export default function CommandPalette() {
     listRef.current?.querySelector(`[data-i="${hi}"]`)?.scrollIntoView({ block: "nearest" });
   }, [hi]);
 
-  if (!open) return null;
-
   const choose = (item: Item | undefined) => {
     if (!item) return;
     close();
@@ -94,10 +90,7 @@ export default function CommandPalette() {
     else router.push(`/stock/${item.stock.s}`);
   };
   const watch = (s: SymbolEntry) => {
-    if (addToWatchlist(s.s, `${s.s} · ${resolveSectorName(s.sec)}`)) {
-      setWatching((prev) => new Set(prev).add(s.s));
-      toast(`${s.s} added to watchlist`);
-    }
+    if (addToWatchlist(s.s, `${s.s} · ${resolveSectorName(s.sec)}`)) toast(`${s.s} added to watchlist`);
   };
 
   return (
@@ -108,7 +101,7 @@ export default function CommandPalette() {
         <div className="flex items-center gap-2.5 px-4 border-b border-line">
           <Search size={15} strokeWidth={2} className="text-ink-3 shrink-0" aria-hidden />
           <input
-            ref={inputRef}
+            autoFocus
             value={query}
             onChange={(e) => { setQuery(e.target.value); setHi(0); }}
             onKeyDown={(e) => {

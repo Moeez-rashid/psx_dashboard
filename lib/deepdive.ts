@@ -283,7 +283,7 @@ export interface DeepDiveData {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const STRUCTURAL_LIMITATIONS = [
-  "PSX's EOD feed provides close/open/volume only — no daily high/low. ATR, ADX, candlestick patterns and true intraday support/resistance are not computed.",
+  "The indicators on this page are computed from daily closing prices and volume. ATR, ADX, candlestick patterns and intraday support/resistance are not computed.",
   "The 52-week range is derived from closing prices, not intraday highs/lows.",
   "Fundamentals are annual fiscal-year figures from askanalyst.com.pk — they can be up to a year old and are never intraday.",
   "No index-level earnings data is available, so the market valuation figure is a KMI-30 median proxy, not the KSE-100 P/E.",
@@ -292,7 +292,7 @@ const STRUCTURAL_LIMITATIONS = [
 ];
 
 const RISK_NOT_COMPUTED = [
-  "ATR and ATR-based stop levels — the EOD feed has no daily high/low to derive a true range from.",
+  "ATR and ATR-based stop levels — not computed; this page's indicators use closing prices only.",
   "Reward/risk ratio — requires a defensible stop and target, which need price levels this data can't honestly produce.",
 ];
 
@@ -550,7 +550,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
   ]);
 
   const history = settled(historyR, "price history", degraded) ?? [];
-  const allStocks = settled(stocksR, "market watch", degraded) ?? [];
+  const allStocks = settled(stocksR, "live market list", degraded) ?? [];
   const fundamentals = settled(fundamentalsR, "fundamentals", degraded);
   const profile = settled(profileR, "company profile", degraded);
   const kse100 = settled(kseR, "KSE-100", degraded);
@@ -691,7 +691,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
       limitations,
       degraded,
       sources: {
-        prices: "dps.psx.com.pk (market watch + EOD timeseries)",
+        prices: "dps.psx.com.pk (public screener + daily market-summary files)",
         fundamentals: "askanalyst.com.pk (annual ratios)",
         news: "Dawn / Geo / Profit / The News / ARY business RSS",
       },
