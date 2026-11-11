@@ -7,6 +7,7 @@
  * to produce them.
  */
 
+import { unstable_cache } from "next/cache";
 import { getStocksBySector, getAllStocks, getKmi30Tickers } from "./psx";
 import { resolveSectorName } from "./sectors";
 import { getAskAnalystFundamentals, effectivePE, type AskAnalystFundamentals } from "./askanalyst";
@@ -64,6 +65,38 @@ async function usablePEs(
   return { values, excludedCount };
 }
 
+// ─── Cross-instance persistence ─────────────────────────────────────────────
+// Each of these medians costs one askanalyst request per constituent (20–35s
+// for a sector or the KMI-30). The in-memory caches below only help the
+// instance that computed them; on serverless most page views land on an
+// instance that hasn't. Next's data cache is shared across instances, so a
+// median is computed once per PERSIST_SECONDS for everyone.
+const PERSIST_SECONDS = 43_200; // 12h — the inputs are annual fundamentals
+
+class NotCacheable extends Error {
+  constructor(public readonly result: unknown) { super("valuation result not cacheable"); this.name = "NotCacheable"; }
+}
+
+/**
+ * Run `compute` through the shared data cache. A result that fails `usable`
+ * (e.g. the provider was down and nothing could be sampled) is returned to
+ * the caller but NOT stored, so a bad half-hour can't be served for 12 hours.
+ */
+async function persisted<T>(key: string[], compute: () => Promise<T>, usable: (r: T) => boolean): Promise<T> {
+  let computed: T | undefined;
+  try {
+    return await unstable_cache(async () => {
+      computed = await compute();
+      if (!usable(computed)) throw new NotCacheable(computed);
+      return computed;
+    }, key, { revalidate: PERSIST_SECONDS })();
+  } catch (err) {
+    if (err instanceof NotCacheable || (err as Error)?.name === "NotCacheable") return (err as NotCacheable).result as T;
+    // No data cache in this context (scripts, tests) or the cache itself failed.
+    return computed !== undefined ? computed : compute();
+  }
+}
+
 // ─── Sector P/E ──────────────────────────────────────────────────────────────
 
 export interface SectorPEResult {
@@ -92,6 +125,12 @@ export async function getSectorPE(sectorCode: string): Promise<SectorPEResult> {
   // lib/sectors.ts has the fuller, verified code->name map (e.g. "Oil & Gas
   // Exploration" rather than just "Oil & Gas"), so every surface that shows a
   // sector name shows the same one.
+  const result = await persisted(["sector-pe", sectorCode], () => computeSectorPE(sectorCode), (r) => r.medianPE !== null);
+  _sectorCache.set(sectorCode, { result, at: Date.now() });
+  return result;
+}
+
+async function computeSectorPE(sectorCode: string): Promise<SectorPEResult> {
   const sectorName = resolveSectorName(sectorCode);
   const stocks = await getStocksBySector(sectorCode);
   const symbols = stocks.map((s) => s.symbol.toUpperCase());
@@ -114,7 +153,6 @@ export async function getSectorPE(sectorCode: string): Promise<SectorPEResult> {
     };
   }
 
-  _sectorCache.set(sectorCode, { result, at: Date.now() });
   return result;
 }
 
@@ -158,6 +196,12 @@ let _universeCache: { result: UniversePEResult; at: number } | null = null;
 export async function getUniversePE(): Promise<UniversePEResult> {
   if (_universeCache && Date.now() - _universeCache.at < CACHE_TTL_MS) return _universeCache.result;
 
+  const result = await persisted(["universe-pe", "KMI30"], computeUniversePE, (r) => r.medianPE !== null);
+  _universeCache = { result, at: Date.now() };
+  return result;
+}
+
+async function computeUniversePE(): Promise<UniversePEResult> {
   const symbols = await getKmi30Tickers();
   const allStocks = await getAllStocks();
   const priceMap = new Map(allStocks.map((s) => [s.symbol.toUpperCase(), s.currentPrice]));
@@ -169,7 +213,6 @@ export async function getUniversePE(): Promise<UniversePEResult> {
     sampleSize: values.length, totalConstituents: symbols.length, excludedCount,
     computedAt: new Date().toISOString(),
   };
-  _universeCache = { result, at: Date.now() };
   return result;
 }
 
