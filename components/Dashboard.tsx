@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
   TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
-  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert,
+  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert, ChevronDown,
 } from "lucide-react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
@@ -13,7 +14,11 @@ import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { isPKTOpen, pktNow, toPKT } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
 import { ErrorBanner, Skeleton, EmptyState, IconButton } from "./ui/primitives";
-import { toast, Toaster } from "./ui/Toast";
+import { toast } from "./ui/Toast";
+import { BrandMark, GlobalActions, NavRow } from "./nav/TopNav";
+import { isDashboardTab, type DashboardTab } from "@/lib/nav";
+import { SET_TAB_EVENT } from "./CommandPalette";
+import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
 import MarketStrip from "./MarketStrip";
 import MetricsGuide from "./MetricsGuide";
@@ -21,6 +26,7 @@ import NewsView, { deriveSentiment, SentimentBadge, type SentimentPoint } from "
 import { StockRow, StockDetailBody, type SignalDetail, type Tier2 } from "./StockRow";
 import { WatchlistHeader, WatchlistRow } from "./WatchlistRow";
 import HoldingsOverview, { type Holding } from "./HoldingsOverview";
+import EventsCard from "./EventsCard";
 import { volLabel, type StockTech } from "./StockBits";
 import type { PersistedScan } from "@/lib/scan-store";
 import type { ScanResult } from "@/lib/scanner";
@@ -224,10 +230,10 @@ export default function Dashboard({
   // A card's catalyst strip → News tab, headline feed filtered to that ticker.
   const openNewsFor = (ticker: string) => { setNewsFilterTicker(ticker); setTab("news"); };
   // A News sector-watch row → Buy Opportunities filtered to that sector.
-  const filterOppsBySector = (sectorName: string) => { setOppSectorFilter(sectorName); setTab("opportunities"); };
+  const filterOppsBySector = (sectorName: string) => { setOppSectorFilter(sectorName); setOppExpanded(true); setTab("opportunities"); };
   // A News headline row → the stock's own expanded card on whichever tab holds it.
   const openTickerCard = (ticker: string) => {
-    if (scanResult?.signals.some(s => s.ticker === ticker)) { setTab("opportunities"); setExpanded(prev => new Set(prev).add(`opp:${ticker}`)); }
+    if (scanResult?.signals.some(s => s.ticker === ticker)) { setTab("opportunities"); setOppExpanded(true); setExpanded(prev => new Set(prev).add(`opp:${ticker}`)); }
     else if (watching.some(w => w.ticker === ticker)) { setTab("watching"); setExpanded(prev => new Set(prev).add(`watch:${ticker}`)); }
     else if (holdings.some(h => h.ticker === ticker)) { setTab("holdings"); setExpanded(prev => new Set(prev).add(`hold:${ticker}`)); }
     else { setTab("opportunities"); }
@@ -258,7 +264,19 @@ export default function Dashboard({
   };
 
   // UI state
-  const [tab, setTab] = useState<"opportunities" | "holdings" | "watching" | "news">("opportunities");
+  const [tab, setTab] = useState<DashboardTab>("opportunities");
+  /** Switch tab from the nav row: clears the filters a fresh visit shouldn't inherit and keeps the URL shareable. */
+  const goTab = (t: DashboardTab) => {
+    if (t === "news") setNewsFilterTicker(null);
+    if (t === "opportunities") setOppSectorFilter(null);
+    setTab(t);
+    window.history.replaceState(null, "", t === "opportunities" ? "/" : `/?tab=${t}`);
+  };
+  // Opportunities starts collapsed to a compact ticker/price preview — expanding
+  // reveals the existing detailed cards unchanged. Navigating in from News (a
+  // specific ticker, or a sector filter) always force-opens it, since the row
+  // or filtered list being navigated to needs to actually be visible.
+  const [oppExpanded, setOppExpanded] = useState(false);
   // News page: ticker to filter the headline feed to (set when arriving from a card's catalyst strip)
   const [newsFilterTicker, setNewsFilterTicker] = useState<string | null>(null);
   // Buy Opportunities: sector to filter the list to (set when arriving from the News sector watch)
@@ -398,16 +416,6 @@ export default function Dashboard({
     setScanning(false); setScanPhase("");
   };
 
-  // KMI-30 list for Shariah auto-detection (client-side)
-  const KMI30 = new Set([
-    "MEBL","HBL","UBL","MCB","BAHL",
-    "OGDC","PPL","PSO","MARI","POL",
-    "LUCK","MLCF","CHCC","DGKC","PIOC",
-    "ENGRO","EFERT","FFC","FATIMA","NRL",
-    "HUBC","KAPCO","KEL","NCPL","PKGP",
-    "SYS","TRG","AVN","COLG","EPCL",
-  ]);
-
   /** Validate ticker exists on PSX by calling the prices API. */
   async function validateTicker(symbol: string): Promise<{ valid: boolean; quote?: StockQuote }> {
     try {
@@ -441,7 +449,8 @@ export default function Dashboard({
       setHoldingError(`"${t}" not found on PSX. Check the ticker symbol and try again.`);
       return;
     }
-    const isShariah = KMI30.has(t);
+    // Shariah status comes from PSX's own KMI All Share membership, not a local list.
+    const isShariah = quote?.shariah ?? false;
     if (quote) setPrices(prev => ({ ...prev, [t]: quote }));
     setHoldings(prev => [...prev.filter(h => h.ticker !== t), {
       ticker: t,
@@ -604,10 +613,28 @@ export default function Dashboard({
     if (h.length) setHoldings(h);
     if (w.length) setWatching(w);
     setSettings(loadSettings());
+    const urlTab = new URLSearchParams(window.location.search).get("tab");
+    if (isDashboardTab(urlTab)) setTab(urlTab);
     storageLoadedRef.current = true;
     const all = [...new Set([...w.map(x => x.ticker), ...h.map(x => x.ticker)])];
     if (all.length > 0) fetchAskAnalystBatch(all);
   }, []); // eslint-disable-line — intentional one-time load
+
+  // Changes made outside this component: the command palette switching tab,
+  // and watchlist edits from the palette, Market or Screener.
+  useEffect(() => {
+    const onTab = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail;
+      if (isDashboardTab(t)) { setTab(t); window.history.replaceState(null, "", t === "opportunities" ? "/" : `/?tab=${t}`); }
+    };
+    const onWatch = () => {
+      const next = readWatchlist();
+      setWatching((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    };
+    window.addEventListener(SET_TAB_EVENT, onTab);
+    window.addEventListener(WATCH_EVENT, onWatch);
+    return () => { window.removeEventListener(SET_TAB_EVENT, onTab); window.removeEventListener(WATCH_EVENT, onWatch); };
+  }, []);
 
   // Auto-fetch tech + fundamentals when tab changes
   const prevTabRef = useRef<string>("");
@@ -727,7 +754,7 @@ export default function Dashboard({
         if (e.inHoldings) tags.push("HOLDING");
         if (e.inSignals) tags.push("BUY SIGNAL");
         if (e.inWatching) tags.push("WATCHING");
-        lines.push(`\n${i + 1}. ${ticker}${e.shariah ? " [KMI-30]" : ""} [${tags.join(" · ")}] — ${e.name}`);
+        lines.push(`\n${i + 1}. ${ticker}${e.shariah ? " [Shariah]" : ""} [${tags.join(" · ")}] — ${e.name}`);
 
         const live = prices[ticker];
         if (live) lines.push(`   Price: PKR ${live.currentPrice.toFixed(2)}  (${live.changePercent >= 0 ? "+" : ""}${live.changePercent.toFixed(2)}% today)`);
@@ -853,6 +880,20 @@ export default function Dashboard({
   const watchingSet = new Set(watching.map(w => w.ticker));
   const na = scanResult?.newsAnalysis;
 
+  // Opportunities collapsed-state preview: ticker + price only, same ordering
+  // and AI-signals-else-top-technicals fallback as the detailed list below —
+  // no new data, just the same list reduced to its two most essential fields.
+  const oppPreviewList: { ticker: string; price?: number }[] = scanResult
+    ? scanResult.signals.length > 0
+      ? sortedOpps(scanResult.signals).map((sig) => {
+          const sigTech = scanResult.technicalData.find(t => t.symbol === sig.ticker);
+          return { ticker: sig.ticker, price: prices[sig.ticker]?.currentPrice ?? sigTech?.currentPrice };
+        })
+      : scanResult.technicalData.slice(0, 8).map((tech) => ({
+          ticker: tech.symbol, price: prices[tech.symbol]?.currentPrice ?? tech.currentPrice,
+        }))
+    : [];
+
   // Dividend payers among tickers we already hold fundamentals for (yield ≥ 2%)
   const dividendPayers = Object.entries(askAnalystData)
     .filter((e): e is [string, AskAnalystFundamentals] => !!e[1] && (e[1].dividendYield ?? 0) >= 2)
@@ -860,75 +901,45 @@ export default function Dashboard({
     .sort((a, b) => b.yieldPct - a.yieldPct)
     .slice(0, 6);
 
-  const TABS = [
-    { id: "opportunities" as const, label: "Buy Opportunities", short: "Signals", icon: TrendingUp, count: scanResult?.signals.length },
-    { id: "holdings" as const, label: "My Holdings", short: "Holdings", icon: Briefcase, count: holdings.length || undefined },
-    { id: "watching" as const, label: "Watchlist", short: "Watchlist", icon: Eye, count: watching.length || undefined },
-    { id: "news" as const, label: "News", short: "News", icon: NewspaperIcon, count: undefined },
-  ];
 
   return (
     <div className="min-h-screen flex flex-col text-[13px]">
 
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line">
-        <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between py-2.5">
-          <div className="flex items-center gap-3">
+        <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between gap-2 py-2.5">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2">
-              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden className="rounded-md">
-                <rect width="24" height="24" rx="6" fill="var(--color-up-dim)" />
-                <polyline points="4,16 9,11 13,14 20,7" fill="none" stroke="var(--color-up-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <polyline points="15,7 20,7 20,12" fill="none" stroke="var(--color-up-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span className="text-sm font-bold tracking-tight">PSX Scanner</span>
+              <BrandMark />
+              <span className="text-sm font-bold tracking-tight whitespace-nowrap">PSX Scanner</span>
             </div>
             {serverOnline === false && (
-              <span className="text-[10px] text-down-2 bg-down-dim border border-down/40 px-2 py-0.5 rounded-full">offline</span>
+              <span className="text-[10px] text-down-2 bg-down-dim border border-down/40 px-2 py-0.5 rounded-full" title="PSX price data didn't load — showing the last values received">data delayed</span>
             )}
             {loadingPrices && <span className="hidden sm:inline text-[10px] text-ink-3 animate-pulse">refreshing…</span>}
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="hidden md:block mr-2"><PKTClock /></div>
-            <IconButton icon={RefreshCw} label="Refresh prices" onClick={fetchPrices} />
+            <div className="hidden lg:block mr-2"><PKTClock /></div>
+            <GlobalActions />
             <IconButton icon={Clipboard} label="Copy full snapshot for AI analysis (Claude, ChatGPT, …)" tone="sky" onClick={exportForClaude} />
-            <button onClick={() => setShowMetricsGuide(true)} className="btn px-2.5 hidden sm:inline-flex" title="Metrics guide">
-              <HelpCircle size={14} strokeWidth={2} aria-hidden /><span className="hidden sm:inline">Guide</span>
+            <button onClick={() => setShowMetricsGuide(true)} className="btn p-2 hidden md:inline-flex" title="Metrics guide" aria-label="Metrics guide">
+              <HelpCircle size={15} strokeWidth={2} aria-hidden />
             </button>
             <button
               onClick={() => setShowSettings(true)}
               className={`btn px-2.5 ${hasKey ? "border-up/50 text-up-2" : "border-gold/50 text-gold-2"}`}
               title="Settings"
             >
-              <SettingsIcon size={14} strokeWidth={2} aria-hidden /><span className="hidden sm:inline">{hasKey ? settings.provider : "Set API Key"}</span>
+              <SettingsIcon size={14} strokeWidth={2} aria-hidden /><span className="hidden md:inline">{hasKey ? settings.provider : "Set API Key"}</span>
             </button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <nav className="max-w-5xl mx-auto px-4 flex">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => {
-                if (t.id === "news") setNewsFilterTicker(null);
-                if (t.id === "opportunities") setOppSectorFilter(null);
-                setTab(t.id);
-              }}
-              className={`relative flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium transition-colors cursor-pointer
-                ${tab === t.id ? "text-ink" : "text-ink-3 hover:text-ink-2"}`}
-            >
-              <t.icon size={13} strokeWidth={2} aria-hidden />
-              <span className="hidden sm:inline">{t.label}</span>
-              <span className="sm:hidden">{t.short}</span>
-              {t.count !== undefined && (
-                <span className={`ml-0.5 text-[9px] px-1.5 py-px rounded-full num ${tab === t.id ? "bg-up-dim text-up-2" : "bg-raised text-ink-3"}`}>
-                  {t.count}
-                </span>
-              )}
-              {tab === t.id && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-up rounded-full" />}
-            </button>
-          ))}
-        </nav>
+        <NavRow
+          active={tab}
+          counts={{ opportunities: scanResult?.signals.length || scanResult?.technicalData.slice(0, 8).length, holdings: holdings.length, watching: watching.length }}
+          onTab={(item) => item.tab && goTab(item.tab)}
+        />
       </header>
 
       {/* ── MAIN ── */}
@@ -1004,10 +1015,10 @@ export default function Dashboard({
             {!scanResult && !scanning && (
               <EmptyState
                 icon={Radar}
-                title={hasKey ? "Ready to scan KMI-30 + Shariah stocks" : "AI scanner — bring your own key"}
+                title={hasKey ? "Ready to scan KMI-30 + Shariah stocks" : "No scan yet"}
                 description={hasKey
                   ? "The scanner fetches live prices, computes RSI/EMA/volume for all KMI-30 stocks, expands into news-relevant sectors, and returns the best 1–8 setups. A scan also runs automatically every trading morning."
-                  : "Add a free Groq key (or Claude / Gemini / OpenAI) in Settings to unlock AI buy signals with news catalysts, entries and risks. The live market data above works without any key."}
+                  : "A scan runs automatically every trading morning. To run one yourself with AI commentary, add a free Groq key (or Claude / Gemini / OpenAI) in Settings. Market, Screener and Deep Dive work without any key."}
                 action={hasKey
                   ? { label: "Run First Scan", icon: Radar, onClick: runFullScan }
                   : { label: "Set API Key", icon: SettingsIcon, onClick: () => setShowSettings(true) }}
@@ -1032,6 +1043,64 @@ export default function Dashboard({
                 </div>
               </div>
             )}
+
+            {/* A scan that scored nothing is a data problem, not a verdict on the
+                market — say so instead of showing an empty slate as if it were one. */}
+            {scanResult && !scanning && scanResult.technicalData.length === 0 && (
+              <div className="flex items-start gap-2.5 bg-gold-dim border border-gold/40 rounded-lg px-3.5 py-3 mb-3">
+                <TriangleAlert size={14} strokeWidth={2} className="text-gold-2 shrink-0 mt-0.5" aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-[12px] text-gold-2 font-medium">This scan has no technical results</p>
+                  <p className="text-[11px] text-ink-2 leading-relaxed mt-0.5">
+                    {scanResult.passedTechnicals === 0 && scanResult.totalScanned > 0
+                      ? "It could not score any stock — most likely PSX price history was unavailable when it ran. It says nothing about the market."
+                      : "No stock was scored."}{" "}
+                    The <Link href="/screener" className="text-sky-2 underline underline-offset-2">Screener</Link> shows live Technical Scores for the whole market
+                    {hasKey ? ", or rerun the scan above." : "; the next scheduled scan will replace this one."}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Opportunities — starts as one compact ticker/price preview;
+                expanding reveals the existing detailed cards unchanged below. */}
+            {scanResult && !scanning && oppPreviewList.length > 0 && (
+              <div className="card p-0 overflow-hidden mb-3">
+                <button
+                  onClick={() => setOppExpanded(v => !v)}
+                  aria-expanded={oppExpanded}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left cursor-pointer"
+                >
+                  <span className="text-sm font-semibold text-ink">Opportunities</span>
+                  <span className="flex items-center gap-2 text-ink-3 shrink-0">
+                    <span className="text-[10px] num">
+                      {oppPreviewList.length} pick{oppPreviewList.length === 1 ? "" : "s"}
+                    </span>
+                    <ChevronDown
+                      size={15} strokeWidth={2.25}
+                      className={`transition-transform duration-200 ${oppExpanded ? "rotate-180" : ""}`}
+                      aria-hidden
+                    />
+                  </span>
+                </button>
+                {!oppExpanded && (
+                  oppPreviewList.length > 0 ? (
+                    <div className="px-4 pb-4 pt-0.5 border-t border-line divide-y divide-line">
+                      {oppPreviewList.map((item) => (
+                        <div key={item.ticker} className="flex items-center justify-between py-2.5">
+                          <span className="text-[13px] font-semibold text-ink">{item.ticker}</span>
+                          <span className="text-[13px] num text-ink-2">{item.price !== undefined ? item.price.toFixed(2) : "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="px-4 pb-4 pt-0.5 text-xs text-ink-3 border-t border-line">No opportunities from this scan.</p>
+                  )
+                )}
+              </div>
+            )}
+
+            {scanResult && oppExpanded && !scanning && <>
 
             {/* Sort */}
             {scanResult && scanResult.signals.length > 1 && (
@@ -1149,6 +1218,8 @@ export default function Dashboard({
               })}
             </div>
 
+            </>}
+
           </div>
         )}
 
@@ -1156,6 +1227,7 @@ export default function Dashboard({
         {tab === "holdings" && (
           <div>
             <HoldingsOverview holdings={holdings} prices={prices} />
+            <EventsCard tickers={holdings.map(h => h.ticker)} title="Announcements for your holdings" />
 
             {holdings.length === 0 && (
               <div className="mb-4">
@@ -1194,7 +1266,7 @@ export default function Dashboard({
                 };
                 const sectorLine = [
                   sectorOf(h.ticker) ?? (h.name.includes(" · ") ? h.name.split(" · ").slice(1).join(" · ") : null),
-                  h.shariah ? "Shariah" : null,
+                  (p?.shariah ?? h.shariah) ? "Shariah" : null,
                 ].filter(Boolean).join(" · ") || undefined;
 
                 const positionBlock = (
@@ -1330,7 +1402,7 @@ export default function Dashboard({
         {tab === "watching" && (
           <div>
             <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-              <span className="label">Watchlist · KMI-30 / Shariah tickers</span>
+              <span className="label">Watchlist</span>
               {watching.length > 0 && (
                 <div className="flex gap-2 items-center">
                   <button
@@ -1428,6 +1500,12 @@ export default function Dashboard({
               </div>
             )}
 
+            {watching.length > 0 && (
+              <div className="mt-4">
+                <EventsCard tickers={watching.map(w => w.ticker)} title="Announcements for your watchlist" />
+              </div>
+            )}
+
             <ErrorBanner msg={watchError} onDismiss={() => setWatchError("")} />
 
             {/* Add to watchlist */}
@@ -1489,7 +1567,6 @@ export default function Dashboard({
 
       <Settings open={showSettings} onClose={() => setShowSettings(false)} onSave={s => { setSettings(s); setShowSettings(false); }} />
       <MetricsGuide open={showMetricsGuide} onClose={() => setShowMetricsGuide(false)} />
-      <Toaster />
     </div>
   );
 }

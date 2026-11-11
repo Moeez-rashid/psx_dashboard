@@ -80,7 +80,7 @@ export default function MarketContextSection({ market }: { market: DeepDiveMarke
           )}
 
           <p className="text-[10px] text-ink-3 mt-4 leading-relaxed border-t border-line pt-3">
-            Sector figures are the mean change across constituents in today&rsquo;s market-watch snapshot. No multi-day sector performance is available — nothing here describes a trend.
+            Sector figures are the mean change across constituents in the latest PSX market snapshot. No multi-day sector performance is available — nothing here describes a trend.
           </p>
         </>
       )}

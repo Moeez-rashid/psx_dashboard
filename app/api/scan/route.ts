@@ -189,7 +189,11 @@ export async function GET(req: NextRequest) {
     const probedDate = await getLatestTradingDate();
     if (probedDate) {
       const latest = await getLatestScan();
-      if (latest && latest.scanDate === probedDate) {
+      // An empty slate is not worth preserving: scans persisted while PSX's
+      // old feeds were dead recorded "success" with zero technicals, and
+      // skipping on top of one would keep serving nothing.
+      const latestHasData = (latest?.results?.technicalData?.length ?? 0) > 0;
+      if (latest && latest.scanDate === probedDate && latestHasData) {
         await saveSkipped({ id, startedAt, scanDate: probedDate });
         return NextResponse.json({ ok: true, skipped: true, scanDate: probedDate });
       }

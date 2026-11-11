@@ -3,18 +3,24 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CircleAlert, Info } from "lucide-react";
 import { buildDeepDiveData } from "@/lib/deepdive";
+import { resolveDeepDiveAnalysis } from "@/lib/deepdive-ai";
 import { getAllStocks } from "@/lib/psx";
 import { getCompanyProfile } from "@/lib/askanalyst";
+import TopNav from "@/components/nav/TopNav";
 import DeepDiveSkeleton from "@/components/deepdive/DeepDiveSkeleton";
 import DeepDiveHeader from "@/components/deepdive/DeepDiveHeader";
 import TechnicalSection from "@/components/deepdive/TechnicalSection";
+import PriceBehaviorSection from "@/components/deepdive/PriceBehaviorSection";
 import ValuationSection from "@/components/deepdive/ValuationSection";
 import FundamentalSection from "@/components/deepdive/FundamentalSection";
 import FundamentalHistorySection from "@/components/deepdive/FundamentalHistorySection";
 import MarketContextSection from "@/components/deepdive/MarketContextSection";
 import CompanyNewsSection from "@/components/deepdive/CompanyNewsSection";
 import RiskSection from "@/components/deepdive/RiskSection";
-import AIInterpretationPlaceholder from "@/components/deepdive/AIInterpretationPlaceholder";
+import AIInterpretationSection from "@/components/deepdive/AIInterpretationSection";
+import RecordResearchVisit from "@/components/deepdive/RecordResearchVisit";
+import PsxFactsSection from "@/components/deepdive/PsxFactsSection";
+import StockActions from "@/components/StockActions";
 
 /**
  * Deep Dive route — the research view for one ticker.
@@ -100,9 +106,12 @@ export default async function DeepDivePage({ params }: { params: Promise<{ ticke
   if (!(await tickerIsKnown(ticker))) notFound();
 
   return (
-    <Suspense fallback={<DeepDiveSkeleton />}>
-      <DeepDiveBody ticker={ticker} />
-    </Suspense>
+    <>
+      <TopNav active="deep-dive" />
+      <Suspense fallback={<DeepDiveSkeleton />}>
+        <DeepDiveBody ticker={ticker} />
+      </Suspense>
+    </>
   );
 }
 
@@ -111,10 +120,22 @@ export default async function DeepDivePage({ params }: { params: Promise<{ ticke
  *  of the (already-resolved, already-committed) 404 decision. */
 async function DeepDiveBody({ ticker }: { ticker: string }) {
   const data = await buildDeepDiveData(ticker);
+  // Cache-only lookup — a Redis GET at most, never a model call. A plain
+  // page view must never trigger AI generation; only the explicit button in
+  // AIInterpretationSection does that, via the same /api/deepdive route.
+  const ai = await resolveDeepDiveAnalysis(data, { generate: false });
 
   return (
     <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:py-8">
+      <RecordResearchVisit ticker={data.identity.ticker} name={data.identity.companyName} />
       <DeepDiveHeader identity={data.identity} technical={data.technical} />
+      <div className="mt-4">
+        <StockActions
+          ticker={data.identity.ticker}
+          price={data.identity.currentPrice}
+          label={data.identity.sectorName ? `${data.identity.ticker} · ${data.identity.sectorName}` : data.identity.ticker}
+        />
+      </div>
 
       {/* Something upstream degraded — say which, rather than rendering a
           silently thinner page. */}
@@ -135,13 +156,19 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
 
       <div className="mt-6">
         <TechnicalSection technical={data.technical} />
+        {/* Own boundary: PSX's company page is a separate upstream, and a slow
+            or failed fetch there must not hold back the rest of the page. */}
+        <Suspense fallback={null}>
+          <PsxFactsSection ticker={data.identity.ticker} />
+        </Suspense>
+        <PriceBehaviorSection behavior={data.priceBehavior} priceSeries={data.technical.priceSeries} />
         <ValuationSection valuation={data.valuation} />
         <FundamentalSection fundamentals={data.fundamentals} history={data.fundamentalHistory} />
         <FundamentalHistorySection history={data.fundamentalHistory} />
         <MarketContextSection market={data.marketContext} />
         <CompanyNewsSection news={data.news} ticker={data.identity.ticker} />
         <RiskSection risk={data.risk} />
-        <AIInterpretationPlaceholder />
+        <AIInterpretationSection ticker={data.identity.ticker} initialResult={ai} />
       </div>
 
       {/* What this page structurally cannot know — available, not shouted. */}

@@ -16,13 +16,12 @@
 
 import {
   getAllStocks,
-  getHistory,
-  getStocksBySector,
-  KMI30_TICKERS,
+  getKmi30Tickers,
+  resolveSectorCode,
   SECTOR_CODES,
-  SECTOR_NAME_TO_CODE,
   type StockQuote,
 } from "./psx";
+import { getAllHistories, HISTORY_SESSIONS } from "./psx-eod";
 import { scoreStock, compareByTechnicalScore, type TechnicalScore } from "./technicals";
 import {
   getNewsAnalysis,
@@ -48,6 +47,16 @@ export interface ScanResult {
   newsItems: NewsItem[];        // structured headlines w/ article links (for the News page)
   fundamentals: Record<string, import("./askanalyst").AskAnalystFundamentals>; // keyed by ticker
   aiError?: string;             // set when the AI narrative pass failed; technicals are still valid
+  /** How much of the candidate universe actually had price history to score.
+   *  Absent on scans persisted before this field existed. */
+  dataQuality?: {
+    /** Latest PSX session the technicals are computed on (YYYY-MM-DD). */
+    sessionDate: string | null;
+    candidates: number;
+    withHistory: number;
+    /** Candidates with no usable history (newly listed, suspended, or untraded). */
+    withoutHistory: string[];
+  };
 }
 
 // ─── Sector-rep tickers for fundamentals context injected into AI prompt ──
@@ -174,33 +183,39 @@ interface ScanOptions {
   skipNewsPass?: boolean;       // for faster manual refresh
 }
 
-/** Fetch history + compute technicals for a list of symbols in parallel batches. */
+/**
+ * Score a list of symbols from the shared EOD store (one load serves every
+ * symbol). Throws when the store itself can't be read — a scan with no price
+ * history is a FAILED scan, never an empty successful one.
+ */
 async function fetchAndScore(
   symbols: string[],
   minScore: number,
   minAvgVolume: number
-): Promise<TechnicalScore[]> {
-  const BATCH = 6; // fetch 6 at a time to avoid rate limits
+): Promise<{ scored: TechnicalScore[]; sessionDate: string | null; withHistory: number; withoutHistory: string[] }> {
+  const histories = await getAllHistories(HISTORY_SESSIONS.technicals);
   const results: TechnicalScore[] = [];
+  const withoutHistory: string[] = [];
+  let withHistory = 0;
+  let sessionDate: string | null = null;
 
-  for (let i = 0; i < symbols.length; i += BATCH) {
-    const batch = symbols.slice(i, i + BATCH);
-    const settled = await Promise.allSettled(
-      batch.map(async (symbol) => {
-        const history = await getHistory(symbol);
-        return scoreStock(symbol, history, minAvgVolume);
-      })
-    );
-    for (const r of settled) {
-      if (r.status === "fulfilled" && r.value !== null) {
-        results.push(r.value);
-      }
-    }
+  for (const symbol of symbols) {
+    const history = histories.get(symbol.toUpperCase());
+    if (!history || history.length === 0) { withoutHistory.push(symbol); continue; }
+    withHistory++;
+    if (!sessionDate || history[0].date > sessionDate) sessionDate = history[0].date;
+    const score = scoreStock(symbol, history, minAvgVolume);
+    if (score) results.push(score);
   }
 
-  return results
-    .filter((s) => s.technicalScore >= minScore)
-    .sort(compareByTechnicalScore);
+  if (symbols.length > 0 && withHistory === 0) {
+    throw new Error("PSX price history returned no data for any scan candidate");
+  }
+
+  return {
+    scored: results.filter((s) => s.technicalScore >= minScore).sort(compareByTechnicalScore),
+    sessionDate, withHistory, withoutHistory,
+  };
 }
 
 /** Build the stock context string fed to the AI in Pass 2. */
@@ -309,52 +324,40 @@ export async function runFullScan(
     }
   }
 
-  // Determine sector expansion
+  // Fetch the live market list once: quotes for display, sector membership
+  // and Shariah status for expansion. Unavailable → KMI-30 only, no expansion.
+  let allStocks: StockQuote[] = [];
+  try {
+    allStocks = await getAllStocks();
+  } catch {
+    // Live list unavailable — technicals still work from history
+  }
+
+  // Determine sector expansion. Candidates start from the LIVE KMI-30 and
+  // grow by the Shariah-compliant (KMI All Share) names of each sector the
+  // news pass flagged.
   const expandedSectors: string[] = [];
-  const sectorSymbolSets: Set<string> = new Set(KMI30_TICKERS);
+  const sectorSymbolSets: Set<string> = new Set(await getKmi30Tickers());
 
   for (const affected of newsAnalysis.affectedSectors) {
     if (affected.impact === "NEUTRAL") continue;
-
-    // Find sector code
-    const code =
-      affected.sectorCode ||
-      SECTOR_NAME_TO_CODE[affected.sectorName.toLowerCase()] ||
-      "";
-
+    const code = resolveSectorCode(affected.sectorName, affected.sectorCode);
     if (!code) continue;
-
+    const members = allStocks.filter((s) => s.sector === code && s.shariah === true);
+    if (members.length === 0) continue;
     expandedSectors.push(affected.sectorName);
-
-    // Fetch all Shariah-compliant stocks in this sector
-    try {
-      const sectorStocks = await getStocksBySector(code);
-      for (const s of sectorStocks) {
-        sectorSymbolSets.add(s.symbol.toUpperCase());
-      }
-    } catch {
-      // Sector fetch failed — continue with KMI-30 only
-    }
+    for (const s of members) sectorSymbolSets.add(s.symbol.toUpperCase());
   }
 
   const allSymbols = Array.from(sectorSymbolSets);
 
-  // Fetch live quotes for display (price + day change)
-  let quotes: Record<string, StockQuote> = {};
-  try {
-    const allStocks = await getAllStocks();
-    const symbolSet = new Set(allSymbols.map((s) => s.toUpperCase()));
-    for (const stock of allStocks) {
-      if (symbolSet.has(stock.symbol.toUpperCase())) {
-        quotes[stock.symbol.toUpperCase()] = stock;
-      }
-    }
-  } catch {
-    // Live quotes unavailable — technicals still work from history
+  const quotes: Record<string, StockQuote> = {};
+  for (const stock of allStocks) {
+    if (sectorSymbolSets.has(stock.symbol.toUpperCase())) quotes[stock.symbol.toUpperCase()] = stock;
   }
 
   // --- Pass 2: Technical scoring ---
-  const scoredStocks = await fetchAndScore(
+  const { scored: scoredStocks, sessionDate, withHistory, withoutHistory } = await fetchAndScore(
     allSymbols,
     minTechnicalScore,
     minAvgVolume
@@ -423,6 +426,7 @@ export async function runFullScan(
     newsItems,
     fundamentals: fundamentalsRecord,
     aiError,
+    dataQuality: { sessionDate, candidates: allSymbols.length, withHistory, withoutHistory },
   };
 }
 

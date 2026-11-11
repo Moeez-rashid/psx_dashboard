@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { ExternalLink, Check } from "lucide-react";
+import { ExternalLink, Check, Download, Upload } from "lucide-react";
+import { buildBackup, restoreBackup } from "@/lib/local-store";
 import { DEFAULT_MODELS } from "@/lib/providers/types";
 import { Modal, ModalHeader } from "./ui/primitives";
 
@@ -64,6 +65,7 @@ export default function Settings({ open, onClose, onSave }: Props) {
   const [s, setS] = useState<UserSettings>(defaultSettings);
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     if (open) setS(loadSettings());
@@ -76,13 +78,37 @@ export default function Settings({ open, onClose, onSave }: Props) {
     setTimeout(() => { setSaved(false); onClose(); }, 800);
   }
 
+  function exportBackup() {
+    const blob = new Blob([JSON.stringify(buildBackup(), null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `psx-scanner-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setBackupMsg({ ok: true, text: "Backup downloaded." });
+  }
+
+  async function importBackup(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const n = restoreBackup(JSON.parse(await file.text()));
+      setBackupMsg({ ok: true, text: `Restored ${n} section${n === 1 ? "" : "s"}. Reloading…` });
+      setTimeout(() => window.location.reload(), 900);
+    } catch (err) {
+      setBackupMsg({ ok: false, text: err instanceof Error ? err.message : "That file could not be read." });
+    }
+  }
+
   if (!open) return null;
 
   const pInfo = PROVIDER_LABELS[s.provider];
 
   return (
     <Modal onClose={onClose} maxWidth="max-w-md">
-      <ModalHeader title="Settings" sub="AI provider for scans — keys never leave your browser" onClose={onClose} />
+      <ModalHeader title="Settings" sub="AI provider for scans, and your saved data" onClose={onClose} />
 
       {/* Provider */}
       <label className="label">AI Provider</label>
@@ -133,6 +159,23 @@ export default function Settings({ open, onClose, onSave }: Props) {
           <option key={m.value} value={m.value}>{m.label}</option>
         ))}
       </select>
+
+      {/* Backup — holdings, watchlist and alerts live only in this browser */}
+      <div className="border-t border-line pt-4 mb-4">
+        <div className="label mb-1">Your data</div>
+        <p className="text-[10px] text-ink-3 mb-2.5 leading-relaxed">
+          Holdings, watchlist and alerts are stored in this browser only. Download a backup to move them to another
+          device or to keep them safe if you clear browser data. The API key is never included.
+        </p>
+        <div className="flex gap-2">
+          <button onClick={exportBackup} className="btn flex-1"><Download size={13} strokeWidth={2} aria-hidden />Download backup</button>
+          <label className="btn flex-1">
+            <Upload size={13} strokeWidth={2} aria-hidden />Restore from file
+            <input type="file" accept="application/json,.json" className="hidden" onChange={importBackup} />
+          </label>
+        </div>
+        {backupMsg && <p className={`text-[11px] mt-2 ${backupMsg.ok ? "text-up-2" : "text-down-2"}`}>{backupMsg.text}</p>}
+      </div>
 
       <button
         onClick={save}

@@ -19,9 +19,9 @@ export default function DeepDiveHeader({
   const hue = hueOf(technical.signal ?? undefined);
   const priceTag =
     identity.priceSource === "live-quote"
-      ? <Tag tone="live" title="Latest price from the PSX market-watch feed"><Radio size={9} strokeWidth={2.5} aria-hidden />Live quote</Tag>
+      ? <Tag tone="live" title="Latest price shown on PSX's data portal (may be delayed during the session)"><Radio size={9} strokeWidth={2.5} aria-hidden />PSX quote</Tag>
       : identity.priceSource === "eod-close"
-        ? <Tag tone="eod" title="Market-watch was unavailable — this is the last end-of-day close"><Clock size={9} strokeWidth={2.5} aria-hidden />EOD close</Tag>
+        ? <Tag tone="eod" title="The live quote was unavailable — this is the last end-of-day close"><Clock size={9} strokeWidth={2.5} aria-hidden />EOD close</Tag>
         : null;
 
   return (

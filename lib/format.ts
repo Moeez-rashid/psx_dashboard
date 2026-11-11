@@ -7,9 +7,11 @@ export function fmtVol(n: number): string {
   return `${Math.round(n)}`;
 }
 
-/** Compact PKR amount: 22760 → "22.8K", 1.2M → "1.20M" */
+/** Compact PKR amount: 22760 → "22.8K", 1.2M → "1.20M", 3.4B → "3.40B" */
 export function fmtPKR(v: number): string {
   const a = Math.abs(v);
+  if (a >= 1_000_000_000_000) return `${(a / 1_000_000_000_000).toFixed(2)}T`;
+  if (a >= 1_000_000_000) return `${(a / 1_000_000_000).toFixed(2)}B`;
   if (a >= 1_000_000) return `${(a / 1_000_000).toFixed(2)}M`;
   if (a >= 1_000) return `${(a / 1_000).toFixed(1)}K`;
   return Math.round(a).toString();
@@ -44,12 +46,30 @@ export function pktDateStr(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
-/** True while the PSX regular session is open (Mon–Thu 09:30–15:30, Fri split session). */
+/**
+ * Clock-based estimate of whether the PSX regular session is open:
+ * Mon–Thu 09:32–15:30, Fri 09:17–12:00 and 14:32–16:30 (PKT). It knows
+ * nothing about holidays or Ramadan hours — where PSX's own market state is
+ * available (/api/market `status`), prefer that.
+ */
 export function isPKTOpen(): boolean {
   const pkt = pktNow();
-  const h = pkt.getHours(), m = pkt.getMinutes(), day = pkt.getDay();
+  const day = pkt.getDay();
   if (day === 0 || day === 6) return false;
-  const mins = h * 60 + m;
-  if (day === 5) return (mins >= 570 && mins <= 720) || (mins >= 870 && mins <= 930);
-  return mins >= 570 && mins <= 930;
+  const mins = pkt.getHours() * 60 + pkt.getMinutes();
+  if (day === 5) return (mins >= 557 && mins <= 720) || (mins >= 872 && mins <= 990);
+  return mins >= 572 && mins <= 930;
+}
+
+/** Coarse relative time: "just now", "12m ago", "3h ago", "2d ago", then a date. */
+export function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-PK", { month: "short", day: "numeric" });
 }

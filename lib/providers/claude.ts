@@ -143,3 +143,31 @@ Be direct. If you would not buy a stock right now, say WATCH or AVOID.`,
 
   return extractJSON<AISignal[]>(text) ?? [];
 }
+
+/**
+ * Thin JSON-completion transport for Deep Dive's AI interpretation.
+ *
+ * Deliberately carries no prompt of its own: the Deep Dive system prompt and
+ * evidence digest are built once in lib/deepdive-ai.ts and passed in. Those
+ * instructions are the anti-hallucination surface of the feature — four
+ * copies of them across four provider files is exactly how one copy quietly
+ * drifts and starts inventing figures.
+ */
+export async function completeJSON(
+  config: ProviderConfig,
+  system: string,
+  user: string,
+  maxTokens: number
+): Promise<string> {
+  const client = new Anthropic({ apiKey: config.apiKey });
+  const resp = await client.messages.create({
+    model: config.model ?? "claude-sonnet-4-5",
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: "user", content: user }],
+  });
+  return (resp.content || [])
+    .filter((b) => b.type === "text")
+    .map((b) => ("text" in b ? b.text : ""))
+    .join("");
+}

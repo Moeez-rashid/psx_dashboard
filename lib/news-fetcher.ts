@@ -1,39 +1,28 @@
 /**
  * Free RSS news fetcher for Pakistan market news.
  *
- * Sources (all free, no API key required):
+ * Sources (all free, no API key required) — re-verified 2026-11: four of the
+ * original five feeds had died (404, or an HTML page where RSS used to be),
+ * leaving the briefing running on Dawn alone.
+ *  - Business Recorder (markets + business & finance) — the PSX paper of record
  *  - Dawn Business
- *  - Geo News Business
- *  - Profit Pakistan (Pakistan Today)
+ *  - Express Tribune Business
  *  - The News Business
- *  - ARY News (fallback)
+ *  - ProPakistani Business
  *
  * Returns a plain-text block of headlines + brief descriptions
  * suitable for pasting directly into an AI prompt.
  */
 
+import { recordFailure, recordSuccess } from "./cache";
+
 const RSS_FEEDS: { name: string; url: string }[] = [
-  {
-    name: "Dawn Business",
-    url: "https://www.dawn.com/feeds/business",
-  },
-  {
-    name: "Geo Business",
-    url: "https://www.geo.tv/rss/1/business",
-  },
-  {
-    name: "Profit Pakistan",
-    url: "https://profit.pakistantoday.com.pk/feed/",
-  },
-  {
-    name: "The News Business",
-    url: "https://www.thenews.com.pk/rss/2/business",
-  },
-  {
-    // Business category only — the general /feed/ mixes in sports & showbiz
-    name: "ARY News",
-    url: "https://arynews.tv/category/business/feed/",
-  },
+  { name: "Business Recorder", url: "https://www.brecorder.com/feeds/markets" },
+  { name: "Business Recorder", url: "https://www.brecorder.com/feeds/business-finance" },
+  { name: "Dawn Business", url: "https://www.dawn.com/feeds/business" },
+  { name: "Express Tribune", url: "https://tribune.com.pk/feed/business" },
+  { name: "The News", url: "https://www.thenews.com.pk/rss/1/8" },
+  { name: "ProPakistani", url: "https://propakistani.pk/category/business/feed/" },
 ];
 
 export interface NewsItem {
@@ -61,11 +50,21 @@ async function fetchFeed(
         Accept: "application/rss+xml, application/xml, text/xml, */*",
       },
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      recordFailure(`news:${sourceName}`, new Error(`HTTP ${res.status}`));
+      return [];
+    }
 
     const xml = await res.text();
+    // A feed that has been retired often still answers 200 with an HTML page.
+    if (!/<item[\s>]/i.test(xml)) {
+      recordFailure(`news:${sourceName}`, new Error("response contained no RSS items"));
+      return [];
+    }
+    recordSuccess(`news:${sourceName}`);
     return parseRSS(xml, sourceName, maxItems);
-  } catch {
+  } catch (err) {
+    recordFailure(`news:${sourceName}`, err);
     return [];
   } finally {
     clearTimeout(timer);

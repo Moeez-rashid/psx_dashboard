@@ -1,7 +1,7 @@
 import { Activity, ChartNoAxesColumn } from "lucide-react";
 import type { DeepDiveTechnical } from "@/lib/deepdive";
 import {
-  Group, Metric, MetricGrid, PriceLine, RangeMeter, Section, Tag, Unavailable,
+  Group, Metric, MetricGrid, RangeMeter, Section, Tag, Unavailable,
   DASH, fmtNum, fmtPercent, fmtSignedPercent, signTone,
 } from "./shared";
 
@@ -84,21 +84,12 @@ export default function TechnicalSection({ technical }: { technical: DeepDiveTec
             </Group>
           </div>
 
-          {/* ── Price history ── */}
-          {t.priceSeries.length >= 5 && (
-            <Group
-              title="Closing price"
-              aside={<span className="text-[10px] text-ink-3 num">{t.priceSeries.length} sessions</span>}
-            >
-              <div className="bg-inset border border-line rounded-lg px-3 py-3">
-                <PriceLine points={t.priceSeries} height={80} />
-                <div className="flex justify-between text-[10px] text-ink-3 num mt-1">
-                  <span>{t.priceSeries[0].date}</span>
-                  <span>{t.priceSeries[t.priceSeries.length - 1].date}</span>
-                </div>
-              </div>
-            </Group>
-          )}
+          {/* The closing-price chart and the 52-week closing range that used to
+              sit here now live in the Price behaviour section directly below,
+              which shows the same closing highs and lows across six lookback
+              windows with the current price's position inside each. Keeping a
+              second, static copy of both here would have been the same facts
+              rendered twice. */}
 
           {/* ── Supplementary indicators — explicitly outside the score ── */}
           <div className="mt-6 pt-5 border-t border-dashed border-line">
@@ -174,28 +165,6 @@ export default function TechnicalSection({ technical }: { technical: DeepDiveTec
               </Group>
             </div>
 
-            {/* 52-week closing range */}
-            <div className="mt-5">
-            <Group title="52-week closing range">
-              {t.closingRange52w ? (
-                <div className="max-w-xl">
-                  <RangeMeter
-                    low={t.closingRange52w.low}
-                    high={t.closingRange52w.high}
-                    value={t.priceSeries.length > 0 ? t.priceSeries[t.priceSeries.length - 1].close : t.closingRange52w.high}
-                    lowLabel={`Low ${t.closingRange52w.low.toFixed(2)}`}
-                    highLabel={`High ${t.closingRange52w.high.toFixed(2)}`}
-                    valueLabel={`${fmtSignedPercent(t.closingRange52w.distanceFromHighPct)} vs high`}
-                  />
-                  <p className="text-[10px] text-ink-3 mt-2 leading-relaxed">
-                    Derived from <strong className="text-ink-2 font-medium">closing prices</strong> over {t.closingRange52w.lookbackSessions} sessions — not intraday highs and lows, which the PSX end-of-day feed does not provide. Treat it as a range, not as support or resistance.
-                  </p>
-                </div>
-              ) : (
-                <p className="text-[11px] text-ink-3">Needs at least 20 sessions of history.</p>
-              )}
-            </Group>
-            </div>
           </div>
         </>
       )}

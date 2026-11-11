@@ -7,6 +7,7 @@
  *
  *   lib/technicals.ts ........ Technical Score (untouched, read-only here)
  *   lib/deepdive-technicals.ts MACD / SMA200 / Bollinger / drawdown / range / liquidity
+ *   lib/price-behavior.ts .... multi-window closing-price ranges + position in them
  *   lib/valuation.ts ......... sector + KMI-30 proxy P/E, premium/discount, PEG
  *   lib/askanalyst.ts ........ annual fundamentals + multi-year history
  *   lib/company-news.ts ...... press mentions filtered from the shared RSS feeds
@@ -33,6 +34,7 @@ import {
   type IndexSnapshot,
   type StockQuote,
 } from "./psx";
+import { HISTORY_SESSIONS } from "./psx-eod";
 import { resolveSectorName } from "./sectors";
 import { scoreStock, type TechnicalComponents, type TechnicalScore } from "./technicals";
 import {
@@ -60,6 +62,7 @@ import {
   type SectorPEResult,
   type UniversePEResult,
 } from "./valuation";
+import { computePriceBehavior, type PriceBehavior } from "./price-behavior";
 import { getCompanyNews, type CompanyNewsResult } from "./company-news";
 
 // ─── 1. Identity ─────────────────────────────────────────────────────────────
@@ -264,6 +267,10 @@ export interface DeepDiveMeta {
 export interface DeepDiveData {
   identity: DeepDiveIdentity;
   technical: DeepDiveTechnical;
+  /** Closing-price ranges over several session windows — see lib/price-behavior.ts.
+   *  Kept beside `technical` rather than inside it: it is price context, not an
+   *  indicator, and nothing in it feeds the Technical Score. */
+  priceBehavior: PriceBehavior;
   valuation: DeepDiveValuation;
   fundamentals: DeepDiveFundamentals;
   fundamentalHistory: DeepDiveFundamentalHistory;
@@ -276,7 +283,7 @@ export interface DeepDiveData {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const STRUCTURAL_LIMITATIONS = [
-  "PSX's EOD feed provides close/open/volume only — no daily high/low. ATR, ADX, candlestick patterns and true intraday support/resistance are not computed.",
+  "The indicators on this page are computed from daily closing prices and volume. ATR, ADX, candlestick patterns and intraday support/resistance are not computed.",
   "The 52-week range is derived from closing prices, not intraday highs/lows.",
   "Fundamentals are annual fiscal-year figures from askanalyst.com.pk — they can be up to a year old and are never intraday.",
   "No index-level earnings data is available, so the market valuation figure is a KMI-30 median proxy, not the KSE-100 P/E.",
@@ -285,7 +292,7 @@ const STRUCTURAL_LIMITATIONS = [
 ];
 
 const RISK_NOT_COMPUTED = [
-  "ATR and ATR-based stop levels — the EOD feed has no daily high/low to derive a true range from.",
+  "ATR and ATR-based stop levels — not computed; this page's indicators use closing prices only.",
   "Reward/risk ratio — requires a defensible stop and target, which need price levels this data can't honestly produce.",
 ];
 
@@ -535,7 +542,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
 
   // Stage 1 — everything that doesn't depend on knowing the sector yet.
   const [historyR, stocksR, fundamentalsR, profileR, kseR] = await Promise.allSettled([
-    getHistory(ticker),
+    getHistory(ticker, HISTORY_SESSIONS.deepDive),
     getAllStocks(),
     getAskAnalystFundamentals(ticker),
     getCompanyProfile(ticker),
@@ -543,7 +550,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
   ]);
 
   const history = settled(historyR, "price history", degraded) ?? [];
-  const allStocks = settled(stocksR, "market watch", degraded) ?? [];
+  const allStocks = settled(stocksR, "live market list", degraded) ?? [];
   const fundamentals = settled(fundamentalsR, "fundamentals", degraded);
   const profile = settled(profileR, "company profile", degraded);
   const kse100 = settled(kseR, "KSE-100", degraded);
@@ -595,6 +602,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
   const supp = computeSupplementaryTechnicals(history);
 
   const technical = buildTechnicalSection(tech, supp, history, price);
+  const priceBehavior = computePriceBehavior(history);
   const valuation = buildValuationSection(fundamentals, price, sector, universe);
   const fundamentalsSection = buildFundamentalsSection(fundamentals);
   const fundamentalHistory = buildFundamentalHistorySection(fundamentals);
@@ -637,6 +645,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
       tradingDate,
     },
     technical,
+    priceBehavior,
     valuation,
     fundamentals: fundamentalsSection,
     fundamentalHistory,
@@ -647,22 +656,42 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
       generatedAt: new Date().toISOString(),
       tradingDate,
       fundamentalsFiscalYear: fundamentals?.fiscalYear ?? null,
+      // Deliberately over-inclusive rather than minimal: this fingerprint is
+      // what Phase 4's AI cache keys on, and a materially changed evidence
+      // set that fails to bump it means a stale interpretation gets served
+      // as current. Two gaps found by review and closed here: market context
+      // (sector/index moves are live, intraday, and change continuously
+      // independent of tradingDate/technical.score — the interpretation
+      // reads them, so they must be in the key) and news identity (a count
+      // alone doesn't change when an old matched article ages out and a
+      // different one takes its place at the same count).
       dataVersion: fingerprint([
         ticker,
         tradingDate,
         fundamentals?.fiscalYear ?? null,
         technical.score,
+        technical.rsi,
+        technical.ema20,
         valuation.pe,
         sector?.medianPE ?? null,
         universe?.medianPE ?? null,
         fundamentalsSection.epsGrowth,
+        fundamentalsSection.roe,
         technical.macd?.trend ?? null,
+        sectorSnapshot?.avgChangePercentToday ?? null,
+        kse100?.changePercent ?? null,
         news.items.length,
+        news.items.map((i) => i.title).join("|"),
+        // Range facts move only when a close changes, which normally means a
+        // new tradingDate — but a revision to an older close would shift a
+        // window's low or high while leaving the date alone, and the AI now
+        // interprets these bands, so they key the cache too.
+        priceBehavior.windows.map((w) => `${w.label}:${w.low}-${w.high}`).join(","),
       ]),
       limitations,
       degraded,
       sources: {
-        prices: "dps.psx.com.pk (market watch + EOD timeseries)",
+        prices: "dps.psx.com.pk (public screener + daily market-summary files)",
         fundamentals: "askanalyst.com.pk (annual ratios)",
         news: "Dawn / Geo / Profit / The News / ARY business RSS",
       },

@@ -2,6 +2,26 @@
 
 Reasoning behind significant choices, newest first. This is *why*, not *what* — for what changed, read `git log`.
 
+## Market data rebuilt on PSX's public pages and daily files (2026-11)
+
+**What happened:** around late September 2026 PSX put `/market-watch` and `/timeseries/eod/*` behind a per-page token (`window.__ps._k`). To any other client they answer 404. The app was built entirely on those two feeds, and it failed *quietly*: `fetchAndScore` used `Promise.allSettled` and dropped every rejected history fetch, so each scheduled scan scored zero stocks, was saved as `status: "success"`, and the freshness indicator showed it as current. For six weeks the site presented "0 passed technicals" as if it were a market reading.
+
+**Decided:** use only what PSX serves to an ordinary, honestly identified request — the screener page, the indices/trading-panel/circuit-breaker pages, per-company pages, and the published daily market-summary files — and never the gated XHR feeds. Sending the headers a browser would send to get past the gate was considered and rejected: it is circumventing an access control, and it would break again the next time PSX tightens it.
+
+**Why the daily files for history:** one request per *session* serves every symbol (130 files cover the whole market for the Technical Score, versus one request per ticker before), they are the exchange's own record, and they carry high/low. Their LDCP column is the exchange's reference price, so a gap between it and the previous close identifies a dividend/bonus/right adjustment; earlier bars are scaled by that ratio so indicators don't read an ex-date as a crash. The cost is a cold-start load (~10s) — accepted, cached in-process and in Next's data cache.
+
+**Why two independent quote sources:** `getAllStocks()` merges the screener snapshot with the latest session file and falls back to the file alone. Either can fail without taking quotes down.
+
+**Failures must be loud.** `cached()` serves the last good value flagged stale; every upstream records into a health ledger exposed at `/api/health`; the scanner throws when no candidate has history; the cron's skip-if-unchanged check ignores a stored scan that has no technicals; and the dashboard shows an explicit notice instead of an empty slate.
+
+**The KMI-30 list was wrong, so membership is now read from PSX.** The hardcoded list had 17 of 30 names not in the index and 10 that are not in KMI All Share at all (including conventional banks) — in an app that labels its universe "Shariah". Shariah status is now `KMIALLSHR` membership and the scan universe is the live `KMI30`, both from the screener's index column. Sector expansion is filtered to KMI All Share names; before, it pulled in every stock in a flagged sector despite the comment saying otherwise.
+
+**AI-supplied sector codes are not trusted over the sector name.** Persisted scans showed the model tagging "Banking" as `0801` (Automobile) and "Food & Beverages" as `0804` (Cement); the scanner took the code first and expanded into the wrong sectors. `resolveSectorCode()` now resolves by name and accepts a supplied code only when its own name agrees.
+
+**Watchlist cards follow Opportunities' layout after all** (reverses the 2026-09-05 entry below): Moeez asked for the same visual weight and column order in both, so `WatchlistRow` now mirrors `StockRow`'s tier 1.
+
+**Not built, deliberately:** a PSX holiday calendar (the session files themselves say which days traded), server-pushed alerts (no accounts, no push service — alerts run while the app is open and say so), and real-time intraday volume (not available without the gated feeds).
+
 ## UI overhaul: Watchlist gets its own component, not a reuse of Opportunities' cards (2026-09-05)
 
 **Decided:** `components/WatchlistRow.tsx` is a new, genuinely different presentation — a real table on desktop, a two-line compact row on mobile — rather than rendering Watchlist through the same `StockRow` cards Opportunities uses.

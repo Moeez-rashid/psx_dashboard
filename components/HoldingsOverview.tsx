@@ -2,6 +2,7 @@
 import type { StockQuote } from "@/lib/psx";
 import { fmtPKR } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
+import { useCostPrefs } from "@/lib/use-local";
 
 export interface Holding { ticker: string; name: string; shares: number; avgPrice: number; shariah: boolean; }
 
@@ -30,16 +31,29 @@ export default function HoldingsOverview({ holdings, prices }: {
   holdings: Holding[];
   prices: Record<string, StockQuote>;
 }) {
+  // Cost assumptions are the user's own, edited in the Trade calculator.
+  const costs = useCostPrefs();
+
   if (holdings.length === 0) return null;
 
   const rows = holdings.map((h, i) => {
-    const livePrice = prices[h.ticker]?.currentPrice ?? h.avgPrice;
-    const changeToday = prices[h.ticker]?.changePercent;
+    const q = prices[h.ticker];
+    const livePrice = q?.currentPrice ?? h.avgPrice;
+    const changeToday = q?.changePercent;
     const marketVal = livePrice * h.shares;
     const costBasis = h.avgPrice * h.shares;
     const pnl = marketVal - costBasis;
     const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
-    return { ticker: h.ticker, name: h.name, marketVal, costBasis, pnl, pnlPct, changeToday, color: PIE_COLORS[i % PIE_COLORS.length] };
+    return {
+      ticker: h.ticker, name: h.name, marketVal, costBasis, pnl, pnlPct, changeToday,
+      dayPnl: q ? q.change * h.shares : 0,
+      // Trailing yield applied to today's value — an indication, not a forecast.
+      dividends: q?.dividendYield ? marketVal * (q.dividendYield / 100) : 0,
+      sectorCode: q?.sector ?? null,
+      shariah: q?.shariah ?? h.shariah,
+      priced: !!q,
+      color: PIE_COLORS[i % PIE_COLORS.length],
+    };
   });
 
   const totalMV = rows.reduce((s, r) => s + r.marketVal, 0);
@@ -49,24 +63,34 @@ export default function HoldingsOverview({ holdings, prices }: {
 
   // Donut slices
   const cx = 60, cy = 60, R = 54, ir = 33;
-  let deg = 0;
-  const slices = rows.map(r => {
-    const frac = totalMV > 0 ? r.marketVal / totalMV : 1 / rows.length;
-    const path = donutSlicePath(cx, cy, R, ir, deg, deg + frac * 360);
-    deg += frac * 360;
-    return { ...r, path };
+  const fracs = rows.map((r) => (totalMV > 0 ? r.marketVal / totalMV : 1 / rows.length));
+  const slices = rows.map((r, i) => {
+    const start = fracs.slice(0, i).reduce((a, f) => a + f, 0) * 360;
+    return { ...r, path: donutSlicePath(cx, cy, R, ir, start, start + fracs[i] * 360) };
   });
 
-  // Sector aggregation
+  // Sector aggregation — from PSX's sector code when priced, else the saved label
   const sectorMap: Record<string, number> = {};
   for (const r of rows) {
-    const raw = r.name.includes(" · ") ? r.name.split(" · ").slice(1).join(" · ") : "Other";
+    const raw = r.sectorCode ?? (r.name.includes(" · ") ? r.name.split(" · ").slice(1).join(" · ") : "Other");
     const sector = resolveSectorName(raw);
     sectorMap[sector] = (sectorMap[sector] ?? 0) + r.marketVal;
   }
   const sectors = Object.entries(sectorMap).sort((a, b) => b[1] - a[1]);
 
   const pnlTone = (v: number) => (v >= 0 ? "text-up-2" : "text-down-2");
+
+  const anyPriced = rows.some((r) => r.priced);
+  const dayPnl = rows.reduce((a, r) => a + r.dayPnl, 0);
+  const dayPct = totalMV - dayPnl > 0 ? (dayPnl / (totalMV - dayPnl)) * 100 : 0;
+  const grossDividends = rows.reduce((a, r) => a + r.dividends, 0);
+  const netDividends = grossDividends * (1 - costs.dividendTaxPct / 100);
+  const shariahPct = totalMV > 0 ? (rows.filter((r) => r.shariah).reduce((a, r) => a + r.marketVal, 0) / totalMV) * 100 : 0;
+  // Liquidation estimate: commission on the sale, then tax on whatever gain is left.
+  const saleProceeds = totalMV * (1 - costs.commissionPct / 100);
+  const gainAfterCommission = saleProceeds - totalCost;
+  const exitTax = gainAfterCommission > 0 ? gainAfterCommission * (costs.cgtPct / 100) : 0;
+  const netIfSold = gainAfterCommission - exitTax;
 
   return (
     <div className="card mb-4">
@@ -101,6 +125,27 @@ export default function HoldingsOverview({ holdings, prices }: {
               <span className={`text-[11px] num ${pnlTone(totalPct)}`}>({totalPct >= 0 ? "+" : ""}{totalPct.toFixed(1)}%)</span>
             </div>
           </div>
+
+          {anyPriced && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-4">
+              {([
+                ["Today", `${dayPnl >= 0 ? "+" : "-"}PKR ${fmtPKR(dayPnl)}`, `${dayPct >= 0 ? "+" : ""}${dayPct.toFixed(2)}%`, pnlTone(dayPnl),
+                  "Change in portfolio value over the latest PSX session"],
+                ["Net if sold now", `${netIfSold >= 0 ? "+" : "-"}PKR ${fmtPKR(netIfSold)}`, `after ${costs.commissionPct}% commission${exitTax > 0 ? ` + ${costs.cgtPct}% tax` : ""}`, pnlTone(netIfSold),
+                  "Estimated profit after sale commission and capital gains tax, using the rates in the Trade calculator"],
+                ["Dividends / year", grossDividends > 0 ? `PKR ${fmtPKR(netDividends)}` : "—", grossDividends > 0 ? `net of ${costs.dividendTaxPct}% tax · trailing yield` : "no payers held", "text-ink",
+                  "Trailing dividend yield applied to today's value, after dividend tax. Past payouts are not a forecast."],
+                ["Shariah-compliant", `${shariahPct.toFixed(0)}%`, "of value · KMI All Share", shariahPct >= 99.5 ? "text-up-2" : "text-ink",
+                  "Share of portfolio value in KMI All Share constituents, per PSX"],
+              ] as const).map(([label, value, sub, tone, title]) => (
+                <div key={label} className="bg-inset rounded-lg px-2.5 py-2 min-w-0" title={title}>
+                  <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1">{label}</div>
+                  <div className={`text-xs font-semibold num truncate ${tone}`}>{value}</div>
+                  <div className="text-[9px] text-ink-3 mt-0.5 truncate">{sub}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Header row */}
           <div className={`${GRID} mb-1`}>
