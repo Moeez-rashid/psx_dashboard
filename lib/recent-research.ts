@@ -37,3 +37,21 @@ export function recordResearch(entry: { ticker: string; name: string | null }): 
     // localStorage unavailable (private browsing, quota) — recent research is a nicety, not load-bearing.
   }
 }
+
+// ─── The stock currently being researched (this tab only) ───────────────────
+// Lets the Deep Dive nav item return to the stock you were on instead of the
+// empty search screen — including when you left while it was still loading.
+
+const ACTIVE_KEY = "psx_deepdive_active";
+export const ACTIVE_EVENT = "psx:deepdive-active";
+
+export function getActiveResearch(): string {
+  try { return sessionStorage.getItem(ACTIVE_KEY) ?? ""; } catch { return ""; }
+}
+
+export function setActiveResearch(ticker: string): void {
+  try {
+    sessionStorage.setItem(ACTIVE_KEY, ticker);
+    window.dispatchEvent(new Event(ACTIVE_EVENT));
+  } catch { /* storage unavailable — the nav item just opens the search screen */ }
+}

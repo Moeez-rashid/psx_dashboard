@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Star, X, ArrowUp, ArrowDown, RefreshCw, SlidersHorizontal, Check } from "lucide-react";
+import { Search, Star, X, ArrowUp, ArrowDown, RefreshCw, SlidersHorizontal, Check, Telescope } from "lucide-react";
 import { fmtPKR, fmtVol } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
 import { addToWatchlist, removeFromWatchlist } from "@/lib/local-store";
@@ -48,7 +48,7 @@ const PAGE = 50;
 const tone = (v: number) => (v > 0 ? "text-up-2" : v < 0 ? "text-down-2" : "text-ink-3");
 const pct = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
 
-const GRID = "grid-cols-[22px_minmax(0,1.5fr)_76px_70px_70px_78px_56px_60px_86px]";
+const GRID = "grid-cols-[22px_minmax(0,1.5fr)_76px_70px_70px_78px_56px_60px_86px_28px]";
 
 function HeaderCell({ label, k, sort, dir, onSort, right = true }: {
   label: string; k: SortKey; sort: SortKey; dir: 1 | -1; onSort: (k: SortKey) => void; right?: boolean;
@@ -237,6 +237,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
         <HeaderCell label="P/E" k="pe" sort={sort} dir={dir} onSort={onSort} />
         <HeaderCell label="Yield" k="dy" sort={sort} dir={dir} onSort={onSort} />
         <HeaderCell label="Tech score" k="ts" sort={sort} dir={dir} onSort={onSort} right={false} />
+        <span />
       </div>
       {/* Mobile sort */}
       <div className="md:hidden flex items-center gap-2 mb-2">
@@ -261,7 +262,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
           <div key={r.s} className="bg-card border border-line hover:border-line-2 rounded-lg transition-colors">
             <div className="grid grid-cols-[22px_minmax(0,1fr)_auto] gap-x-2 items-center px-3.5 py-2.5 md:hidden">
               <StarBtn on={watching.has(r.s)} onClick={() => toggleStar(r)} symbol={r.s} />
-              <Link href={`/stock/${r.s}`} className="min-w-0">
+              <div className="min-w-0">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-[13px] font-bold tracking-tight">{r.s}</span>
                   {r.sh && <span className="text-[8px] font-bold tracking-wide text-up-2 border border-up/40 rounded px-1 py-px shrink-0">SHARIAH</span>}
@@ -274,22 +275,25 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
                   {r.dy > 0 && <span>Yield {r.dy.toFixed(1)}%</span>}
                   <span>{fmtPKR(r.mc)}</span>
                 </div>
-              </Link>
-              <Link href={`/stock/${r.s}`} className="text-right leading-tight">
-                <div className="text-[14px] font-semibold num">{r.p.toFixed(2)}</div>
-                <div className={`text-[10px] num ${tone(r.chg)}`}>{pct(r.chg)}</div>
-              </Link>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="text-right leading-tight">
+                  <div className="text-[14px] font-semibold num">{r.p.toFixed(2)}</div>
+                  <div className={`text-[10px] num ${tone(r.chg)}`}>{pct(r.chg)}</div>
+                </div>
+                <DeepDiveBtn symbol={r.s} />
+              </div>
             </div>
             <div className={`hidden md:grid ${GRID} gap-x-3 items-center px-3.5 py-2`}>
               <StarBtn on={watching.has(r.s)} onClick={() => toggleStar(r)} symbol={r.s} />
-              <Link href={`/stock/${r.s}`} className="min-w-0" title={`Open the research view for ${r.s}`}>
+              <div className="min-w-0">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-[13px] font-bold tracking-tight">{r.s}</span>
                   {r.sh && <span className="text-[8px] font-bold tracking-wide text-up-2 border border-up/40 rounded px-1 py-px shrink-0" title="KMI All Share constituent">SHARIAH</span>}
                   {r.fl.map((x) => <span key={x} className="text-[8px] font-bold text-gold-2 border border-gold/40 rounded px-1 py-px shrink-0" title={x === "XD" ? "Ex-dividend" : x === "XB" ? "Ex-bonus" : "Ex-right"}>{x}</span>)}
                 </div>
                 <div className="text-[10px] text-ink-3 truncate">{r.n} · {resolveSectorName(r.sec)}</div>
-              </Link>
+              </div>
               <span className="text-[12px] font-medium num text-right">{r.p.toFixed(2)}</span>
               <span className={`text-[11px] num text-right ${tone(r.chg)}`}>{pct(r.chg)}</span>
               <span className={`text-[11px] num text-right ${tone(r.y1)}`}>{r.y1 === 0 ? "—" : pct(r.y1)}</span>
@@ -297,6 +301,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
               <span className="text-[11px] num text-right text-ink-2">{r.pe > 0 ? r.pe.toFixed(1) : "—"}</span>
               <span className="text-[11px] num text-right text-ink-2">{r.dy > 0 ? `${r.dy.toFixed(1)}%` : "—"}</span>
               <span>{r.ts !== null ? <TechnicalScoreChip score={r.ts} /> : <span className="text-[11px] text-ink-3">—</span>}</span>
+              <DeepDiveBtn symbol={r.s} />
             </div>
           </div>
         ))}
@@ -311,10 +316,21 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
       {rows && (
         <p className="text-[10px] text-ink-3 mt-4 leading-relaxed">
           Prices, valuation and index membership from the Pakistan Stock Exchange data portal. Shariah = KMI All Share constituent.
-          Technical Score is this app&apos;s deterministic 0–100 setup score from price and volume — not a recommendation. Not financial advice.
+          Use the telescope button on a row to open its Deep Dive. Technical Score is this app&apos;s deterministic 0–100 setup score from price and volume — not a recommendation. Not financial advice.
         </p>
       )}
     </main>
+  );
+}
+
+/** The only way from a screener row into research — rows themselves are not
+ *  clickable, so selecting or double-clicking text never navigates away. */
+function DeepDiveBtn({ symbol }: { symbol: string }) {
+  return (
+    <Link href={`/stock/${symbol}`} title={`Open Deep Dive for ${symbol}`} aria-label={`Open Deep Dive for ${symbol}`}
+      className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-line-2 text-ink-3 hover:text-sky-2 hover:border-sky/60 transition-colors shrink-0">
+      <Telescope size={13} strokeWidth={2} aria-hidden />
+    </Link>
   );
 }
 

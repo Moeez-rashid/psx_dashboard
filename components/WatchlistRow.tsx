@@ -96,7 +96,8 @@ export function WatchlistRow({
             <span className={`sm:hidden shrink-0 inline-flex items-center rounded border px-1 py-px text-[8px] font-bold tracking-wide ${hue.text} ${hue.border}`}>
               {badgeLabel(signal ?? undefined)}
             </span>
-            <span className="text-[14px] font-bold tracking-tight truncate leading-tight">{ticker}</span>
+            {/* Tickers are short and are the row's identity — never truncate them; the sector gives way instead. */}
+            <span className="text-[14px] font-bold tracking-tight leading-tight shrink-0">{ticker}</span>
             {sector && <span className="hidden sm:inline text-[10px] text-ink-3 truncate min-w-0">{sector}</span>}
           </div>
           {/* Mobile second line: score · price · change — score before price to

@@ -18,7 +18,7 @@ import MarketContextSection from "@/components/deepdive/MarketContextSection";
 import CompanyNewsSection from "@/components/deepdive/CompanyNewsSection";
 import RiskSection from "@/components/deepdive/RiskSection";
 import AIInterpretationSection from "@/components/deepdive/AIInterpretationSection";
-import RecordResearchVisit from "@/components/deepdive/RecordResearchVisit";
+import RecordResearchVisit, { MarkActiveResearch } from "@/components/deepdive/RecordResearchVisit";
 import PsxFactsSection from "@/components/deepdive/PsxFactsSection";
 import StockActions from "@/components/StockActions";
 
@@ -108,6 +108,7 @@ export default async function DeepDivePage({ params }: { params: Promise<{ ticke
   return (
     <>
       <TopNav active="deep-dive" />
+      <MarkActiveResearch ticker={ticker} />
       <Suspense fallback={<DeepDiveSkeleton />}>
         <DeepDiveBody ticker={ticker} />
       </Suspense>
