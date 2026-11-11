@@ -184,7 +184,7 @@ export async function getEodDay(date: string): Promise<EodDay | null> {
 
 // ─── Session window ─────────────────────────────────────────────────────────
 
-const CONCURRENCY = 8;
+const CONCURRENCY = 12;
 
 function weekdaysBack(fromDate: string, count: number): string[] {
   const out: string[] = [];
