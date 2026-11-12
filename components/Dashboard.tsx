@@ -38,7 +38,7 @@ const DEFAULT_HOLDINGS: Holding[] = [];
 
 /** Opportunities tickers to poll prices for, mirroring the post-scan logic below:
  *  prefer the AI-ranked signals, fall back to the top technical picks when AI failed. */
-function initialScanTickers(r: ScanResult | null): string[] {
+function initialScanTickers(r: { signals: { ticker: string }[]; technicalData: { symbol: string }[] } | null): string[] {
   if (!r) return [];
   if (r.signals.length > 0) return r.signals.map((s) => s.ticker);
   return r.technicalData.slice(0, 8).map((t) => t.symbol);
@@ -67,7 +67,43 @@ function formatMarketDate(scanDate: string): string {
 
 /** Matches the scanResult state shape used after a live scan — `fundamentals`
  *  is intentionally excluded here; it's hydrated separately into askAnalystData below. */
-function toScanResultState(r: ScanResult, scanDate?: string) {
+interface ScanState {
+  signals: AISignal[];
+  newsAnalysis: NewsAnalysis | null;
+  expandedSectors: string[];
+  totalScanned: number;
+  passedTechnicals: number;
+  timestamp: string;
+  /** PSX trading date this scan's technicals reflect — distinct from
+   *  `timestamp` (when the scan code ran). See lib/scan-freshness.ts. */
+  scanDate?: string;
+  technicalData: StockTech[];
+  newsHeadlines: string[];
+  newsSources: string[];
+  newsFromCache: boolean;
+  newsItems: NewsItem[];
+  aiError?: string;
+}
+
+/**
+ * The scan on screen, kept at module scope so it survives client-side
+ * navigation (Market / Screener / Deep Dive and back). Without it, Dashboard
+ * remounts with whatever AppShell loaded at startup, and a scan the user ran
+ * since then (or a newer scheduled one) disappears until a full reload.
+ */
+let sessionScan: ScanState | null = null;
+const OPP_EXPANDED_KEY = "psx_opp_expanded";
+const SCAN_RECHECK_MS = 5 * 60_000;
+
+/** Whichever scan ran later; ties keep `current` so nothing re-renders for no reason. */
+function newerScan(current: ScanState | null, candidate: ScanState | null): ScanState | null {
+  if (!candidate) return current;
+  if (!current) return candidate;
+  const a = Date.parse(current.timestamp), b = Date.parse(candidate.timestamp);
+  return Number.isFinite(b) && (!Number.isFinite(a) || b > a) ? candidate : current;
+}
+
+function toScanResultState(r: ScanResult, scanDate?: string): ScanState {
   return {
     signals: r.signals,
     newsAnalysis: r.newsAnalysis,
@@ -157,26 +193,39 @@ export default function Dashboard({
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
-  const scanTickersRef = useRef<string[]>(initialScanTickers(initialResults));
 
-  // Scanner
-  const [scanResult, setScanResult] = useState<{
-    signals: AISignal[];
-    newsAnalysis: NewsAnalysis | null;
-    expandedSectors: string[];
-    totalScanned: number;
-    passedTechnicals: number;
-    timestamp: string;
-    /** PSX trading date this scan's technicals reflect — distinct from
-     *  `timestamp` (when the scan code ran). See lib/scan-freshness.ts. */
-    scanDate?: string;
-    technicalData: StockTech[];
-    newsHeadlines: string[];
-    newsSources: string[];
-    newsFromCache: boolean;
-    newsItems: NewsItem[];
-    aiError?: string;
-  } | null>(() => (initialResults ? toScanResultState(initialResults, initialScan?.scanDate) : null));
+  // Scanner — the newer of what this tab already showed and what AppShell loaded.
+  const [scanResult, setScanResult] = useState<ScanState | null>(() =>
+    newerScan(sessionScan, initialResults ? toScanResultState(initialResults, initialScan?.scanDate) : null));
+  const scanTickersRef = useRef<string[]>(initialScanTickers(scanResult));
+  useEffect(() => { if (scanResult) sessionScan = scanResult; }, [scanResult]);
+
+  // Pick up a newer stored scan without a reload: once on mount (AppShell may
+  // have handed over a scan cached earlier in this tab) and every few minutes
+  // while the page is visible, so the morning's scheduled scan replaces
+  // yesterday's on a page that was already open. A stored scan only ever
+  // replaces an older one — never a scan the user just ran.
+  useEffect(() => {
+    let alive = true;
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      fetch("/api/scan/latest")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { scan: PersistedScan | null } | null) => {
+          const s = d?.scan;
+          if (!alive || !s?.results) return;
+          const next = toScanResultState(s.results, s.scanDate);
+          if (newerScan(sessionScan, next) !== next) return;
+          scanTickersRef.current = initialScanTickers(next);
+          setScanResult(next);
+        })
+        .catch(() => {});
+    };
+    const first = setTimeout(check, 1500);
+    const id = setInterval(check, SCAN_RECHECK_MS);
+    document.addEventListener("visibilitychange", check);
+    return () => { alive = false; clearTimeout(first); clearInterval(id); document.removeEventListener("visibilitychange", check); };
+  }, []);
   // Whether TODAY's scheduled (cron) attempt already failed, from the initial
   // page load only — a fresh manual scan naturally supersedes this (scanDate
   // becomes today, so the stale-gated banner below stops showing regardless).
@@ -276,7 +325,14 @@ export default function Dashboard({
   // reveals the existing detailed cards unchanged. Navigating in from News (a
   // specific ticker, or a sector filter) always force-opens it, since the row
   // or filtered list being navigated to needs to actually be visible.
-  const [oppExpanded, setOppExpanded] = useState(false);
+  // The user's last expand/collapse choice is remembered, so the tab doesn't
+  // fold back to the preview every time they return to it.
+  const [oppExpanded, setOppExpanded] = useState(() => {
+    try { return localStorage.getItem(OPP_EXPANDED_KEY) === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(OPP_EXPANDED_KEY, oppExpanded ? "1" : "0"); } catch { /* private mode */ }
+  }, [oppExpanded]);
   // News page: ticker to filter the headline feed to (set when arriving from a card's catalyst strip)
   const [newsFilterTicker, setNewsFilterTicker] = useState<string | null>(null);
   // Buy Opportunities: sector to filter the list to (set when arriving from the News sector watch)
