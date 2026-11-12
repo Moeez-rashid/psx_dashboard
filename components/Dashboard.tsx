@@ -27,6 +27,8 @@ import { StockRow, StockDetailBody, type SignalDetail, type Tier2 } from "./Stoc
 import { WatchlistHeader, WatchlistRow } from "./WatchlistRow";
 import HoldingsOverview, { type Holding } from "./HoldingsOverview";
 import EventsCard from "./EventsCard";
+import HoldingsSync from "./HoldingsSync";
+import { useHoldingsSync, SYNC_APPLY_EVENT } from "@/lib/holdings-sync-client";
 import { volLabel, type StockTech } from "./StockBits";
 import type { PersistedScan } from "@/lib/scan-store";
 import type { ScanResult } from "@/lib/scanner";
@@ -185,6 +187,13 @@ export default function Dashboard({
   const [holdings, setHoldings] = useState<Holding[]>(DEFAULT_HOLDINGS);
   const [watching, setWatching] = useState<WatchItem[]>([]);
   const storageLoadedRef = useRef(false);
+  // Opt-in sync with other devices and the iPhone widget (off unless turned on).
+  useHoldingsSync(holdings, storageLoadedRef);
+  useEffect(() => {
+    const onApply = (e: Event) => setHoldings((e as CustomEvent<Holding[]>).detail);
+    window.addEventListener(SYNC_APPLY_EVENT, onApply);
+    return () => window.removeEventListener(SYNC_APPLY_EVENT, onApply);
+  }, []);
   useEffect(() => { if (storageLoadedRef.current) localStorage.setItem("psx_holdings", JSON.stringify(holdings)); }, [holdings]);
   useEffect(() => { if (storageLoadedRef.current) localStorage.setItem("psx_watch", JSON.stringify(watching)); }, [watching]);
 
@@ -1282,6 +1291,7 @@ export default function Dashboard({
         {/* ════ HOLDINGS ════ */}
         {tab === "holdings" && (
           <div>
+            <HoldingsSync />
             <HoldingsOverview holdings={holdings} prices={prices} />
 
             {holdings.length === 0 && (
@@ -1289,7 +1299,7 @@ export default function Dashboard({
                 <EmptyState
                   icon={Briefcase}
                   title="Track your PSX portfolio"
-                  description="Add your holdings below to see live P&L, allocation, sector exposure, technicals and AI advice. Everything is stored in your browser only — nothing leaves your device."
+                  description="Add your holdings below to see live P&L, allocation, sector exposure, technicals and AI advice. They're stored in this browser only, unless you turn on sync for other devices and the iPhone widget."
                 />
               </div>
             )}

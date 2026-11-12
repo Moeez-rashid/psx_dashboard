@@ -2,6 +2,14 @@
 
 Reasoning behind significant choices, newest first. This is *why*, not *what* — for what changed, read `git log`.
 
+## Holdings sync uses a secret key, not accounts (2026-11)
+
+**Decided:** to put holdings on an iPhone widget (Scriptable), holdings can optionally be stored server-side under a random 192-bit key that works like a secret link. There is no login. Redis is keyed by the key's SHA-256, so the stored data can't be turned back into working keys. Edits on any device are pushed and pulled with last-edit-wins on `updatedAt`.
+
+**Why not the alternatives:** baking holdings into the widget code meant re-pasting after every trade. Saving a file to iCloud Drive still needs a manual download, because a browser can't write there. Accounts would be a whole auth system for a one-person tool. A capability key gives automatic updates with nothing to sign up for. It can be replaced instantly, and turning sync off deletes the server copy.
+
+**Widget refresh is iOS's call** (roughly every 15–60 minutes). The widget always prints the time its prices are from and opens the live Holdings tab when tapped. It does not try to be a ticker.
+
 ## Market data rebuilt on PSX's public pages and daily files (2026-11)
 
 **What happened:** around late September 2026 PSX put `/market-watch` and `/timeseries/eod/*` behind a per-page token (`window.__ps._k`). To any other client they answer 404. The app was built entirely on those two feeds, and it failed *quietly*: `fetchAndScore` used `Promise.allSettled` and dropped every rejected history fetch, so each scheduled scan scored zero stocks, was saved as `status: "success"`, and the freshness indicator showed it as current. For six weeks the site presented "0 passed technicals" as if it were a market reading.
