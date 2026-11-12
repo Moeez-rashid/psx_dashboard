@@ -57,6 +57,11 @@ function getClient(): Redis | null {
   return null;
 }
 
+/** The shared Upstash client (null when not configured) — also used by lib/holdings-sync.ts. */
+export function getRedisClient(): Redis | null {
+  return getClient();
+}
+
 export function isScanStoreConfigured(): boolean {
   return getClient() !== null;
 }
