@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, Copy, Smartphone } from "lucide-react";
+import { ArrowLeft, Check, Copy, Smartphone } from "lucide-react";
 import { getSyncKey, joinSync, useSyncKey } from "@/lib/holdings-sync-client";
 
 /**
@@ -83,6 +83,9 @@ export default function WidgetSetup() {
 
   return (
     <main className="max-w-xl mx-auto px-4 py-6">
+      <Link href="/?tab=holdings" className="inline-flex items-center gap-1 text-xs text-ink-3 hover:text-ink mb-3">
+        <ArrowLeft size={14} /> Back to Holdings
+      </Link>
       <div className="flex items-center gap-2 mb-1">
         <Smartphone size={18} className="text-up-2" />
         <h1 className="text-lg font-semibold text-ink">Holdings on your iPhone</h1>
