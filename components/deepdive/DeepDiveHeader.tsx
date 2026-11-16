@@ -54,7 +54,7 @@ export default function DeepDiveHeader({
         </div>
 
         {/* Price + score */}
-        <div className="flex items-end gap-6 sm:gap-8">
+        <div className="flex items-end justify-between w-full sm:w-auto gap-4 sm:gap-8">
           <div>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold num tabular-nums text-ink">
@@ -76,7 +76,7 @@ export default function DeepDiveHeader({
           </div>
 
           {technical.score !== null && (
-            <div className="shrink-0">
+            <div className="min-w-0 max-w-[9.5rem]">
               <TechnicalScoreMeter score={technical.score} />
               <p className="text-[10px] text-ink-3 mt-1.5 max-w-[10rem] leading-snug">
                 Price and volume only — no fundamentals, news or AI.

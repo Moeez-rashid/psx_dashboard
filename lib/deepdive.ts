@@ -581,7 +581,7 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
   const [sectorR, universeR, newsR] = await Promise.allSettled([
     sectorCode ? getSectorPE(sectorCode) : Promise.resolve(null),
     getUniversePE(),
-    getCompanyNews(ticker, profile?.name ?? fundamentals?.companyName ?? null),
+    getCompanyNews(ticker, profile?.name ?? fundamentals?.companyName ?? quote?.name ?? null),
   ]);
 
   const sector = settled(sectorR, "sector P/E", degraded);
@@ -635,7 +635,8 @@ export async function buildDeepDiveData(rawTicker: string): Promise<DeepDiveData
   return {
     identity: {
       ticker,
-      companyName: profile?.name ?? fundamentals?.companyName ?? null,
+      // PSX's own listing name when askanalyst doesn't cover the company.
+      companyName: profile?.name ?? fundamentals?.companyName ?? quote?.name ?? null,
       sectorCode,
       sectorName: sectorCode ? resolveSectorName(sectorCode) : null,
       currentPrice: price,

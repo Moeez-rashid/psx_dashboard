@@ -46,10 +46,12 @@ function breadthSentence(shortLabel: string, longLabel: string, ratioPct: number
 }
 
 export default function PriceBehaviorSection({
-  behavior, priceSeries,
+  behavior, priceSeries, showChart = true,
 }: {
   behavior: PriceBehavior;
   priceSeries: DeepDivePricePoint[];
+  /** Off on the stock page, which already leads with a full price chart. */
+  showChart?: boolean;
 }) {
   const windows = behavior.windows;
   const [selectedLabel, setSelectedLabel] = useState<string>(() => {
@@ -133,9 +135,9 @@ export default function PriceBehaviorSection({
 
           {/* Chart + the selected window's numbers, together in one card. */}
           <div className="mt-4 bg-inset border border-line rounded-lg px-3 py-3">
-            <ClosingPriceChart points={chartPoints} window={selected} />
+            {showChart && <ClosingPriceChart points={chartPoints} window={selected} />}
 
-            <div className="mt-4 max-w-xl">
+            <div className={`${showChart ? "mt-4" : ""} max-w-xl`}>
               {selected.positionPct !== null ? (
                 <RangeMeter
                   low={selected.low}

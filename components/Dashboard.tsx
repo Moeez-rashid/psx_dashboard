@@ -16,7 +16,9 @@ import { resolveSectorName } from "@/lib/sectors";
 import { ErrorBanner, Skeleton, EmptyState, IconButton } from "./ui/primitives";
 import { toast } from "./ui/Toast";
 import { BrandMark, GlobalActions, NavRow } from "./nav/TopNav";
-import { isDashboardTab, type DashboardTab } from "@/lib/nav";
+import { COPY_SNAPSHOT_EVENT, OPEN_METRICS_EVENT, OPEN_SETTINGS_EVENT, isDashboardTab, type DashboardTab } from "@/lib/nav";
+import { publishDashboardTab } from "@/lib/nav-state";
+import SegmentSwitch from "./nav/SegmentSwitch";
 import { SET_TAB_EVENT } from "./CommandPalette";
 import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
@@ -678,8 +680,14 @@ export default function Dashboard({
     if (h.length) setHoldings(h);
     if (w.length) setWatching(w);
     setSettings(loadSettings());
-    const urlTab = new URLSearchParams(window.location.search).get("tab");
+    const params = new URLSearchParams(window.location.search);
+    const urlTab = params.get("tab");
     if (isDashboardTab(urlTab)) setTab(urlTab);
+    // "Settings" in the phone More sheet, chosen from another page.
+    if (params.get("settings") === "1") {
+      setShowSettings(true);
+      window.history.replaceState(null, "", isDashboardTab(urlTab) && urlTab !== "opportunities" ? `/?tab=${urlTab}` : "/");
+    }
     storageLoadedRef.current = true;
     const all = [...new Set([...w.map(x => x.ticker), ...h.map(x => x.ticker)])];
     if (all.length > 0) fetchAskAnalystBatch(all);
@@ -699,6 +707,19 @@ export default function Dashboard({
     window.addEventListener(SET_TAB_EVENT, onTab);
     window.addEventListener(WATCH_EVENT, onWatch);
     return () => { window.removeEventListener(SET_TAB_EVENT, onTab); window.removeEventListener(WATCH_EVENT, onWatch); };
+  }, []);
+
+  // The phone tab bar highlights the tab showing here.
+  useEffect(() => { publishDashboardTab(tab); }, [tab]);
+  useEffect(() => () => publishDashboardTab(null), []);
+
+  // Dialogs the phone More sheet opens.
+  useEffect(() => {
+    const openSettings = () => setShowSettings(true);
+    const openMetrics = () => setShowMetricsGuide(true);
+    window.addEventListener(OPEN_SETTINGS_EVENT, openSettings);
+    window.addEventListener(OPEN_METRICS_EVENT, openMetrics);
+    return () => { window.removeEventListener(OPEN_SETTINGS_EVENT, openSettings); window.removeEventListener(OPEN_METRICS_EVENT, openMetrics); };
   }, []);
 
   // Auto-fetch tech + fundamentals when tab changes
@@ -967,11 +988,27 @@ export default function Dashboard({
     .slice(0, 6);
 
 
+  // Re-subscribed each render: exportForClaude closes over the latest scan and prices.
+  useEffect(() => {
+    window.addEventListener(COPY_SNAPSHOT_EVENT, exportForClaude);
+    return () => window.removeEventListener(COPY_SNAPSHOT_EVENT, exportForClaude);
+  });
+
+  const portfolioSwitch = (
+    <SegmentSwitch
+      label="Portfolio"
+      segments={[
+        { label: "Holdings", active: tab === "holdings", onClick: () => goTab("holdings"), count: holdings.length },
+        { label: "Watchlist", active: tab === "watching", onClick: () => goTab("watching"), count: watching.length },
+      ]}
+    />
+  );
+
   return (
     <div className="min-h-screen flex flex-col text-[13px]">
 
       {/* ── HEADER ── */}
-      <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line">
+      <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line pt-[env(safe-area-inset-top)]">
         <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between gap-2 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2">
@@ -986,13 +1023,14 @@ export default function Dashboard({
           <div className="flex items-center gap-1.5">
             <div className="hidden lg:block mr-2"><PKTClock /></div>
             <GlobalActions />
-            <IconButton icon={Clipboard} label="Copy full snapshot for AI analysis (Claude, ChatGPT, …)" tone="sky" onClick={exportForClaude} />
+            {/* Phones reach these from the tab bar's More sheet. */}
+            <span className="hidden md:inline-flex"><IconButton icon={Clipboard} label="Copy full snapshot for AI analysis (Claude, ChatGPT, …)" tone="sky" onClick={exportForClaude} /></span>
             <button onClick={() => setShowMetricsGuide(true)} className="btn p-2 hidden md:inline-flex" title="Metrics guide" aria-label="Metrics guide">
               <HelpCircle size={15} strokeWidth={2} aria-hidden />
             </button>
             <button
               onClick={() => setShowSettings(true)}
-              className={`btn px-2.5 ${hasKey ? "border-up/50 text-up-2" : "border-gold/50 text-gold-2"}`}
+              className={`btn px-2.5 hidden md:inline-flex ${hasKey ? "border-up/50 text-up-2" : "border-gold/50 text-gold-2"}`}
               title="Settings"
             >
               <SettingsIcon size={14} strokeWidth={2} aria-hidden /><span className="hidden md:inline">{hasKey ? settings.provider : "Set API Key"}</span>
@@ -1291,6 +1329,7 @@ export default function Dashboard({
         {/* ════ HOLDINGS ════ */}
         {tab === "holdings" && (
           <div>
+            {portfolioSwitch}
             <HoldingsSync />
             <HoldingsOverview holdings={holdings} prices={prices} />
 
@@ -1472,6 +1511,7 @@ export default function Dashboard({
         {/* ════ WATCHLIST — monitoring, not a second Opportunities: one dense row per ticker ════ */}
         {tab === "watching" && (
           <div>
+            {portfolioSwitch}
             <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
               <span className="label">Watchlist</span>
               {watching.length > 0 && (

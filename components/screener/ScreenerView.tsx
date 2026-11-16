@@ -1,4 +1,5 @@
 "use client";
+import { MarketsSwitch } from "@/components/nav/SegmentSwitch";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, Star, X, ArrowUp, ArrowDown, RefreshCw, SlidersHorizontal, Check, Telescope } from "lucide-react";
@@ -154,6 +155,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
 
   return (
     <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-5 text-[13px]">
+      <MarketsSwitch active="screener" />
       {/* Presets */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {PRESETS.map((p) => (

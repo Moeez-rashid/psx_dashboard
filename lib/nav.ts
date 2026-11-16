@@ -39,3 +39,7 @@ export function isDashboardTab(v: string | null | undefined): v is DashboardTab 
 export const OPEN_PALETTE_EVENT = "psx:open-palette";
 export const OPEN_ALERTS_EVENT = "psx:open-alerts";
 export const OPEN_TOOLS_EVENT = "psx:open-tools";
+/** Opened from the phone "More" sheet; the dashboard owns these dialogs. */
+export const OPEN_SETTINGS_EVENT = "psx:open-settings";
+export const OPEN_METRICS_EVENT = "psx:open-metrics";
+export const COPY_SNAPSHOT_EVENT = "psx:copy-snapshot";

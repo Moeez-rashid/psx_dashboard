@@ -1,4 +1,5 @@
 "use client";
+import { MarketsSwitch } from "@/components/nav/SegmentSwitch";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { TrendingUp, TrendingDown, Plus, Check, ChevronDown, ArrowUpToLine, ArrowDownToLine, RefreshCw } from "lucide-react";
@@ -153,6 +154,7 @@ export default function MarketView() {
 
   return (
     <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-5 space-y-6 text-[13px]">
+      <MarketsSwitch active="overview" />
 
       {/* ── Session status ── */}
       <section className="card py-3 px-3.5">

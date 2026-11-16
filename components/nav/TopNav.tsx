@@ -25,18 +25,19 @@ export function GlobalActions() {
     <>
       <button
         onClick={fire(OPEN_PALETTE_EVENT)}
-        className="btn px-2.5 text-ink-3"
+        className="btn px-3 min-h-10 md:min-h-0 md:px-2.5 text-ink-3"
         title="Search stocks and actions (Ctrl/⌘ K)"
         aria-label="Search stocks and actions"
       >
         <Search size={14} strokeWidth={2} aria-hidden />
-        <span className="hidden lg:inline">Search</span>
+        <span className="md:hidden lg:inline">Search</span>
         <kbd className="hidden lg:inline text-[9px] border border-line-2 rounded px-1 py-px text-ink-3">⌘K</kbd>
       </button>
-      <button onClick={fire(OPEN_ALERTS_EVENT)} className="btn p-2" title="Price alerts" aria-label="Price alerts">
+      {/* On phones these live in the tab bar's More sheet. */}
+      <button onClick={fire(OPEN_ALERTS_EVENT)} className="btn p-2 hidden md:inline-flex" title="Price alerts" aria-label="Price alerts">
         <Bell size={15} strokeWidth={2} aria-hidden />
       </button>
-      <button onClick={fire(OPEN_TOOLS_EVENT)} className="btn p-2 hidden sm:inline-flex" title="Trade calculator" aria-label="Trade calculator">
+      <button onClick={fire(OPEN_TOOLS_EVENT)} className="btn p-2 hidden md:inline-flex" title="Trade calculator" aria-label="Trade calculator">
         <Calculator size={15} strokeWidth={2} aria-hidden />
       </button>
     </>
@@ -46,8 +47,7 @@ export function GlobalActions() {
 const TAB_CLASS = "relative flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 text-xs font-medium transition-colors shrink-0 cursor-pointer";
 
 /**
- * The primary nav row. Scrolls horizontally inside itself on narrow screens,
- * so no number of items or badges can ever widen the page.
+ * The primary nav row on tablets and desktops. Phones get BottomNav instead.
  * `onTab` makes dashboard-tab items switch in place instead of navigating.
  */
 export function NavRow({ active, counts, onTab }: {
@@ -67,7 +67,7 @@ export function NavRow({ active, counts, onTab }: {
     item.id === "deep-dive" && activeTicker && !pathname.startsWith("/stock/") ? `/stock/${activeTicker}` : item.href;
 
   return (
-    <nav className="max-w-5xl mx-auto px-2 sm:px-4 flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Primary">
+    <nav className="hidden md:flex max-w-5xl mx-auto px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Primary">
       {NAV_ITEMS.map((item) => {
         const isActive = item.id === active;
         const count = counts?.[item.id];
@@ -98,7 +98,7 @@ export function NavRow({ active, counts, onTab }: {
 /** Header for every route other than the dashboard, which composes the same pieces itself. */
 export default function TopNav({ active }: { active: NavItem["id"] }) {
   return (
-    <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line">
+    <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line pt-[env(safe-area-inset-top)]">
       <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between py-2.5">
         <Link href="/" className="flex items-center gap-2">
           <BrandMark />

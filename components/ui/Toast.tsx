@@ -32,7 +32,7 @@ export function Toaster() {
 
   if (items.length === 0) return null;
   return (
-    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-150 flex flex-col gap-2 items-center pointer-events-none">
+    <div className="fixed bottom-[calc(130px+env(safe-area-inset-bottom))] md:bottom-5 left-1/2 -translate-x-1/2 z-150 flex flex-col gap-2 items-center pointer-events-none">
       {items.map(t => (
         <div key={t.id} className={`bg-raised border rounded-lg px-4 py-2 text-xs font-medium shadow-xl shadow-black/50 animate-slide-up ${TONE_CLASS[t.tone]}`}>
           {t.text}
