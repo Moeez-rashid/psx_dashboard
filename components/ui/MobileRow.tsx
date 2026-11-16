@@ -7,7 +7,7 @@ import { Sparkline } from "./primitives";
  * right-aligned figures. Flat (the list draws hairlines between rows), about
  * 52px tall. Phones only; wider screens keep the card grids.
  */
-export function MobileRow({ ticker, sub, top, bottom, tone, spark }: {
+export function MobileRow({ ticker, sub, top, bottom, tone, spark, flag }: {
   ticker: string;
   /** One line under the ticker: score and sector, or "200 × 480.00". */
   sub?: ReactNode;
@@ -19,6 +19,8 @@ export function MobileRow({ ticker, sub, top, bottom, tone, spark }: {
   tone?: string;
   /** ~30 daily closes; drawn as a small trend line, green or red by direction. */
   spark?: number[];
+  /** Small marker after the ticker, e.g. "Near entry". */
+  flag?: ReactNode;
 }) {
   return (
     <div className="sm:hidden flex items-center gap-2.5 px-4 py-2 min-h-[52px]">
@@ -29,10 +31,16 @@ export function MobileRow({ ticker, sub, top, bottom, tone, spark }: {
         {ticker.slice(0, 2)}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-semibold tracking-tight leading-tight">{ticker}</div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[14px] font-semibold tracking-tight leading-tight">{ticker}</span>
+          {flag}
+        </div>
         {sub && <div className="text-[11px] text-ink-3 leading-tight mt-0.5 truncate">{sub}</div>}
       </div>
-      {spark && spark.length >= 5 && <Sparkline data={spark} width={52} height={22} opacity={0.9} />}
+      {spark && spark.length >= 5 && (
+        <Sparkline data={spark} width={52} height={22} opacity={0.85}
+          color={spark[spark.length - 1] >= spark[0] ? "var(--color-up)" : "var(--color-down)"} />
+      )}
       <div className="text-right shrink-0 leading-tight min-w-[64px]">
         <div className="text-[14px] font-semibold num">{top}</div>
         {bottom && <div className="text-[11px] num mt-0.5">{bottom}</div>}
@@ -57,6 +65,21 @@ export function Move({ pct, abs, digits = 2 }: { pct?: number | null; abs?: numb
 /** 308812.4 → "308,812". */
 export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString("en-US");
+}
+
+/** "Near entry": the scorer rates the price at EMA20 support (entry 20/20). */
+export function NearEntryFlag({ title }: { title?: string }) {
+  return (
+    <span title={title ?? "Price at EMA20 support: the Technical Score's best entry rating"}
+      className="shrink-0 text-[9px] font-semibold text-sky-2 bg-sky-dim rounded px-1 leading-[14px]">
+      Near entry
+    </span>
+  );
+}
+
+/** Phone sub-line technicals: "RSI 64 · Vol 1.3×". */
+export function techBrief(t?: { rsi: number; volumeRatio: number } | null): string | null {
+  return t ? `RSI ${t.rsi.toFixed(0)} · Vol ${t.volumeRatio.toFixed(1)}×` : null;
 }
 
 /** Hairline-separated, edge-to-edge list on phones; the usual spaced cards from sm up. */

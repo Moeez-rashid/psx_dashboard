@@ -1,9 +1,10 @@
 "use client";
-import { MobileRow, Move } from "./ui/MobileRow";
+import { MobileRow, Move, NearEntryFlag, techBrief } from "./ui/MobileRow";
 import Link from "next/link";
 import { Star, ChevronDown, RefreshCw, Sparkles, Telescope, Bell } from "lucide-react";
 import { openAlertFor } from "./AlertsCenter";
 import { hueOf, StockDetailBody, type SignalDetail } from "./StockRow";
+import { nearEntry } from "./StockBits";
 import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreChip } from "./ui/TechnicalScore";
 
@@ -79,8 +80,10 @@ export function WatchlistRow({
         <MobileRow
           ticker={ticker}
           tone={hue.text}
+          flag={nearEntry(detail.tech) ? <NearEntryFlag /> : undefined}
           sub={technicalScore != null ? (
-            <><span className={hue.text}>{badgeLabel(signal ?? undefined)} · {Math.round(technicalScore)}</span>{sector && <> · {sector}</>}</>
+            <><span className={hue.text}>{badgeLabel(signal ?? undefined)} {Math.round(technicalScore)}</span>
+            {techBrief(detail.tech) ? <> · {techBrief(detail.tech)}</> : sector ? <> · {sector}</> : null}</>
           ) : !hasData ? (
             <span className="inline-flex items-center gap-1"><RefreshCw size={10} strokeWidth={2.25} className="animate-spin" aria-hidden />Loading</span>
           ) : sector}
@@ -146,16 +149,16 @@ export function WatchlistRow({
       {open && (
         <div className="px-4 sm:px-3.5 pb-3.5 border-t border-line animate-fade-in">
           {/* Phones: the row's actions, which the compact row has no room for. */}
-          <div className="sm:hidden flex gap-2 pt-3">
-            <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(); }} className="btn flex-1 justify-center min-h-10 text-[13px] border-gold/50 text-gold-2">
-              <Star size={14} strokeWidth={2} fill="currentColor" aria-hidden />Unwatch
+          <div className="sm:hidden flex gap-2 pt-2.5">
+            <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(); }} className="btn flex-1 justify-center min-h-8 text-[12px] border-gold/50 text-gold-2">
+              <Star size={13} strokeWidth={2} fill="currentColor" aria-hidden />Unwatch
             </button>
             <button type="button" onClick={(e) => { e.stopPropagation(); openAlertFor(ticker, price); }}
-              aria-label={`Price alert for ${ticker}`} title="Price alert" className="btn w-10 justify-center min-h-10 px-0 shrink-0">
-              <Bell size={14} strokeWidth={2} aria-hidden />
+              aria-label={`Price alert for ${ticker}`} title="Price alert" className="btn w-8 justify-center min-h-8 px-0 shrink-0">
+              <Bell size={13} strokeWidth={2} aria-hidden />
             </button>
-            <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-10 text-[13px]">
-              <Telescope size={14} strokeWidth={2} aria-hidden />Deep Dive
+            <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-8 text-[12px]">
+              <Telescope size={13} strokeWidth={2} aria-hidden />Deep Dive
             </Link>
           </div>
           {hasData ? (

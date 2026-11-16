@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { NewsAnalysis } from "@/lib/providers/types";
 import { SentimentBadge } from "./NewsView";
@@ -8,6 +9,7 @@ import { Move } from "./ui/MobileRow";
 interface Pulse {
   kse100: { value: number; change: number; changePercent: number } | null;
   breadth: { advancing: number; declining: number; unchanged: number; total: number };
+  sectors?: { code: string; name: string; changePercent: number }[];
 }
 
 /**
@@ -31,6 +33,10 @@ export default function SignalsPulse({ na, onOpenNews }: { na: NewsAnalysis | nu
 
   const k = data?.kse100;
   const b = data?.breadth;
+  // Two best and the worst of the 20 largest sectors (as on the Market page), so a
+  // one-stock sector can't headline; each opens the screener on that sector.
+  const ranked = [...(data?.sectors ?? []).slice(0, 20)].sort((x, y) => y.changePercent - x.changePercent);
+  const sectorPicks = ranked.length >= 3 ? [ranked[0], ranked[1], ranked[ranked.length - 1]] : [];
   if (!k && !b && !na) return null;
 
   return (
@@ -55,6 +61,20 @@ export default function SignalsPulse({ na, onOpenNews }: { na: NewsAnalysis | nu
               <div className="bg-down" style={{ width: `${(b.declining / b.total) * 100}%` }} />
             </div>
           )}
+        </div>
+      )}
+      {sectorPicks.length > 0 && (
+        <div className="flex items-center gap-1.5 border-t border-line px-3 py-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <span className="text-[10px] text-ink-3 shrink-0">Sectors</span>
+          {sectorPicks.map((s) => (
+            <Link key={s.code} href={`/screener?sector=${s.code}`}
+              className="shrink-0 inline-flex items-center gap-1 rounded-full bg-raised px-2 py-0.5 text-[10px] text-ink-2">
+              <span className="max-w-[88px] truncate">{s.name}</span>
+              <span className={`num ${s.changePercent >= 0 ? "text-up-2" : "text-down-2"}`}>
+                {s.changePercent >= 0 ? "+" : "−"}{Math.abs(s.changePercent).toFixed(2)}%
+              </span>
+            </Link>
+          ))}
         </div>
       )}
       {na?.summary && (

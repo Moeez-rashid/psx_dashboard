@@ -122,13 +122,13 @@ export default function HoldingsOverview({ holdings, prices }: {
       </div>
       {/* Allocation donut — the chart only; the legend below names the slices */}
       <svg viewBox="0 0 120 120" width={68} height={68} className="shrink-0" aria-label="Allocation by holding">
-        {slices.map((s, i) => <path key={i} d={s.path} fill={s.color} />)}
+        {slices.map((s, i) => <path key={i} d={s.path} fill={s.color} opacity={0.75} />)}
       </svg>
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-[11px] text-ink-3">
         {rows.map((r) => (
           <span key={r.ticker} className="inline-flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: r.color }} />
+            <span className="w-1.5 h-1.5 rounded-full opacity-75" style={{ background: r.color }} />
             <span className="text-ink-2">{r.ticker}</span>
             <span className="num">{totalMV > 0 ? Math.round((r.marketVal / totalMV) * 100) : 0}%</span>
           </span>

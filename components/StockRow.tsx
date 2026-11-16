@@ -6,9 +6,8 @@ import { openAlertFor } from "./AlertsCenter";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreMeter } from "./ui/TechnicalScore";
-import { TechChips, FundamentalsState, type StockTech } from "./StockBits";
-import { MobileRow, Move, fmtInt } from "./ui/MobileRow";
-import { effectivePE } from "@/lib/askanalyst";
+import { TechChips, FundamentalsState, nearEntry, fundamentalChips, type StockTech } from "./StockBits";
+import { MobileRow, Move, fmtInt, NearEntryFlag, techBrief } from "./ui/MobileRow";
 
 // ─── Detail payload shared by every tab ─────────────────────────────────────
 export interface SignalDetail {
@@ -151,32 +150,36 @@ function dedupedReasons(reasons: string[] | undefined, reason?: string): string[
 }
 
 // ─── Phone-only pieces of the expanded body ─────────────────────────────────
-/** Six key numbers in a tight grid: what the desktop shows as two chip rows. */
+/** Technicals and fundamentals as two compact lines of label–value pairs. */
 function PhoneStats({ detail }: { detail: SignalDetail }) {
   const { tech, fundamentals: f, technicalScore, currentPrice } = detail;
-  const pe = f ? effectivePE(f, currentPrice) : null;
-  const trend = tech
-    ? tech.trendRegime
-      ? tech.trendRegime.replace(/_/g, " ")
-      : tech.priceVsEma20 === "above" ? "Above EMA20" : "Below EMA20"
-    : null;
-  const cells: [string, string, string][] = [
+  const techPairs: [string, string, string][] = tech ? [
     ["Score", technicalScore !== undefined ? `${Math.round(technicalScore)}` : "—", "text-ink"],
-    ["RSI", tech ? tech.rsi.toFixed(0) : "—", tech ? (tech.rsi < 30 ? "text-up-2" : tech.rsi > 70 ? "text-down-2" : "text-ink") : "text-ink-3"],
-    ["Volume", tech ? `${tech.volumeRatio.toFixed(1)}× avg` : "—", tech && tech.volumeRatio >= 1.5 ? "text-up-2" : "text-ink"],
-    ["Trend", trend ?? "—", "text-ink"],
-    ["P/E", pe !== null && pe > 0 ? `${pe.toFixed(1)}×` : "—", "text-ink"],
-    ["Dividend", f?.dividendYield ? `${f.dividendYield.toFixed(1)}%` : "—", f?.dividendYield && f.dividendYield >= 5 ? "text-up-2" : "text-ink"],
-  ];
-  return (
-    <dl className="sm:hidden grid grid-cols-3 gap-x-3 gap-y-1.5 rounded-lg bg-inset px-3 py-2">
-      {cells.map(([label, value, tone]) => (
-        <div key={label} className="min-w-0">
-          <dt className="text-[10px] text-ink-3">{label}</dt>
-          <dd className={`text-[12px] font-medium num truncate ${label === "Trend" ? "capitalize" : ""} ${tone}`}>{value}</dd>
-        </div>
+    ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? "text-up-2" : tech.rsi > 70 ? "text-down-2" : "text-ink"],
+    ["EMA20", tech.ema20.toFixed(2), "text-ink"],
+    ["EMA50", tech.ema50.toFixed(2), "text-ink"],
+    ["Vol", `${tech.volumeRatio.toFixed(1)}×`, tech.volumeRatio >= 1.5 ? "text-up-2" : "text-ink"],
+    ["Trend", tech.trendRegime ?? (tech.priceVsEma20 === "above" ? "above EMA20" : "below EMA20"), "text-ink"],
+  ] : [];
+  const fundPairs: [string, string, string][] = f
+    ? fundamentalChips(f, currentPrice).map(([l, v, t]) => [l, v, t])
+    : [];
+  const line = (title: string, pairs: [string, string, string][]) => (
+    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+      <span className="text-[9px] uppercase tracking-wide text-ink-3 w-full">{title}</span>
+      {pairs.map(([l, v, tone]) => (
+        <span key={l} className="whitespace-nowrap"><span className="text-ink-3">{l} </span><span className={`num ${tone}`}>{v}</span></span>
       ))}
-    </dl>
+    </div>
+  );
+  if (!techPairs.length && !fundPairs.length) return null;
+  return (
+    <div className="sm:hidden space-y-1.5 text-[11px]">
+      {techPairs.length > 0 && line("Technicals", techPairs)}
+      {fundPairs.length > 0 ? line("Fundamentals", fundPairs) : f === null ? (
+        <p className="text-[10px] text-ink-3">Fundamentals unavailable for this ticker</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -320,9 +323,9 @@ function MobileRemove({ label, onConfirm }: { label: string; onConfirm: () => vo
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); if (armed) onConfirm(); else setArmed(true); }}
-      className={`btn flex-1 justify-center min-h-10 text-[13px] ${armed ? "border-down/60 text-down-2" : ""}`}
+      className={`btn flex-1 justify-center min-h-8 text-[12px] ${armed ? "border-down/60 text-down-2" : ""}`}
     >
-      <X size={14} strokeWidth={2} aria-hidden />{armed ? "Tap again" : label}
+      <X size={13} strokeWidth={2} aria-hidden />{armed ? "Tap again" : label}
     </button>
   );
 }
@@ -330,7 +333,7 @@ function MobileRemove({ label, onConfirm }: { label: string; onConfirm: () => vo
 export function StockRow({
   variant, signal, ticker, sector, technicalScore, pnlPct,
   spark, price, change, starred, onToggleStar, onRemove, tier2, open, onToggle, children,
-  shares, avgPrice, value, pnl,
+  shares, avgPrice, value, pnl, tech,
 }: {
   variant: "signal" | "holding";
   signal?: string;
@@ -353,6 +356,8 @@ export function StockRow({
   avgPrice?: number;
   value?: number | null;
   pnl?: number | null;
+  /** Phone row: RSI and volume in the sub-line, and the Near entry flag. */
+  tech?: StockTech | null;
 }) {
   const hue = hueOf(signal);
   const isSignal = variant === "signal";
@@ -381,9 +386,10 @@ export function StockRow({
           <MobileRow
             ticker={ticker}
             tone={hue.text}
+            flag={nearEntry(tech) ? <NearEntryFlag /> : undefined}
             sub={<>
-              <span className={hue.text}>{badgeLabel(signal)}{technicalScore !== undefined ? ` · ${Math.round(technicalScore)}` : ""}</span>
-              {sector && <> · {sector}</>}
+              <span className={hue.text}>{badgeLabel(signal)}{technicalScore !== undefined ? ` ${Math.round(technicalScore)}` : ""}</span>
+              {techBrief(tech) ? <> · {techBrief(tech)}</> : sector ? <> · {sector}</> : null}
             </>}
             top={price !== undefined ? price.toFixed(2) : "—"}
             bottom={<Move pct={change} />}
@@ -476,9 +482,9 @@ export function StockRow({
       {open && (
         <div className="px-4 sm:px-3.5 pb-3.5 border-t border-line animate-fade-in">
           {/* Phones: the one-line summary and the row's own action, which the compact row has no room for. */}
-          <div className="sm:hidden pt-3 space-y-3">
+          <div className="sm:hidden pt-2.5 space-y-2.5">
             {/* Holdings already show the position block below; this line would repeat it. */}
-            {isSignal && <p className="flex items-start gap-1.5 text-[13px] text-ink-2 leading-snug">
+            {isSignal && <p className="flex items-start gap-1.5 text-[12px] text-ink-2 leading-snug">
               <Tier2Icon size={14} strokeWidth={2} className="shrink-0 text-ink-3 mt-0.5" aria-hidden />
               <span>
                 {tier2.text}
@@ -491,20 +497,20 @@ export function StockRow({
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onToggleStar?.(); }}
                   aria-pressed={!!starred}
-                  className={`btn flex-1 justify-center min-h-10 text-[13px] whitespace-nowrap ${starred ? "border-gold/50 text-gold-2" : ""}`}
+                  className={`btn flex-1 justify-center min-h-8 text-[12px] whitespace-nowrap ${starred ? "border-gold/50 text-gold-2" : ""}`}
                 >
-                  <Star size={14} strokeWidth={2} fill={starred ? "currentColor" : "none"} aria-hidden />
+                  <Star size={13} strokeWidth={2} fill={starred ? "currentColor" : "none"} aria-hidden />
                   {starred ? "Watching" : "Watch"}
                 </button>
               ) : onRemove ? (
                 <MobileRemove label="Remove" onConfirm={onRemove} />
               ) : null}
               <button type="button" onClick={(e) => { e.stopPropagation(); openAlertFor(ticker, price); }}
-                aria-label={`Price alert for ${ticker}`} title="Price alert" className="btn w-10 justify-center min-h-10 px-0 shrink-0">
-                <Bell size={14} strokeWidth={2} aria-hidden />
+                aria-label={`Price alert for ${ticker}`} title="Price alert" className="btn w-8 justify-center min-h-8 px-0 shrink-0">
+                <Bell size={13} strokeWidth={2} aria-hidden />
               </button>
-              <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-10 text-[13px]">
-                <Telescope size={14} strokeWidth={2} aria-hidden />Deep Dive
+              <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-8 text-[12px]">
+                <Telescope size={13} strokeWidth={2} aria-hidden />Deep Dive
               </Link>
             </div>
           </div>

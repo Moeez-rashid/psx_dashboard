@@ -1326,6 +1326,7 @@ export default function Dashboard({
                       ticker={tech.symbol}
                       sector={sectorOf(tech.symbol)}
                       technicalScore={tech.technicalScore}
+                      tech={tech}
                       spark={sparks[tech.symbol]}
                       price={liveQuote?.currentPrice ?? tech.currentPrice}
                       change={liveQuote?.changePercent}
@@ -1364,6 +1365,7 @@ export default function Dashboard({
                     ticker={sig.ticker}
                     sector={sectorOf(sig.ticker)}
                     technicalScore={sigTech?.technicalScore}
+                    tech={sigTech}
                     spark={sparks[sig.ticker]}
                     price={displayPrice}
                     change={displayChange}
@@ -1582,8 +1584,19 @@ export default function Dashboard({
             {portfolioSwitch}
             <div className="flex justify-between items-center mb-2 sm:mb-3 flex-wrap gap-2">
               <span className="label hidden sm:inline">Watchlist</span>
+              {/* Phones: sort sits in the same row as the actions */}
+              {watching.length > 1 && (
+                <div className="sm:hidden flex gap-1">
+                  {(["score", "name"] as const).map(opt => (
+                    <button key={opt} onClick={() => setSortWatch(opt)}
+                      className={`btn text-[10px] px-2 py-1 ${sortWatch === opt ? "bg-raised text-ink border-line-2" : ""}`}>
+                      {opt === "score" ? "Score ↓" : "A–Z"}
+                    </button>
+                  ))}
+                </div>
+              )}
               {watching.length > 0 && (
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-1.5 sm:gap-2 items-center">
                   <button
                     onClick={async () => { await fetchWatchTech(); fetchPrices(); }}
                     disabled={loadingWatchTech || runningWatchAI}
@@ -1600,14 +1613,14 @@ export default function Dashboard({
                     title={!settings.apiKey ? "Set your API key in Settings first" : "Run AI analysis on your watchlist"}
                   >
                     <Sparkles size={11} strokeWidth={2.25} className={runningWatchAI ? "animate-pulse" : ""} aria-hidden />
-                    {runningWatchAI ? "Analysing…" : "AI Analysis"}
+                    {runningWatchAI ? "Analysing…" : <><span className="sm:hidden">AI</span><span className="hidden sm:inline">AI Analysis</span></>}
                   </button>
                 </div>
               )}
             </div>
 
             {watching.length > 1 && (
-              <div className="flex items-center gap-2 mb-2 sm:mb-3">
+              <div className="hidden sm:flex items-center gap-2 mb-3">
                 <span className="text-[10px] text-ink-3">Sort</span>
                 {(["score", "name"] as const).map(opt => (
                   <button
