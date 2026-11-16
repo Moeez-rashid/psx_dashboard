@@ -20,6 +20,7 @@ import { COPY_SNAPSHOT_EVENT, OPEN_METRICS_EVENT, OPEN_SETTINGS_EVENT, isDashboa
 import { publishDashboardTab } from "@/lib/nav-state";
 import SegmentSwitch from "./nav/SegmentSwitch";
 import { LIST_CLASS } from "./ui/MobileRow";
+import { useIsPhone } from "@/lib/use-media";
 import { SET_TAB_EVENT } from "./CommandPalette";
 import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
@@ -270,6 +271,9 @@ export default function Dashboard({
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showMetricsGuide, setShowMetricsGuide] = useState(false);
+  // Phones: the picks list is always open (rows are compact), and the AI note is a tap-to-read chip.
+  const isPhone = useIsPhone();
+  const [aiNoteOpen, setAiNoteOpen] = useState(false);
   // Inline row expansion — keys are prefixed per tab ("opp:MEBL", "hold:MEBL", "watch:MEBL")
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleRow = (key: string, ticker: string) => {
@@ -1052,8 +1056,53 @@ export default function Dashboard({
         {/* ════ BUY OPPORTUNITIES ════ */}
         {tab === "opportunities" && (
           <div>
+            {/* Phones: one slim title row, then straight into the picks. */}
+            {scanResult && !scanning && (() => {
+              const { status, tradingSessionsBehind } = freshnessFromScanDate(scanResult.scanDate ?? null);
+              const count = oppPreviewList.length;
+              return (
+                <div className="sm:hidden mb-2">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[15px] font-semibold text-ink">Today&apos;s picks</h2>
+                    {count > 0 && <span className="text-[12px] text-ink-3 num">{count}</span>}
+                    <span className="flex-1" />
+                    {scanResult.aiError && (
+                      <button
+                        type="button"
+                        onClick={() => setAiNoteOpen((v) => !v)}
+                        aria-expanded={aiNoteOpen}
+                        className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold-dim px-2 py-0.5 text-[11px] text-gold-2 cursor-pointer"
+                      >
+                        <CircleAlert size={11} strokeWidth={2.25} aria-hidden />AI off
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={runFullScan}
+                      aria-label="Rerun full scan"
+                      title="Rerun full scan"
+                      className="w-8 h-8 inline-flex items-center justify-center rounded-full text-ink-3 active:bg-raised cursor-pointer"
+                    >
+                      <RefreshCw size={15} strokeWidth={2.25} aria-hidden />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-ink-3 -mt-0.5">
+                    {formatScanTimestamp(scanResult.timestamp)}
+                    {status === "stale" && tradingSessionsBehind !== null && (
+                      <span className="text-gold-2"> · data {tradingSessionsBehind} session{tradingSessionsBehind === 1 ? "" : "s"} old</span>
+                    )}
+                  </p>
+                  {scanResult.aiError && aiNoteOpen && (
+                    <p className="mt-1.5 text-[11px] text-ink-2 leading-snug bg-raised rounded-lg px-2.5 py-2 animate-fade-in">
+                      The AI commentary didn&apos;t run for this scan, so the picks are ranked by Technical Score alone. That score uses price and volume only, so it&apos;s unaffected.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Scanner controls — the tab's primary action stays on top */}
-            <div className="flex gap-2.5 mb-4 flex-wrap items-center">
+            <div className="hidden sm:flex gap-2.5 mb-4 flex-wrap items-center">
               <button onClick={runFullScan} disabled={scanning} className="btn-accent font-semibold px-4 py-2">
                 {scanning
                   ? <><RefreshCw size={14} strokeWidth={2.25} className="animate-spin" aria-hidden />Scanning…</>
@@ -1100,13 +1149,14 @@ export default function Dashboard({
             <ErrorBanner msg={scanError} onDismiss={() => setScanError("")} />
 
             {/* Live market pulse — compact; the full ranked lists live on the News tab */}
-            <MarketStrip variant="compact" onViewAll={() => setTab("news")} />
+            {/* Phones get movers under Markets; this tab is for the picks. */}
+            <div className="hidden sm:block"><MarketStrip variant="compact" onViewAll={() => setTab("news")} /></div>
 
             {/* Macro banner — one-line glance; the full briefing lives on the News tab */}
             {na && !scanning && (
               <button
                 onClick={() => setTab("news")}
-                className="w-full card card-hover mb-4 py-2.5 px-3.5 flex items-center gap-2.5 text-left cursor-pointer"
+                className="hidden sm:flex w-full card card-hover mb-4 py-2.5 px-3.5 items-center gap-2.5 text-left cursor-pointer"
                 title="Open today's full briefing"
               >
                 <SentimentBadge na={na} />
@@ -1169,7 +1219,7 @@ export default function Dashboard({
             {/* Opportunities — starts as one compact ticker/price preview;
                 expanding reveals the existing detailed cards unchanged below. */}
             {scanResult && !scanning && oppPreviewList.length > 0 && (
-              <div className="card p-0 overflow-hidden mb-3">
+              <div className="hidden sm:block card p-0 overflow-hidden mb-3">
                 <button
                   onClick={() => setOppExpanded(v => !v)}
                   aria-expanded={oppExpanded}
@@ -1204,11 +1254,11 @@ export default function Dashboard({
               </div>
             )}
 
-            {scanResult && oppExpanded && !scanning && <>
+            {scanResult && (oppExpanded || isPhone) && !scanning && <>
 
             {/* Sort */}
             {scanResult && scanResult.signals.length > 1 && (
-              <div className="flex items-center gap-2 mb-3">
+              <div className="hidden sm:flex items-center gap-2 mb-3">
                 <span className="text-[10px] text-ink-3">Sort</span>
                 {(["score", "name"] as const).map(opt => (
                   <button
@@ -1239,11 +1289,10 @@ export default function Dashboard({
 
             {/* AI narrative unavailable — technicals below are still valid */}
             {scanResult && scanResult.aiError && (
-              <div className="flex items-start gap-2 sm:card sm:px-3.5 sm:py-2.5 mb-2 sm:mb-3 text-[11px] text-ink-3 sm:text-ink-2 sm:border-gold/40">
-                <CircleAlert size={13} strokeWidth={2} className="text-gold-2 shrink-0 mt-px" aria-hidden />
-                <span><span className="text-gold-2 sm:font-medium">AI commentary unavailable</span>
-                <span className="sm:hidden"> · ranked by Technical Score</span>
-                <span className="hidden sm:inline">{" — showing the deterministic technical ranking. Technical Score is computed from price and volume only, so it is unaffected."}</span></span>
+              <div className="hidden sm:flex items-start gap-2 card px-3.5 py-2.5 mb-3 text-[11px] text-ink-2 border-gold/40">
+                <CircleAlert size={14} strokeWidth={2} className="text-gold-2 shrink-0 mt-px" aria-hidden />
+                <span><span className="text-gold-2 font-medium">AI commentary unavailable</span>
+                {" — showing the deterministic technical ranking. Technical Score is computed from price and volume only, so it is unaffected."}</span>
               </div>
             )}
 

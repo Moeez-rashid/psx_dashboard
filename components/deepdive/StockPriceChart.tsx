@@ -78,7 +78,7 @@ export default function StockPriceChart({ series }: { series: DeepDivePricePoint
       </div>
 
       <div
-        className="relative mt-1.5 h-36 sm:h-56 touch-pan-y select-none"
+        className="relative mt-1.5 h-28 sm:h-56 touch-pan-y select-none"
         onPointerMove={(e) => setHover(toIndex(e.clientX, e.currentTarget))}
         onPointerDown={(e) => setHover(toIndex(e.clientX, e.currentTarget))}
         onPointerLeave={() => setHover(null)}

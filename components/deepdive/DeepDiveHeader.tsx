@@ -78,7 +78,7 @@ export default function DeepDiveHeader({
           {technical.score !== null && (
             <div className="min-w-0 max-w-[9.5rem]">
               <TechnicalScoreMeter score={technical.score} />
-              <p className="text-[10px] text-ink-3 mt-1.5 max-w-[10rem] leading-snug">
+              <p className="hidden sm:block text-[10px] text-ink-3 mt-1.5 max-w-[10rem] leading-snug">
                 Price and volume only — no fundamentals, news or AI.
               </p>
             </div>

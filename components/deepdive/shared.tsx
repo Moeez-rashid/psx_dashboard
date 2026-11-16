@@ -78,7 +78,8 @@ export function Section({
             <Icon size={15} strokeWidth={2} className="text-ink-3 shrink-0" aria-hidden />
             {title}
           </h2>
-          {kicker && <p className="text-[11px] text-ink-3 mt-1 leading-snug">{kicker}</p>}
+          {/* Explanatory line: tablets and up; phones keep just the heading. */}
+          {kicker && <p className="hidden sm:block text-[11px] text-ink-3 mt-1 leading-snug">{kicker}</p>}
         </div>
         {aside && <div className="shrink-0 flex items-center gap-1.5">{aside}</div>}
       </div>
