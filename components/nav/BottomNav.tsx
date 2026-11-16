@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity, Bell, BookOpen, Briefcase, Calculator, ChevronRight, Clipboard, Ellipsis, Newspaper,
-  Settings as SettingsIcon, SlidersHorizontal, Smartphone, Telescope, TrendingUp, type LucideIcon,
+  Settings as SettingsIcon, Smartphone, Telescope, TrendingUp, type LucideIcon,
 } from "lucide-react";
 import { SET_TAB_EVENT } from "@/components/CommandPalette";
 import { Modal, ModalHeader } from "@/components/ui/primitives";
@@ -24,7 +24,7 @@ interface Item {
 
 const ITEMS: Item[] = [
   { id: "signals", label: "Signals", icon: TrendingUp, href: "/", tab: "opportunities" },
-  { id: "markets", label: "Markets", icon: Activity, href: "/market" },
+  { id: "markets", label: "Markets", icon: Activity, href: "/screener" },
   { id: "portfolio", label: "Portfolio", icon: Briefcase, href: "/?tab=holdings", tab: "holdings" },
   { id: "news", label: "News", icon: Newspaper, href: "/?tab=news", tab: "news" },
 ];
@@ -105,7 +105,7 @@ function MoreSheet({ onClose, onDashboard }: { onClose: () => void; onDashboard:
       <ModalHeader title="More" onClose={onClose} />
       <div className="-mx-2">
         <Group>
-          <Row icon={SlidersHorizontal} label="Screener" sub="Filter all 750+ PSX stocks" href="/screener" onClose={onClose} />
+          <Row icon={Activity} label="Market overview" sub="Indices, sectors, top movers" href="/market" onClose={onClose} />
           <Row icon={Telescope} label="Research a stock" sub="Deep Dive: technicals, financials, news" href="/deep-dive" onClose={onClose} />
         </Group>
         <Group>

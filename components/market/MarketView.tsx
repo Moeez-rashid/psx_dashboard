@@ -115,6 +115,8 @@ export default function MarketView() {
   // Phones: one movers list at a time, and the first 10 sectors until asked for all.
   const [moverTab, setMoverTab] = useState<"gainers" | "losers" | "active">("gainers");
   const [allSectors, setAllSectors] = useState(false);
+  // One switch for all three movers lists, so they always open and close together.
+  const [moversOpen, setMoversOpen] = useState(false);
   const watching = useWatchSet();
 
   // Only ever sets state from the fetch callbacks, never synchronously.
@@ -153,7 +155,7 @@ export default function MarketView() {
   const st = data?.status ?? null;
   const b = data?.breadth;
   const pick = (list: MarketMover[] | undefined) =>
-    (list ?? []).filter((m) => !shariahOnly || m.shariah).slice(0, 8);
+    (list ?? []).filter((m) => !shariahOnly || m.shariah).slice(0, moversOpen ? 15 : 5);
   const headline = HEADLINE.map((c) => data?.indices.find((i) => i.code === c)).filter((x): x is IndexRow => !!x);
   const others = (data?.indices ?? []).filter((i) => !HEADLINE.includes(i.code));
 
@@ -308,6 +310,17 @@ export default function MarketView() {
             <MoverList title="Most active · by value" movers={pick(data.mostActive)} watching={watching} onAdd={onAdd} showVolume />
           </div>
         ) : <Skeleton className="h-64" />}
+        {data && (
+          <button
+            type="button"
+            onClick={() => setMoversOpen((v) => !v)}
+            aria-expanded={moversOpen}
+            className="mt-1.5 sm:mt-2 w-full inline-flex items-center justify-center gap-1 text-[12px] text-ink-3 hover:text-ink-2 py-1.5 cursor-pointer"
+          >
+            {moversOpen ? "Show top 5" : "Show top 15"}
+            <ChevronDown size={13} strokeWidth={2.25} className={`transition-transform ${moversOpen ? "rotate-180" : ""}`} aria-hidden />
+          </button>
+        )}
       </section>
 
       {/* ── Circuit breakers ── */}

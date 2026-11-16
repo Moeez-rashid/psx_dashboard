@@ -12,6 +12,7 @@ import { toast } from "@/components/ui/Toast";
 import type { ScreenerRow } from "@/app/api/screener/route";
 import { MarketsSwitch } from "@/components/nav/SegmentSwitch";
 import { Move } from "@/components/ui/MobileRow";
+import { flagInfo } from "@/lib/corporate-flags";
 
 type SortKey = "s" | "p" | "chg" | "y1" | "mc" | "pe" | "dy" | "ts" | "av";
 
@@ -282,7 +283,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
                   <span className="flex items-center gap-1.5 min-w-0">
                     <span className="text-[14px] font-semibold tracking-tight leading-tight">{r.s}</span>
                     {r.sh && <span className="text-[8px] font-bold tracking-wide text-up-2 border border-up/40 rounded px-1 shrink-0">SHARIAH</span>}
-                    {r.fl.map((x) => <span key={x} className="text-[8px] font-bold text-gold-2 border border-gold/40 rounded px-1 shrink-0">{x}</span>)}
+                    {r.fl.map((x) => <span key={x} className="text-[9px] font-semibold text-gold-2 border border-gold/40 rounded px-1 shrink-0">{flagInfo(x).label}</span>)}
                     {watching.has(r.s) && <Star size={10} strokeWidth={2} fill="currentColor" className="text-gold-2 shrink-0" aria-label="On watchlist" />}
                   </span>
                   <span className="block text-[11px] text-ink-3 leading-tight mt-0.5 truncate">
@@ -304,6 +305,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
                     <span>1Y <span className={tone(r.y1)}>{r.y1 === 0 ? "—" : pct(r.y1)}</span></span>
                     <span className="basis-full truncate">{resolveSectorName(r.sec)}</span>
                   </div>
+
                   <div className="flex gap-2">
                     <button type="button" onClick={() => toggleStar(r)} aria-pressed={watching.has(r.s)}
                       className={`btn flex-1 justify-center min-h-9 text-[13px] ${watching.has(r.s) ? "border-gold/50 text-gold-2" : ""}`}>
@@ -323,7 +325,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-[13px] font-bold tracking-tight">{r.s}</span>
                   {r.sh && <span className="text-[8px] font-bold tracking-wide text-up-2 border border-up/40 rounded px-1 py-px shrink-0" title="KMI All Share constituent">SHARIAH</span>}
-                  {r.fl.map((x) => <span key={x} className="text-[8px] font-bold text-gold-2 border border-gold/40 rounded px-1 py-px shrink-0" title={x === "XD" ? "Ex-dividend" : x === "XB" ? "Ex-bonus" : "Ex-right"}>{x}</span>)}
+                  {r.fl.map((x) => <span key={x} className="text-[9px] font-semibold text-gold-2 border border-gold/40 rounded px-1 py-px shrink-0">{flagInfo(x).label}</span>)}
                 </div>
                 <div className="text-[10px] text-ink-3 truncate">{r.n} · {resolveSectorName(r.sec)}</div>
               </div>

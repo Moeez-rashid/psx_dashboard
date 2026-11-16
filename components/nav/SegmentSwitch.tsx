@@ -36,14 +36,14 @@ export default function SegmentSwitch({ segments, label }: { segments: Segment[]
   );
 }
 
-/** Markets tab on phones: the market overview and the screener. */
+/** Markets tab on phones: the screener (where the tab opens) and the market overview. */
 export function MarketsSwitch({ active }: { active: "overview" | "screener" }) {
   return (
     <SegmentSwitch
       label="Markets"
       segments={[
-        { label: "Overview", active: active === "overview", href: "/market" },
         { label: "Screener", active: active === "screener", href: "/screener" },
+        { label: "Overview", active: active === "overview", href: "/market" },
       ]}
     />
   );
