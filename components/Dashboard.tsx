@@ -19,6 +19,7 @@ import { BrandMark, GlobalActions, NavRow } from "./nav/TopNav";
 import { COPY_SNAPSHOT_EVENT, OPEN_METRICS_EVENT, OPEN_SETTINGS_EVENT, isDashboardTab, type DashboardTab } from "@/lib/nav";
 import { publishDashboardTab } from "@/lib/nav-state";
 import SegmentSwitch from "./nav/SegmentSwitch";
+import { LIST_CLASS } from "./ui/MobileRow";
 import { SET_TAB_EVENT } from "./CommandPalette";
 import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
@@ -1046,7 +1047,7 @@ export default function Dashboard({
       </header>
 
       {/* ── MAIN ── */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-5">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5">
 
         {/* ════ BUY OPPORTUNITIES ════ */}
         {tab === "opportunities" && (
@@ -1238,10 +1239,11 @@ export default function Dashboard({
 
             {/* AI narrative unavailable — technicals below are still valid */}
             {scanResult && scanResult.aiError && (
-              <div className="flex items-start gap-2 card px-3.5 py-2.5 mb-3 text-[11px] text-ink-2 border-gold/40">
-                <CircleAlert size={14} strokeWidth={2} className="text-gold-2 shrink-0 mt-px" aria-hidden />
-                <span><span className="text-gold-2 font-medium">AI commentary unavailable</span>
-                {" — showing the deterministic technical ranking. Technical Score is computed from price and volume only, so it is unaffected."}</span>
+              <div className="flex items-start gap-2 sm:card sm:px-3.5 sm:py-2.5 mb-2 sm:mb-3 text-[11px] text-ink-3 sm:text-ink-2 sm:border-gold/40">
+                <CircleAlert size={13} strokeWidth={2} className="text-gold-2 shrink-0 mt-px" aria-hidden />
+                <span><span className="text-gold-2 sm:font-medium">AI commentary unavailable</span>
+                <span className="sm:hidden"> · ranked by Technical Score</span>
+                <span className="hidden sm:inline">{" — showing the deterministic technical ranking. Technical Score is computed from price and volume only, so it is unaffected."}</span></span>
               </div>
             )}
 
@@ -1249,7 +1251,7 @@ export default function Dashboard({
                 No fabricated catalysts/risks here — StockDetailBody already shows the
                 full tech.reasons list, so there's nothing genuine to add in that slot. */}
             {scanResult && scanResult.signals.length === 0 && scanResult.technicalData.length > 0 && (
-              <div className="space-y-2">
+              <div className={LIST_CLASS}>
                 {scanResult.technicalData.slice(0, 8).map((tech) => {
                   const liveQuote = prices[tech.symbol];
                   const key = `opp:${tech.symbol}`;
@@ -1285,7 +1287,7 @@ export default function Dashboard({
             )}
 
             {/* Signal rows — collapsed by default, expand inline */}
-            <div className="space-y-2">
+            <div className={LIST_CLASS}>
               {scanResult && visibleOpps(scanResult.signals).map((sig) => {
                 const sigTech = scanResult.technicalData?.find(t => t.symbol === sig.ticker);
                 const liveQuote = prices[sig.ticker];
@@ -1343,7 +1345,7 @@ export default function Dashboard({
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className={LIST_CLASS}>
               {holdings.map(h => {
                 const p = prices[h.ticker];
                 const livePrice = p?.currentPrice;
@@ -1464,6 +1466,10 @@ export default function Dashboard({
                     open={expanded.has(key)}
                     onToggle={() => toggleRow(key, h.ticker)}
                     onRemove={() => { setHoldings(prev => prev.filter(x => x.ticker !== h.ticker)); toast(`${h.ticker} removed`); }}
+                    shares={h.shares}
+                    avgPrice={h.avgPrice}
+                    value={marketVal}
+                    pnl={pnl}
                   >
                     <StockDetailBody detail={detail} topBlock={positionBlock} onOpenNews={openNewsFor} />
                   </StockRow>
@@ -1566,7 +1572,7 @@ export default function Dashboard({
             )}
 
             {watching.length > 0 && (
-              <div className="space-y-1.5">
+              <div className={LIST_CLASS}>
                 <WatchlistHeader />
                 {sortedWatch(watching).map(w => {
                   const p = prices[w.ticker];

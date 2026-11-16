@@ -129,11 +129,11 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
   const ai = await resolveDeepDiveAnalysis(data, { generate: false });
 
   return (
-    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:py-8">
+    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-8">
       <RecordResearchVisit ticker={data.identity.ticker} name={data.identity.companyName} />
       <DeepDiveHeader identity={data.identity} technical={data.technical} />
       <StockPriceChart series={data.technical.priceSeries} />
-      <div className="mt-4">
+      <div className="mt-3 sm:mt-4">
         <StockActions
           bar
           ticker={data.identity.ticker}
@@ -213,7 +213,7 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
         Prices from {data.meta.sources.prices} · Fundamentals from {data.meta.sources.fundamentals} · News from {data.meta.sources.news}. Not financial advice.
       </footer>
       {/* Room for the phone action bar pinned above the tab bar. */}
-      <div aria-hidden className="md:hidden h-16" />
+      <div aria-hidden className="md:hidden h-14" />
     </main>
   );
 }

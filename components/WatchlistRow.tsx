@@ -1,4 +1,5 @@
 "use client";
+import { MobileRow, Move } from "./ui/MobileRow";
 import Link from "next/link";
 import { Star, ChevronDown, RefreshCw, Sparkles, Telescope } from "lucide-react";
 import { hueOf, StockDetailBody, type SignalDetail } from "./StockRow";
@@ -65,55 +66,38 @@ export function WatchlistRow({
   const hasData = technicalScore != null || signal != null;
 
   return (
-    <div className="bg-card border border-line rounded-lg overflow-hidden transition-colors data-[open=true]:border-line-2" data-open={open}>
+    <div className="overflow-hidden transition-colors data-[open=true]:bg-card sm:bg-card sm:border sm:border-line sm:rounded-lg sm:data-[open=true]:border-line-2" data-open={open}>
       <div
         role="button"
         tabIndex={0}
         aria-expanded={open}
         onClick={onToggle}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
-        className="cursor-pointer select-none grid grid-cols-[minmax(0,1fr)_20px] sm:grid-cols-[56px_120px_112px_minmax(0,1fr)_64px_80px_22px_14px] gap-x-2 sm:gap-x-3 items-center px-3.5 py-3"
+        className="cursor-pointer select-none"
       >
-        {/* Desktop: signal badge leads the row, matching Opportunities' hierarchy */}
-        <div className="hidden sm:flex justify-center min-w-0">
+        <MobileRow
+          ticker={ticker}
+          tone={hue.text}
+          sub={technicalScore != null ? (
+            <><span className={hue.text}>{badgeLabel(signal ?? undefined)} · {Math.round(technicalScore)}</span>{sector && <> · {sector}</>}</>
+          ) : !hasData ? (
+            <span className="inline-flex items-center gap-1"><RefreshCw size={10} strokeWidth={2.25} className="animate-spin" aria-hidden />Loading</span>
+          ) : sector}
+          top={price !== undefined ? price.toFixed(2) : "—"}
+          bottom={<Move pct={change} />}
+        />
+      <div className="hidden sm:grid grid-cols-[56px_120px_112px_minmax(0,1fr)_64px_80px_22px_14px] gap-x-3 items-center px-3.5 py-3">
+        <div className="flex justify-center min-w-0">
           <span className={`inline-flex items-center justify-center rounded-md border bg-transparent text-[9px] font-bold tracking-wide px-1.5 py-0.5 w-full ${hue.text} ${hue.border}`}>
             {badgeLabel(signal ?? undefined)}
           </span>
         </div>
 
-        {/* Mobile: single stacked block; Desktop: ticker + sector cell */}
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="sm:hidden shrink-0">
-              <button
-                onClick={(e) => { e.stopPropagation(); onRemove(); }}
-                title="Remove from watchlist" aria-label="Remove from watchlist"
-                className="text-gold-2 cursor-pointer inline-flex"
-              >
-                <Star size={12} strokeWidth={2} fill="currentColor" />
-              </button>
-            </span>
-            <span className={`sm:hidden shrink-0 inline-flex items-center rounded border px-1 py-px text-[8px] font-bold tracking-wide ${hue.text} ${hue.border}`}>
-              {badgeLabel(signal ?? undefined)}
-            </span>
             {/* Tickers are short and are the row's identity — never truncate them; the sector gives way instead. */}
             <span className="text-[14px] font-bold tracking-tight leading-tight shrink-0">{ticker}</span>
-            {sector && <span className="hidden sm:inline text-[10px] text-ink-3 truncate min-w-0">{sector}</span>}
-          </div>
-          {/* Mobile second line: score · price · change — score before price to
-              match the same signal→ticker→score→chart→price priority order. */}
-          <div className="sm:hidden flex items-center gap-2 mt-0.5 text-[10px] num text-ink-3">
-            {technicalScore != null ? (
-              <span className={hue.text}>Tech {Math.round(technicalScore)}/100</span>
-            ) : !hasData ? (
-              <span className="text-ink-3 inline-flex items-center gap-1">
-                <RefreshCw size={9} strokeWidth={2.25} className="animate-spin" aria-hidden />Loading
-              </span>
-            ) : null}
-            <span className="text-ink-2 font-medium">{price !== undefined ? price.toFixed(2) : "—"}</span>
-            {change !== undefined && (
-              <span className={change >= 0 ? "text-up-2" : "text-down-2"}>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</span>
-            )}
+            {sector && <span className="text-[10px] text-ink-3 truncate min-w-0">{sector}</span>}
           </div>
         </div>
 
@@ -151,13 +135,23 @@ export function WatchlistRow({
           </button>
         </span>
 
-        <span className="flex justify-end sm:justify-center">
+        <span className="flex justify-center">
           <ChevronDown size={14} strokeWidth={2.25} className={`text-ink-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`} aria-hidden />
         </span>
       </div>
+      </div>
 
       {open && (
-        <div className="px-3.5 pb-3.5 border-t border-line animate-fade-in">
+        <div className="px-4 sm:px-3.5 pb-3.5 border-t border-line animate-fade-in">
+          {/* Phones: the row's actions, which the compact row has no room for. */}
+          <div className="sm:hidden flex gap-2 pt-3">
+            <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(); }} className="btn flex-1 justify-center min-h-10 text-[13px] border-gold/50 text-gold-2">
+              <Star size={14} strokeWidth={2} fill="currentColor" aria-hidden />Remove from watchlist
+            </button>
+            <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-10 text-[13px]">
+              <Telescope size={14} strokeWidth={2} aria-hidden />Open stock
+            </Link>
+          </div>
           {hasData ? (
             <StockDetailBody detail={detail} onOpenNews={onOpenNews} />
           ) : (

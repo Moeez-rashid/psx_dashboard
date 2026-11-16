@@ -25,27 +25,27 @@ export default function DeepDiveHeader({
         : null;
 
   return (
-    <header className="pb-6 border-b border-line">
+    <header className="pb-4 sm:pb-6 border-b border-line">
       <Link
         href="/"
-        className="inline-flex items-center gap-1.5 text-[11px] text-ink-3 hover:text-ink transition-colors mb-4"
+        className="inline-flex items-center gap-1.5 text-[11px] text-ink-3 hover:text-ink transition-colors mb-2 sm:mb-4"
       >
         <ArrowLeft size={13} strokeWidth={2} aria-hidden />
         Back to scanner
       </Link>
 
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 sm:gap-y-4">
         {/* Identity */}
         <div className="min-w-0">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight text-ink">{identity.ticker}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">{identity.ticker}</h1>
             {technical.signal && (
               <span className={`inline-flex items-center rounded-md border bg-transparent text-[10px] font-bold tracking-wide px-2 py-0.5 ${hue.text} ${hue.border}`}>
                 {technical.signal.replace("_", " ")}
               </span>
             )}
           </div>
-          <p className="text-[13px] text-ink-2 mt-1 leading-snug">
+          <p className="text-[12px] sm:text-[13px] text-ink-2 mt-0.5 sm:mt-1 leading-snug">
             {identity.companyName ?? "Company name unavailable"}
           </p>
           {identity.sectorName && (
@@ -57,7 +57,7 @@ export default function DeepDiveHeader({
         <div className="flex items-end justify-between w-full sm:w-auto gap-4 sm:gap-8">
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold num tabular-nums text-ink">
+              <span className="text-xl sm:text-2xl font-bold num tabular-nums text-ink">
                 <span className="text-ink-3 font-normal text-[0.55em] mr-1">PKR</span>
                 {identity.currentPrice !== null ? identity.currentPrice.toFixed(2) : DASH}
               </span>

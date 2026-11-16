@@ -16,14 +16,14 @@ export interface Segment {
  */
 export default function SegmentSwitch({ segments, label }: { segments: Segment[]; label: string }) {
   return (
-    <div role="tablist" aria-label={label} className="md:hidden grid grid-cols-2 gap-1 p-1 mb-4 rounded-xl bg-inset border border-line">
+    <div role="tablist" aria-label={label} className="md:hidden grid grid-cols-2 gap-0.5 p-0.5 mb-3 rounded-lg bg-inset border border-line">
       {segments.map((s) => {
-        const cls = `flex items-center justify-center gap-1.5 min-h-10 rounded-lg text-[14px] font-medium transition-colors cursor-pointer
+        const cls = `flex items-center justify-center gap-1.5 min-h-8 rounded-md text-[13px] font-medium transition-colors cursor-pointer
           ${s.active ? "bg-raised text-ink shadow-sm shadow-black/40" : "text-ink-3 active:text-ink-2"}`;
         const inner = (
           <>
             {s.label}
-            {s.count !== undefined && s.count > 0 && <span className="text-[12px] text-ink-3 num">{s.count}</span>}
+            {s.count !== undefined && s.count > 0 && <span className="text-[11px] text-ink-3 num">{s.count}</span>}
           </>
         );
         return s.href ? (

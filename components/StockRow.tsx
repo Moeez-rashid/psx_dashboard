@@ -7,6 +7,7 @@ import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreMeter } from "./ui/TechnicalScore";
 import { TechChips, FundamentalsState, type StockTech } from "./StockBits";
+import { MobileRow, Move, fmtInt } from "./ui/MobileRow";
 
 // ─── Detail payload shared by every tab ─────────────────────────────────────
 export interface SignalDetail {
@@ -249,7 +250,7 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
           <Link
             href={`/stock/${ticker}`}
             onClick={(e) => e.stopPropagation()}
-            className="btn-sky text-[11px] px-3 py-1.5 font-medium"
+            className="btn-sky text-[11px] px-3 py-1.5 font-medium hidden sm:inline-flex"
             title={`Open the full research view for ${ticker}`}
           >
             <Telescope size={13} strokeWidth={2} aria-hidden />
@@ -262,9 +263,29 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
 }
 
 // ─── Two-tier collapsed card → expands inline ───────────────────────────────
+/** Phone-sized remove: first tap arms, second tap removes; arming expires after 4s. */
+function MobileRemove({ label, onConfirm }: { label: string; onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); if (armed) onConfirm(); else setArmed(true); }}
+      className={`btn flex-1 justify-center min-h-10 text-[13px] ${armed ? "border-down/60 text-down-2" : ""}`}
+    >
+      <X size={14} strokeWidth={2} aria-hidden />{armed ? "Tap again to remove" : label}
+    </button>
+  );
+}
+
 export function StockRow({
   variant, signal, ticker, sector, technicalScore, pnlPct,
   spark, price, change, starred, onToggleStar, onRemove, tier2, open, onToggle, children,
+  shares, avgPrice, value, pnl,
 }: {
   variant: "signal" | "holding";
   signal?: string;
@@ -282,6 +303,11 @@ export function StockRow({
   open: boolean;
   onToggle: () => void;
   children?: ReactNode;       // expanded content
+  // Holding variant, phone row: "200 × 480.00" and value / P&L.
+  shares?: number;
+  avgPrice?: number;
+  value?: number | null;
+  pnl?: number | null;
 }) {
   const hue = hueOf(signal);
   const isSignal = variant === "signal";
@@ -293,8 +319,9 @@ export function StockRow({
 
   return (
     <article
-      className={`bg-card border rounded-xl overflow-hidden transition-colors ${open ? "border-line-2" : "border-line hover:border-line-2"}`}
-      style={{ borderLeftWidth: "3px", borderLeftColor: hue.edge }}
+      className={`overflow-hidden transition-colors sm:bg-card sm:border-y sm:border-r sm:border-l-[3px] sm:rounded-xl
+        ${open ? "bg-card sm:border-line-2" : "sm:border-line sm:hover:border-line-2"}`}
+      style={{ borderLeftColor: hue.edge }}
     >
       <div
         role="button"
@@ -304,8 +331,29 @@ export function StockRow({
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         className="cursor-pointer select-none"
       >
-        {/* ── Tier 1 ── */}
-        <div className={`grid items-center gap-x-2 sm:gap-x-3 px-3.5 pt-3 pb-2.5 ${grid}`}>
+        {/* ── Phone: one compact row ── */}
+        {isSignal ? (
+          <MobileRow
+            ticker={ticker}
+            tone={hue.text}
+            sub={<>
+              <span className={hue.text}>{badgeLabel(signal)}{technicalScore !== undefined ? ` · ${Math.round(technicalScore)}` : ""}</span>
+              {sector && <> · {sector}</>}
+            </>}
+            top={price !== undefined ? price.toFixed(2) : "—"}
+            bottom={<Move pct={change} />}
+          />
+        ) : (
+          <MobileRow
+            ticker={ticker}
+            sub={shares !== undefined && avgPrice !== undefined ? `${shares.toLocaleString("en-US")} × ${avgPrice.toFixed(2)}` : sector}
+            top={value !== undefined && value !== null ? fmtInt(value) : price !== undefined ? price.toFixed(2) : "—"}
+            bottom={<Move pct={pnlPct} abs={pnl} digits={1} />}
+          />
+        )}
+
+        {/* ── Tier 1 (tablet and up) ── */}
+        <div className={`hidden sm:grid items-center gap-x-2 sm:gap-x-3 px-3.5 pt-3 pb-2.5 ${grid}`}>
           {/* 1 · badge — outline, status hue */}
           <div className="flex justify-center min-w-0">
             <span className={`inline-flex items-center justify-center rounded-md border bg-transparent text-[9px] font-bold tracking-wide px-1.5 py-0.5 w-full ${hue.text} ${hue.border}`}>
@@ -367,8 +415,8 @@ export function StockRow({
           <div className="flex justify-center"><Chevron open={open} /></div>
         </div>
 
-        {/* ── Tier 2 ── */}
-        <div className="flex items-center gap-1.5 border-t border-line px-3.5 py-2.5 overflow-hidden">
+        {/* ── Tier 2 (tablet and up; phones show it when the row opens) ── */}
+        <div className="hidden sm:flex items-center gap-1.5 border-t border-line px-3.5 py-2.5 overflow-hidden">
           <Tier2Icon size={13} strokeWidth={2} className="shrink-0 text-ink-3" aria-hidden />
           <span className="text-[11px] text-ink-2 truncate min-w-0 flex-1">
             {tier2.text}
@@ -379,7 +427,35 @@ export function StockRow({
 
       {/* ── Expanded body ── */}
       {open && (
-        <div className="px-3.5 pb-3.5 border-t border-line animate-fade-in">
+        <div className="px-4 sm:px-3.5 pb-3.5 border-t border-line animate-fade-in">
+          {/* Phones: the one-line summary and the row's own action, which the compact row has no room for. */}
+          <div className="sm:hidden pt-3 space-y-3">
+            <p className="flex items-start gap-1.5 text-[13px] text-ink-2 leading-snug">
+              <Tier2Icon size={14} strokeWidth={2} className="shrink-0 text-ink-3 mt-0.5" aria-hidden />
+              <span>
+                {tier2.text}
+                {tier2.fragment && <span className={tier2.fragment.className}> · {tier2.fragment.text}</span>}
+              </span>
+            </p>
+            <div className="flex gap-2">
+              {isSignal ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onToggleStar?.(); }}
+                  aria-pressed={!!starred}
+                  className={`btn flex-1 justify-center min-h-10 text-[13px] ${starred ? "border-gold/50 text-gold-2" : ""}`}
+                >
+                  <Star size={14} strokeWidth={2} fill={starred ? "currentColor" : "none"} aria-hidden />
+                  {starred ? "On watchlist" : "Add to watchlist"}
+                </button>
+              ) : onRemove ? (
+                <MobileRemove label="Remove holding" onConfirm={onRemove} />
+              ) : null}
+              <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-10 text-[13px]">
+                <Telescope size={14} strokeWidth={2} aria-hidden />Open stock
+              </Link>
+            </div>
+          </div>
           {children}
         </div>
       )}

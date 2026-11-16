@@ -71,8 +71,8 @@ export function Section({
   id?: string;
 }) {
   return (
-    <section id={id} className="border-t border-line pt-6 mt-6 first:border-0 first:pt-0 first:mt-0">
-      <div className="flex items-start justify-between gap-3 mb-4">
+    <section id={id} className="border-t border-line pt-5 mt-5 sm:pt-6 sm:mt-6 first:border-0 first:pt-0 first:mt-0">
+      <div className="flex items-start justify-between gap-3 mb-3 sm:mb-4">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-[13px] font-semibold text-ink tracking-tight">
             <Icon size={15} strokeWidth={2} className="text-ink-3 shrink-0" aria-hidden />

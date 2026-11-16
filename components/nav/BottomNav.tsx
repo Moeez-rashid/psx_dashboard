@@ -49,22 +49,22 @@ export default function BottomNav() {
       : null;
 
   const cls = (active: boolean) =>
-    `flex flex-col items-center justify-center gap-1 min-h-[58px] text-[11px] font-medium transition-colors cursor-pointer
+    `flex flex-col items-center justify-center gap-0.5 min-h-[52px] text-[10px] font-medium transition-colors cursor-pointer
      ${active ? "text-ink" : "text-ink-3 active:text-ink-2"}`;
 
   return (
     <>
-      <div aria-hidden className="md:hidden shrink-0 h-[calc(58px+env(safe-area-inset-bottom))]" />
+      <div aria-hidden className="md:hidden shrink-0 h-[calc(52px+env(safe-area-inset-bottom))]" />
       <nav
         aria-label="Primary"
         className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/92 backdrop-blur-md border-t border-line pb-[env(safe-area-inset-bottom)]"
       >
-        <div className="grid grid-cols-5 h-[58px]">
+        <div className="grid grid-cols-5 h-[52px]">
           {ITEMS.map((item) => {
             const active = activeId === item.id;
             const inner = (
               <>
-                <item.icon size={21} strokeWidth={active ? 2.25 : 1.75} className={active ? "text-up-2" : ""} aria-hidden />
+                <item.icon size={19} strokeWidth={active ? 2.25 : 1.75} className={active ? "text-up-2" : ""} aria-hidden />
                 {item.label}
               </>
             );
@@ -86,7 +86,7 @@ export default function BottomNav() {
             );
           })}
           <button type="button" className={cls(activeId === "more")} onClick={() => setMoreOpen(true)} aria-haspopup="dialog">
-            <Ellipsis size={21} strokeWidth={activeId === "more" ? 2.25 : 1.75} className={activeId === "more" ? "text-up-2" : ""} aria-hidden />
+            <Ellipsis size={19} strokeWidth={activeId === "more" ? 2.25 : 1.75} className={activeId === "more" ? "text-up-2" : ""} aria-hidden />
             More
           </button>
         </div>

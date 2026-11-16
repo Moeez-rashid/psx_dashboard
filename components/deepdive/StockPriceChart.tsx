@@ -63,7 +63,7 @@ export default function StockPriceChart({ series }: { series: DeepDivePricePoint
   };
 
   return (
-    <section aria-label="Price chart" className="mt-5">
+    <section aria-label="Price chart" className="mt-3 sm:mt-5">
       {/* Readout: follows the finger, otherwise the latest close. */}
       <div className="flex items-baseline justify-between gap-3 min-h-6">
         <span className="text-[13px] text-ink-2">
@@ -78,7 +78,7 @@ export default function StockPriceChart({ series }: { series: DeepDivePricePoint
       </div>
 
       <div
-        className="relative mt-2 h-44 sm:h-56 touch-pan-y select-none"
+        className="relative mt-1.5 h-36 sm:h-56 touch-pan-y select-none"
         onPointerMove={(e) => setHover(toIndex(e.clientX, e.currentTarget))}
         onPointerDown={(e) => setHover(toIndex(e.clientX, e.currentTarget))}
         onPointerLeave={() => setHover(null)}
@@ -104,7 +104,7 @@ export default function StockPriceChart({ series }: { series: DeepDivePricePoint
         />
       </div>
 
-      <div className="flex items-center justify-between mt-3">
+      <div className="flex items-center justify-between mt-2">
         <div role="group" aria-label="Chart range" className="flex gap-1">
           {ranges.map((r) => (
             <button
@@ -112,7 +112,7 @@ export default function StockPriceChart({ series }: { series: DeepDivePricePoint
               type="button"
               onClick={() => { setRangeLabel(r.label); setHover(null); }}
               aria-pressed={r.label === range.label}
-              className={`min-w-11 min-h-9 px-2 rounded-lg text-[13px] font-semibold transition-colors cursor-pointer
+              className={`min-w-10 min-h-8 px-2 rounded-md text-[12px] font-semibold transition-colors cursor-pointer
                 ${r.label === range.label ? "bg-raised text-ink" : "text-ink-3 hover:text-ink-2"}`}
             >
               {r.label}

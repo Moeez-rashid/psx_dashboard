@@ -40,7 +40,7 @@ export default function StockTabs({ tabs }: { tabs: StockTab[] }) {
         id="stock-tabs"
         role="tablist"
         aria-label="Stock sections"
-        className="sticky z-30 top-[calc(52px+env(safe-area-inset-top))] md:top-[89px] -mx-4 px-4 mt-6 bg-surface/92 backdrop-blur-md border-b border-line flex"
+        className="sticky z-30 top-[calc(52px+env(safe-area-inset-top))] md:top-[89px] -mx-4 px-4 mt-4 sm:mt-6 bg-surface/92 backdrop-blur-md border-b border-line flex"
       >
         {tabs.map((t) => {
           const on = t.id === active;
@@ -53,7 +53,7 @@ export default function StockTabs({ tabs }: { tabs: StockTab[] }) {
               aria-selected={on}
               aria-controls={`panel-${t.id}`}
               onClick={() => choose(t.id)}
-              className={`relative flex-1 sm:flex-none sm:px-5 min-h-11 text-[14px] font-medium transition-colors cursor-pointer
+              className={`relative flex-1 sm:flex-none sm:px-5 min-h-10 text-[13px] font-medium transition-colors cursor-pointer
                 ${on ? "text-ink" : "text-ink-3 hover:text-ink-2"}`}
             >
               {t.label}
@@ -63,7 +63,7 @@ export default function StockTabs({ tabs }: { tabs: StockTab[] }) {
         })}
       </div>
       {tabs.map((t) => (
-        <div key={t.id} id={`panel-${t.id}`} role="tabpanel" aria-labelledby={`tab-${t.id}`} hidden={t.id !== active} className="pt-6">
+        <div key={t.id} id={`panel-${t.id}`} role="tabpanel" aria-labelledby={`tab-${t.id}`} hidden={t.id !== active} className="pt-4 sm:pt-6">
           {t.content}
         </div>
       ))}
