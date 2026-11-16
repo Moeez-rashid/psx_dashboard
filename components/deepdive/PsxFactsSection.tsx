@@ -1,5 +1,5 @@
 import { Landmark, FileText, ExternalLink } from "lucide-react";
-import { flagInfo } from "@/lib/corporate-flags";
+import FlagBubble from "@/components/ui/FlagBubble";
 import { getCompanyPage, type AnnouncementKind, type CompanyPage, type FinancialTable } from "@/lib/psx-company";
 import { getSnapshotMap } from "@/lib/psx-snapshot";
 import { PSX_BASE } from "@/lib/psx-http";
@@ -114,7 +114,7 @@ export default async function PsxFactsSection({ ticker }: { ticker: string }) {
             <span key={i} className="text-[10px] text-ink-2 border border-line-2 rounded-md px-2 py-0.5">{INDEX_LABEL[i]}</span>
           ))}
           {c.flags.map((f) => (
-            <span key={f} className="text-[10px] font-semibold text-gold-2 border border-gold/40 rounded-md px-2 py-0.5">{flagInfo(f).label}</span>
+            <FlagBubble key={f} code={f} size="md" />
           ))}
         </div>
       )}
