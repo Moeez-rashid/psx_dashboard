@@ -1435,8 +1435,12 @@ export default function Dashboard({
 
                 const positionBlock = (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[9px] uppercase tracking-wide text-ink-3">Position</span>
+                    <div className="flex items-center justify-between mb-0 sm:mb-2">
+                      <span className="text-[9px] uppercase tracking-wide text-ink-3">
+                        Position
+                        {/* Phones: the row already shows shares × avg, value and P&L — only cost basis is new */}
+                        {!isEditing && <span className="sm:hidden normal-case tracking-normal text-[11px] text-ink-2 ml-1.5 num">cost PKR {Math.round(cost).toLocaleString()}</span>}
+                      </span>
                       {!isEditing && (
                         <button
                           onClick={() => setEditingHolding({ ticker: h.ticker, shares: String(h.shares), avg: String(h.avgPrice) })}
@@ -1481,7 +1485,7 @@ export default function Dashboard({
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 sm:gap-2">
+                      <div className="hidden sm:grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 sm:gap-2">
                         {([
                           ["Shares", h.shares.toLocaleString(), "text-ink"],
                           ["Avg cost", `PKR ${h.avgPrice.toFixed(2)}`, "text-ink"],

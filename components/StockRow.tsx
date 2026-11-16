@@ -8,6 +8,7 @@ import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreMeter } from "./ui/TechnicalScore";
 import { TechChips, FundamentalsState, nearEntry, fundamentalChips, type StockTech } from "./StockBits";
 import { MobileRow, Move, fmtInt, NearEntryFlag, techBrief } from "./ui/MobileRow";
+import RowActions from "./ui/RowActions";
 
 // ─── Detail payload shared by every tab ─────────────────────────────────────
 export interface SignalDetail {
@@ -146,39 +147,45 @@ function StarButton({ starred, onToggle }: { starred: boolean; onToggle: () => v
 function dedupedReasons(reasons: string[] | undefined, reason?: string): string[] {
   if (!reasons?.length) return [];
   if (!reason) return reasons.slice(1);
-  return reasons.filter((r) => r !== reason);
+  // A holding's reason carries a "· via Technicals" suffix, so match on the start.
+  return reasons.filter((r) => r !== reason && !reason.startsWith(r));
 }
 
 // ─── Phone-only pieces of the expanded body ─────────────────────────────────
-/** Technicals and fundamentals as two compact lines of label–value pairs. */
+/**
+ * Phones: five key numbers in one slim strip (Score · RSI · Vol · P/E · Div),
+ * then everything else on one quiet line. Readable at a glance, ~60px tall.
+ */
 function PhoneStats({ detail }: { detail: SignalDetail }) {
   const { tech, fundamentals: f, technicalScore, currentPrice } = detail;
-  const techPairs: [string, string, string][] = tech ? [
+  const fund = f ? Object.fromEntries(fundamentalChips(f, currentPrice).map(([l, v, t]) => [l, { v, t }])) : {};
+  const strip: [string, string, string][] = [
     ["Score", technicalScore !== undefined ? `${Math.round(technicalScore)}` : "—", "text-ink"],
-    ["RSI", tech.rsi.toFixed(0), tech.rsi < 30 ? "text-up-2" : tech.rsi > 70 ? "text-down-2" : "text-ink"],
-    ["EMA20", tech.ema20.toFixed(2), "text-ink"],
-    ["EMA50", tech.ema50.toFixed(2), "text-ink"],
-    ["Vol", `${tech.volumeRatio.toFixed(1)}×`, tech.volumeRatio >= 1.5 ? "text-up-2" : "text-ink"],
-    ["Trend", tech.trendRegime ?? (tech.priceVsEma20 === "above" ? "above EMA20" : "below EMA20"), "text-ink"],
-  ] : [];
-  const fundPairs: [string, string, string][] = f
-    ? fundamentalChips(f, currentPrice).map(([l, v, t]) => [l, v, t])
-    : [];
-  const line = (title: string, pairs: [string, string, string][]) => (
-    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-      <span className="text-[9px] uppercase tracking-wide text-ink-3 w-full">{title}</span>
-      {pairs.map(([l, v, tone]) => (
-        <span key={l} className="whitespace-nowrap"><span className="text-ink-3">{l} </span><span className={`num ${tone}`}>{v}</span></span>
-      ))}
-    </div>
-  );
-  if (!techPairs.length && !fundPairs.length) return null;
+    ["RSI", tech ? tech.rsi.toFixed(0) : "—", tech ? (tech.rsi < 30 ? "text-up-2" : tech.rsi > 70 ? "text-down-2" : "text-ink") : "text-ink-3"],
+    ["Vol", tech ? `${tech.volumeRatio.toFixed(1)}×` : "—", tech && tech.volumeRatio >= 1.5 ? "text-up-2" : "text-ink"],
+    ["P/E", fund["P/E"]?.v ?? "—", fund["P/E"]?.t ?? "text-ink-3"],
+    ["Div", fund["Div"]?.v ?? "—", fund["Div"]?.t ?? "text-ink-3"],
+  ];
+  const more = [
+    tech?.trendRegime ? `Trend ${tech.trendRegime}` : null,
+    tech ? `EMA20 ${tech.ema20.toFixed(2)}` : null,
+    tech ? `EMA50 ${tech.ema50.toFixed(2)}` : null,
+    fund["ROE"] ? `ROE ${fund["ROE"].v}` : null,
+    fund["D/E"] ? `D/E ${fund["D/E"].v}` : null,
+    fund["PBV"] ? `PBV ${fund["PBV"].v}` : null,
+  ].filter(Boolean);
   return (
-    <div className="sm:hidden space-y-1.5 text-[11px]">
-      {techPairs.length > 0 && line("Technicals", techPairs)}
-      {fundPairs.length > 0 ? line("Fundamentals", fundPairs) : f === null ? (
-        <p className="text-[10px] text-ink-3">Fundamentals unavailable for this ticker</p>
-      ) : null}
+    <div className="sm:hidden">
+      <dl className="grid grid-cols-5 divide-x divide-line border-y border-line">
+        {strip.map(([label, value, tone]) => (
+          <div key={label} className="px-1 py-1.5 text-center min-w-0">
+            <dt className="text-[9px] uppercase tracking-wide text-ink-3">{label}</dt>
+            <dd className={`text-[13px] font-semibold num truncate ${tone}`}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {more.length > 0 && <p className="text-[10.5px] text-ink-3 num mt-1.5 leading-snug">{more.join(" · ")}</p>}
+      {f === null && <p className="text-[10.5px] text-ink-3 mt-0.5">Fundamentals unavailable for this ticker</p>}
     </div>
   );
 }
@@ -187,8 +194,8 @@ function ReasonList({ reasons }: { reasons: string[] }) {
   const [all, setAll] = useState(false);
   return (
     <div>
-      <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1.5">Key technical reasons</div>
-      <ul className="space-y-1">
+      <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1 sm:mb-1.5"><span className="sm:hidden">Why</span><span className="hidden sm:inline">Key technical reasons</span></div>
+      <ul className="space-y-0.5 sm:space-y-1">
         {reasons.map((r, i) => (
           <li key={i} className={`text-[11px] text-ink-2 leading-snug pl-3 relative before:content-['·'] before:absolute before:left-0 before:text-ink-3 ${i >= 2 && !all ? "hidden sm:list-item" : ""}`}>
             {r}
@@ -219,11 +226,11 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
   const hasRisks = (risks?.length ?? 0) > 0;
 
   return (
-    <div className="space-y-3 pt-2.5">
+    <div className="space-y-2.5 sm:space-y-3 pt-2.5">
       {topBlock}
 
       {reason && (
-        <p className={`text-[12px] sm:text-[13px] leading-snug border-l-2 pl-2.5 sm:pl-3 sm:italic ${hue.text} border-current`}>{reason}</p>
+        <p className={`text-[12px] sm:text-[13px] leading-snug border-l-2 pl-2.5 sm:pl-3 sm:italic max-sm:text-ink-2 max-sm:line-clamp-2 ${hue.text} border-current`}>{reason}</p>
       )}
 
       {/* Phones: the key numbers at a glance, in place of the chip rows below. */}
@@ -311,25 +318,6 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
 }
 
 // ─── Two-tier collapsed card → expands inline ───────────────────────────────
-/** Phone-sized remove: first tap arms, second tap removes; arming expires after 4s. */
-function MobileRemove({ label, onConfirm }: { label: string; onConfirm: () => void }) {
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 4000);
-    return () => clearTimeout(t);
-  }, [armed]);
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); if (armed) onConfirm(); else setArmed(true); }}
-      className={`btn flex-1 justify-center min-h-8 text-[12px] ${armed ? "border-down/60 text-down-2" : ""}`}
-    >
-      <X size={13} strokeWidth={2} aria-hidden />{armed ? "Tap again" : label}
-    </button>
-  );
-}
-
 export function StockRow({
   variant, signal, ticker, sector, technicalScore, pnlPct,
   spark, price, change, starred, onToggleStar, onRemove, tier2, open, onToggle, children,
@@ -482,39 +470,21 @@ export function StockRow({
       {open && (
         <div className="px-4 sm:px-3.5 pb-3.5 border-t border-line animate-fade-in">
           {/* Phones: the one-line summary and the row's own action, which the compact row has no room for. */}
-          <div className="sm:hidden pt-2.5 space-y-2.5">
-            {/* Holdings already show the position block below; this line would repeat it. */}
-            {isSignal && <p className="flex items-start gap-1.5 text-[12px] text-ink-2 leading-snug">
-              <Tier2Icon size={14} strokeWidth={2} className="shrink-0 text-ink-3 mt-0.5" aria-hidden />
-              <span>
-                {tier2.text}
-                {tier2.fragment && <span className={tier2.fragment.className}> · {tier2.fragment.text}</span>}
-              </span>
-            </p>}
-            <div className="flex gap-2">
-              {isSignal ? (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onToggleStar?.(); }}
-                  aria-pressed={!!starred}
-                  className={`btn flex-1 justify-center min-h-8 text-[12px] whitespace-nowrap ${starred ? "border-gold/50 text-gold-2" : ""}`}
-                >
-                  <Star size={13} strokeWidth={2} fill={starred ? "currentColor" : "none"} aria-hidden />
-                  {starred ? "Watching" : "Watch"}
-                </button>
-              ) : onRemove ? (
-                <MobileRemove label="Remove" onConfirm={onRemove} />
-              ) : null}
-              <button type="button" onClick={(e) => { e.stopPropagation(); openAlertFor(ticker, price); }}
-                aria-label={`Price alert for ${ticker}`} title="Price alert" className="btn w-8 justify-center min-h-8 px-0 shrink-0">
-                <Bell size={13} strokeWidth={2} aria-hidden />
-              </button>
-              <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-8 text-[12px]">
-                <Telescope size={13} strokeWidth={2} aria-hidden />Deep Dive
-              </Link>
-            </div>
-          </div>
+          {/* Phones: the one-line summary first; holdings show their position block instead. */}
+          {isSignal && (
+            <p className="sm:hidden pt-2.5 text-[12px] text-ink-2 leading-snug line-clamp-2">
+              {tier2.text}
+              {tier2.fragment && <span className={tier2.fragment.className}> · {tier2.fragment.text}</span>}
+            </p>
+          )}
           {children}
+          <RowActions
+            ticker={ticker}
+            price={price}
+            watching={isSignal ? !!starred : undefined}
+            onToggleWatch={isSignal ? () => onToggleStar?.() : undefined}
+            onRemove={!isSignal ? onRemove : undefined}
+          />
         </div>
       )}
     </article>

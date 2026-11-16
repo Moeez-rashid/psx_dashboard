@@ -38,8 +38,8 @@ export function MobileRow({ ticker, sub, top, bottom, tone, spark, flag }: {
         {sub && <div className="text-[11px] text-ink-3 leading-tight mt-0.5 truncate">{sub}</div>}
       </div>
       {spark && spark.length >= 5 && (
-        <Sparkline data={spark} width={52} height={22} opacity={0.85}
-          color={spark[spark.length - 1] >= spark[0] ? "var(--color-up)" : "var(--color-down)"} />
+        <Sparkline data={spark} width={52} height={22} opacity={1}
+          color={spark[spark.length - 1] >= spark[0] ? MUTED_UP : MUTED_DOWN} />
       )}
       <div className="text-right shrink-0 leading-tight min-w-[64px]">
         <div className="text-[14px] font-semibold num">{top}</div>
@@ -66,6 +66,12 @@ export function Move({ pct, abs, digits = 2 }: { pct?: number | null; abs?: numb
 export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString("en-US");
 }
+
+/** Chart colours a step darker than the price text, so lines sit quietly in the dark theme. */
+export const MUTED_UP = "color-mix(in srgb, var(--color-up) 62%, #000)";
+export const MUTED_DOWN = "color-mix(in srgb, var(--color-down) 62%, #000)";
+/** Same treatment for any palette colour (allocation donut). */
+export const muted = (c: string) => `color-mix(in srgb, ${c} 62%, #000)`;
 
 /** "Near entry": the scorer rates the price at EMA20 support (entry 20/20). */
 export function NearEntryFlag({ title }: { title?: string }) {

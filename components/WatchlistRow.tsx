@@ -1,8 +1,8 @@
 "use client";
 import { MobileRow, Move, NearEntryFlag, techBrief } from "./ui/MobileRow";
+import RowActions from "./ui/RowActions";
 import Link from "next/link";
-import { Star, ChevronDown, RefreshCw, Sparkles, Telescope, Bell } from "lucide-react";
-import { openAlertFor } from "./AlertsCenter";
+import { Star, ChevronDown, RefreshCw, Sparkles, Telescope } from "lucide-react";
 import { hueOf, StockDetailBody, type SignalDetail } from "./StockRow";
 import { nearEntry } from "./StockBits";
 import { Sparkline } from "./ui/primitives";
@@ -148,19 +148,6 @@ export function WatchlistRow({
 
       {open && (
         <div className="px-4 sm:px-3.5 pb-3.5 border-t border-line animate-fade-in">
-          {/* Phones: the row's actions, which the compact row has no room for. */}
-          <div className="sm:hidden flex gap-2 pt-2.5">
-            <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(); }} className="btn flex-1 justify-center min-h-8 text-[12px] border-gold/50 text-gold-2">
-              <Star size={13} strokeWidth={2} fill="currentColor" aria-hidden />Unwatch
-            </button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); openAlertFor(ticker, price); }}
-              aria-label={`Price alert for ${ticker}`} title="Price alert" className="btn w-8 justify-center min-h-8 px-0 shrink-0">
-              <Bell size={13} strokeWidth={2} aria-hidden />
-            </button>
-            <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-8 text-[12px]">
-              <Telescope size={13} strokeWidth={2} aria-hidden />Deep Dive
-            </Link>
-          </div>
           {hasData ? (
             <StockDetailBody detail={detail} onOpenNews={onOpenNews} />
           ) : (
@@ -186,6 +173,7 @@ export function WatchlistRow({
               </Link>
             </div>
           )}
+          <RowActions ticker={ticker} price={price} watching onToggleWatch={onRemove} />
         </div>
       )}
     </div>
