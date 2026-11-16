@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Newspaper, ExternalLink, X, RefreshCw, Radar, Settings as SettingsIcon, Coins, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
 import type { NewsItem } from "@/lib/news-fetcher";
@@ -162,14 +162,15 @@ function FeedRow({ item, onOpenTicker }: { item: FeedItem; onOpenTicker: (t: str
 
   const body = (
     <span className="flex-1 min-w-0">
-      <span className="block text-xs leading-snug text-ink group-hover:text-sky-2 transition-colors">
+      <span className="block text-[13px] sm:text-xs leading-snug text-ink group-hover:text-sky-2 transition-colors">
         {item.head}
       </span>
+      {/* Phones: headline and source only. */}
       {item.desc && item.desc !== item.head && (
-        <span className="block text-[11px] text-ink-3 leading-snug mt-0.5 line-clamp-2">{item.desc}</span>
+        <span className="hidden sm:block text-[11px] text-ink-3 leading-snug mt-0.5 line-clamp-2">{item.desc}</span>
       )}
       {(item.source || item.date) && (
-        <span className="block text-[10px] text-ink-3 mt-1">
+        <span className="block text-[11px] sm:text-[10px] text-ink-3 mt-0.5 sm:mt-1">
           {item.source}{item.source && item.date ? " · " : ""}{item.date}
         </span>
       )}
@@ -181,7 +182,7 @@ function FeedRow({ item, onOpenTicker }: { item: FeedItem; onOpenTicker: (t: str
       <button
         onClick={() => onOpenTicker(item.ticker!)}
         title={`Open ${item.ticker}`}
-        className="w-full flex items-start gap-2.5 py-2.5 text-left cursor-pointer group"
+        className="w-full flex items-start gap-2.5 py-2 sm:py-2.5 text-left cursor-pointer group"
       >
         {badge}
         {body}
@@ -203,7 +204,7 @@ function FeedRow({ item, onOpenTicker }: { item: FeedItem; onOpenTicker: (t: str
       href={item.link || googleNewsUrl(item.head)}
       target="_blank" rel="noopener noreferrer"
       title={item.link ? "Open article" : "Search this story on Google News"}
-      className="w-full flex items-start gap-2.5 py-2.5 text-left cursor-pointer group"
+      className="w-full flex items-start gap-2.5 py-2 sm:py-2.5 text-left cursor-pointer group"
     >
       {badge}
       {body}
@@ -284,6 +285,8 @@ export default function NewsView({
 
   // Cap the unfiltered feed at 7 rows (per-ticker catalysts first, macro fills the rest)
   const visibleFeed = filterTicker ? feed.filter(f => f.ticker === filterTicker) : feed.slice(0, 7);
+  // Phones: the long narrative folds to a few lines until asked for.
+  const [briefOpen, setBriefOpen] = useState(false);
 
   // No analysis yet → a scanning progress card or the run-a-scan prompt.
   // Market movers below stay live either way (they need no AI key).
@@ -315,7 +318,7 @@ export default function NewsView({
     : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {/* filter banner when arriving from a card's catalyst strip */}
       {filterTicker && (
         <div className="flex items-center gap-2 text-xs text-ink-2">
@@ -325,15 +328,15 @@ export default function NewsView({
         </div>
       )}
 
-      {/* ── 1. Market movers — live pulse first, works without an AI key ── */}
-      <MarketStrip variant="full" onAddWatch={onAddWatch} watchingTickers={watchingTickers} />
+      {/* ── 1. Market movers — live pulse first, works without an AI key. Phones: under Markets instead. ── */}
+      <div className="hidden sm:block"><MarketStrip variant="full" onAddWatch={onAddWatch} watchingTickers={watchingTickers} /></div>
 
       {statusCard}
 
       {/* ── 2. Today's briefing ── */}
       {na && (
-      <section className="card">
-        <div className="flex items-center justify-between gap-2 mb-3">
+      <section className="card max-sm:p-3">
+        <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
           <span className="label">Today&rsquo;s briefing</span>
           <div className="flex items-center gap-2">
             {updatedAt && <span className="text-[9px] text-ink-3 bg-raised px-2 py-px rounded-full num">updated {updatedAt}</span>}
@@ -347,9 +350,14 @@ export default function NewsView({
           </div>
         </div>
 
-        {na?.summary && <p className="text-xs text-ink-2 leading-relaxed">{na.summary}</p>}
+        {na?.summary && <p className="text-[13px] sm:text-xs text-ink sm:text-ink-2 leading-relaxed">{na.summary}</p>}
         {narrative && narrative !== na?.summary && (
-          <p className="text-xs text-ink-2 leading-loose mt-2 pt-2.5 border-t border-line">{narrative}</p>
+          <>
+            <p className={`text-xs text-ink-2 leading-relaxed sm:leading-loose mt-2 pt-2.5 border-t border-line ${briefOpen ? "" : "max-sm:line-clamp-3"}`}>{narrative}</p>
+            <button type="button" onClick={() => setBriefOpen((v) => !v)} className="sm:hidden mt-1 text-[12px] text-sky-2 cursor-pointer">
+              {briefOpen ? "Show less" : "Read more"}
+            </button>
+          </>
         )}
 
         {na && na.globalFactors.length > 0 && (
@@ -360,7 +368,7 @@ export default function NewsView({
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t border-line">
+        <div className="mt-3 sm:mt-4 pt-3 border-t border-line">
           <div className="label mb-2">7-day sentiment</div>
           <SentimentChart history={sentimentHistory} />
         </div>
@@ -369,10 +377,10 @@ export default function NewsView({
 
       {/* ── 2. Sector watch ── */}
       {na && na.affectedSectors.length > 0 && (
-        <section className="card">
+        <section className="card max-sm:p-3">
           <div className="flex items-center justify-between mb-1">
             <span className="label">Sector watch</span>
-            <span className="text-[10px] text-ink-3">tap a sector to filter opportunities</span>
+            <span className="hidden sm:inline text-[10px] text-ink-3">tap a sector to filter opportunities</span>
           </div>
           <div className="divide-y divide-line">
             {na.affectedSectors.map((sec, i) => (
@@ -384,11 +392,11 @@ export default function NewsView({
 
       {/* ── 4. Latest headlines ── */}
       {na && (
-      <section className="card">
+      <section className="card max-sm:p-3">
         <div className="flex items-center justify-between mb-1">
           <span className="label">Latest headlines</span>
           {newsSources.length > 0 && (
-            <span className="text-[10px] text-ink-3 truncate ml-2">{newsSources.join(" · ")}</span>
+            <span className="hidden sm:inline text-[10px] text-ink-3 truncate ml-2">{newsSources.join(" · ")}</span>
           )}
         </div>
         {visibleFeed.length > 0 ? (
@@ -432,7 +440,7 @@ export default function NewsView({
           </a>
         </div>
 
-        <div className="text-[10px] text-ink-3 pt-3 mt-1 border-t border-line">
+        <div className="hidden sm:block text-[10px] text-ink-3 pt-3 mt-1 border-t border-line">
           Headlines from public RSS feeds · sentiment is AI-derived · dividend yields from latest reported fiscal year · Not financial advice
         </div>
       </section>
