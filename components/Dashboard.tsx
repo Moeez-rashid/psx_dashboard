@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
   TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
-  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert, ChevronDown,
+  Radar, X, Pencil, Plus, Sparkles, CircleAlert, TriangleAlert, ChevronDown,
 } from "lucide-react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
@@ -16,7 +16,11 @@ import { resolveSectorName } from "@/lib/sectors";
 import { ErrorBanner, Skeleton, EmptyState, IconButton } from "./ui/primitives";
 import { toast } from "./ui/Toast";
 import { BrandMark, GlobalActions, NavRow } from "./nav/TopNav";
-import { isDashboardTab, type DashboardTab } from "@/lib/nav";
+import { COPY_SNAPSHOT_EVENT, OPEN_METRICS_EVENT, OPEN_SETTINGS_EVENT, isDashboardTab, type DashboardTab } from "@/lib/nav";
+import { publishDashboardTab } from "@/lib/nav-state";
+import SegmentSwitch from "./nav/SegmentSwitch";
+import { LIST_CLASS } from "./ui/MobileRow";
+import { useIsPhone } from "@/lib/use-media";
 import { SET_TAB_EVENT } from "./CommandPalette";
 import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
@@ -267,6 +271,12 @@ export default function Dashboard({
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showMetricsGuide, setShowMetricsGuide] = useState(false);
+  // Phones: the picks list is always open (rows are compact), and the AI note is a tap-to-read chip.
+  const isPhone = useIsPhone();
+  const [aiNoteOpen, setAiNoteOpen] = useState(false);
+  // Phones: the add forms stay folded behind a "+ Add" row until wanted.
+  const [addHoldingOpen, setAddHoldingOpen] = useState(false);
+  const [addWatchOpen, setAddWatchOpen] = useState(false);
   // Inline row expansion — keys are prefixed per tab ("opp:MEBL", "hold:MEBL", "watch:MEBL")
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleRow = (key: string, ticker: string) => {
@@ -678,8 +688,14 @@ export default function Dashboard({
     if (h.length) setHoldings(h);
     if (w.length) setWatching(w);
     setSettings(loadSettings());
-    const urlTab = new URLSearchParams(window.location.search).get("tab");
+    const params = new URLSearchParams(window.location.search);
+    const urlTab = params.get("tab");
     if (isDashboardTab(urlTab)) setTab(urlTab);
+    // "Settings" in the phone More sheet, chosen from another page.
+    if (params.get("settings") === "1") {
+      setShowSettings(true);
+      window.history.replaceState(null, "", isDashboardTab(urlTab) && urlTab !== "opportunities" ? `/?tab=${urlTab}` : "/");
+    }
     storageLoadedRef.current = true;
     const all = [...new Set([...w.map(x => x.ticker), ...h.map(x => x.ticker)])];
     if (all.length > 0) fetchAskAnalystBatch(all);
@@ -699,6 +715,19 @@ export default function Dashboard({
     window.addEventListener(SET_TAB_EVENT, onTab);
     window.addEventListener(WATCH_EVENT, onWatch);
     return () => { window.removeEventListener(SET_TAB_EVENT, onTab); window.removeEventListener(WATCH_EVENT, onWatch); };
+  }, []);
+
+  // The phone tab bar highlights the tab showing here.
+  useEffect(() => { publishDashboardTab(tab); }, [tab]);
+  useEffect(() => () => publishDashboardTab(null), []);
+
+  // Dialogs the phone More sheet opens.
+  useEffect(() => {
+    const openSettings = () => setShowSettings(true);
+    const openMetrics = () => setShowMetricsGuide(true);
+    window.addEventListener(OPEN_SETTINGS_EVENT, openSettings);
+    window.addEventListener(OPEN_METRICS_EVENT, openMetrics);
+    return () => { window.removeEventListener(OPEN_SETTINGS_EVENT, openSettings); window.removeEventListener(OPEN_METRICS_EVENT, openMetrics); };
   }, []);
 
   // Auto-fetch tech + fundamentals when tab changes
@@ -967,11 +996,27 @@ export default function Dashboard({
     .slice(0, 6);
 
 
+  // Re-subscribed each render: exportForClaude closes over the latest scan and prices.
+  useEffect(() => {
+    window.addEventListener(COPY_SNAPSHOT_EVENT, exportForClaude);
+    return () => window.removeEventListener(COPY_SNAPSHOT_EVENT, exportForClaude);
+  });
+
+  const portfolioSwitch = (
+    <SegmentSwitch
+      label="Portfolio"
+      segments={[
+        { label: "Holdings", active: tab === "holdings", onClick: () => goTab("holdings"), count: holdings.length },
+        { label: "Watchlist", active: tab === "watching", onClick: () => goTab("watching"), count: watching.length },
+      ]}
+    />
+  );
+
   return (
     <div className="min-h-screen flex flex-col text-[13px]">
 
       {/* ── HEADER ── */}
-      <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line">
+      <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line pt-[env(safe-area-inset-top)]">
         <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between gap-2 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2">
@@ -986,13 +1031,14 @@ export default function Dashboard({
           <div className="flex items-center gap-1.5">
             <div className="hidden lg:block mr-2"><PKTClock /></div>
             <GlobalActions />
-            <IconButton icon={Clipboard} label="Copy full snapshot for AI analysis (Claude, ChatGPT, …)" tone="sky" onClick={exportForClaude} />
+            {/* Phones reach these from the tab bar's More sheet. */}
+            <span className="hidden md:inline-flex"><IconButton icon={Clipboard} label="Copy full snapshot for AI analysis (Claude, ChatGPT, …)" tone="sky" onClick={exportForClaude} /></span>
             <button onClick={() => setShowMetricsGuide(true)} className="btn p-2 hidden md:inline-flex" title="Metrics guide" aria-label="Metrics guide">
               <HelpCircle size={15} strokeWidth={2} aria-hidden />
             </button>
             <button
               onClick={() => setShowSettings(true)}
-              className={`btn px-2.5 ${hasKey ? "border-up/50 text-up-2" : "border-gold/50 text-gold-2"}`}
+              className={`btn px-2.5 hidden md:inline-flex ${hasKey ? "border-up/50 text-up-2" : "border-gold/50 text-gold-2"}`}
               title="Settings"
             >
               <SettingsIcon size={14} strokeWidth={2} aria-hidden /><span className="hidden md:inline">{hasKey ? settings.provider : "Set API Key"}</span>
@@ -1008,13 +1054,58 @@ export default function Dashboard({
       </header>
 
       {/* ── MAIN ── */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-5">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5">
 
         {/* ════ BUY OPPORTUNITIES ════ */}
         {tab === "opportunities" && (
           <div>
+            {/* Phones: one slim title row, then straight into the picks. */}
+            {scanResult && !scanning && (() => {
+              const { status, tradingSessionsBehind } = freshnessFromScanDate(scanResult.scanDate ?? null);
+              const count = oppPreviewList.length;
+              return (
+                <div className="sm:hidden mb-2">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[15px] font-semibold text-ink">Today&apos;s picks</h2>
+                    {count > 0 && <span className="text-[12px] text-ink-3 num">{count}</span>}
+                    <span className="flex-1" />
+                    {scanResult.aiError && (
+                      <button
+                        type="button"
+                        onClick={() => setAiNoteOpen((v) => !v)}
+                        aria-expanded={aiNoteOpen}
+                        className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold-dim px-2 py-0.5 text-[11px] text-gold-2 cursor-pointer"
+                      >
+                        <CircleAlert size={11} strokeWidth={2.25} aria-hidden />AI off
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={runFullScan}
+                      aria-label="Rerun full scan"
+                      title="Rerun full scan"
+                      className="w-8 h-8 inline-flex items-center justify-center rounded-full text-ink-3 active:bg-raised cursor-pointer"
+                    >
+                      <RefreshCw size={15} strokeWidth={2.25} aria-hidden />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-ink-3 -mt-0.5">
+                    {formatScanTimestamp(scanResult.timestamp)}
+                    {status === "stale" && tradingSessionsBehind !== null && (
+                      <span className="text-gold-2"> · data {tradingSessionsBehind} session{tradingSessionsBehind === 1 ? "" : "s"} old</span>
+                    )}
+                  </p>
+                  {scanResult.aiError && aiNoteOpen && (
+                    <p className="mt-1.5 text-[11px] text-ink-2 leading-snug bg-raised rounded-lg px-2.5 py-2 animate-fade-in">
+                      The AI commentary didn&apos;t run for this scan, so the picks are ranked by Technical Score alone. That score uses price and volume only, so it&apos;s unaffected.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Scanner controls — the tab's primary action stays on top */}
-            <div className="flex gap-2.5 mb-4 flex-wrap items-center">
+            <div className="hidden sm:flex gap-2.5 mb-4 flex-wrap items-center">
               <button onClick={runFullScan} disabled={scanning} className="btn-accent font-semibold px-4 py-2">
                 {scanning
                   ? <><RefreshCw size={14} strokeWidth={2.25} className="animate-spin" aria-hidden />Scanning…</>
@@ -1061,13 +1152,14 @@ export default function Dashboard({
             <ErrorBanner msg={scanError} onDismiss={() => setScanError("")} />
 
             {/* Live market pulse — compact; the full ranked lists live on the News tab */}
-            <MarketStrip variant="compact" onViewAll={() => setTab("news")} />
+            {/* Phones get movers under Markets; this tab is for the picks. */}
+            <div className="hidden sm:block"><MarketStrip variant="compact" onViewAll={() => setTab("news")} /></div>
 
             {/* Macro banner — one-line glance; the full briefing lives on the News tab */}
             {na && !scanning && (
               <button
                 onClick={() => setTab("news")}
-                className="w-full card card-hover mb-4 py-2.5 px-3.5 flex items-center gap-2.5 text-left cursor-pointer"
+                className="hidden sm:flex w-full card card-hover mb-4 py-2.5 px-3.5 items-center gap-2.5 text-left cursor-pointer"
                 title="Open today's full briefing"
               >
                 <SentimentBadge na={na} />
@@ -1130,7 +1222,7 @@ export default function Dashboard({
             {/* Opportunities — starts as one compact ticker/price preview;
                 expanding reveals the existing detailed cards unchanged below. */}
             {scanResult && !scanning && oppPreviewList.length > 0 && (
-              <div className="card p-0 overflow-hidden mb-3">
+              <div className="hidden sm:block card p-0 overflow-hidden mb-3">
                 <button
                   onClick={() => setOppExpanded(v => !v)}
                   aria-expanded={oppExpanded}
@@ -1165,11 +1257,11 @@ export default function Dashboard({
               </div>
             )}
 
-            {scanResult && oppExpanded && !scanning && <>
+            {scanResult && (oppExpanded || isPhone) && !scanning && <>
 
             {/* Sort */}
             {scanResult && scanResult.signals.length > 1 && (
-              <div className="flex items-center gap-2 mb-3">
+              <div className="hidden sm:flex items-center gap-2 mb-3">
                 <span className="text-[10px] text-ink-3">Sort</span>
                 {(["score", "name"] as const).map(opt => (
                   <button
@@ -1200,7 +1292,7 @@ export default function Dashboard({
 
             {/* AI narrative unavailable — technicals below are still valid */}
             {scanResult && scanResult.aiError && (
-              <div className="flex items-start gap-2 card px-3.5 py-2.5 mb-3 text-[11px] text-ink-2 border-gold/40">
+              <div className="hidden sm:flex items-start gap-2 card px-3.5 py-2.5 mb-3 text-[11px] text-ink-2 border-gold/40">
                 <CircleAlert size={14} strokeWidth={2} className="text-gold-2 shrink-0 mt-px" aria-hidden />
                 <span><span className="text-gold-2 font-medium">AI commentary unavailable</span>
                 {" — showing the deterministic technical ranking. Technical Score is computed from price and volume only, so it is unaffected."}</span>
@@ -1211,7 +1303,7 @@ export default function Dashboard({
                 No fabricated catalysts/risks here — StockDetailBody already shows the
                 full tech.reasons list, so there's nothing genuine to add in that slot. */}
             {scanResult && scanResult.signals.length === 0 && scanResult.technicalData.length > 0 && (
-              <div className="space-y-2">
+              <div className={LIST_CLASS}>
                 {scanResult.technicalData.slice(0, 8).map((tech) => {
                   const liveQuote = prices[tech.symbol];
                   const key = `opp:${tech.symbol}`;
@@ -1247,7 +1339,7 @@ export default function Dashboard({
             )}
 
             {/* Signal rows — collapsed by default, expand inline */}
-            <div className="space-y-2">
+            <div className={LIST_CLASS}>
               {scanResult && visibleOpps(scanResult.signals).map((sig) => {
                 const sigTech = scanResult.technicalData?.find(t => t.symbol === sig.ticker);
                 const liveQuote = prices[sig.ticker];
@@ -1291,6 +1383,7 @@ export default function Dashboard({
         {/* ════ HOLDINGS ════ */}
         {tab === "holdings" && (
           <div>
+            {portfolioSwitch}
             <HoldingsSync />
             <HoldingsOverview holdings={holdings} prices={prices} />
 
@@ -1304,7 +1397,7 @@ export default function Dashboard({
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className={LIST_CLASS}>
               {holdings.map(h => {
                 const p = prices[h.ticker];
                 const livePrice = p?.currentPrice;
@@ -1382,7 +1475,7 @@ export default function Dashboard({
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 sm:gap-2">
                         {([
                           ["Shares", h.shares.toLocaleString(), "text-ink"],
                           ["Avg cost", `PKR ${h.avgPrice.toFixed(2)}`, "text-ink"],
@@ -1391,15 +1484,15 @@ export default function Dashboard({
                           ["P&L", pnl !== null ? `${pnl >= 0 ? "+" : ""}PKR ${Math.round(pnl).toLocaleString()}` : "—", pnl !== null ? (pnl >= 0 ? "text-up-2" : "text-down-2") : "text-ink"],
                           ["P&L %", pnlPct !== null ? `${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%` : "—", pnlPct !== null ? (pnlPct >= 0 ? "text-up-2" : "text-down-2") : "text-ink"],
                         ] as [string, string, string][]).map(([label, val, tone], i) => (
-                          <div key={i} className="bg-inset rounded-lg px-2.5 py-1.5">
-                            <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-0.5">{label}</div>
-                            <div className={`text-[11px] sm:text-xs font-medium num ${tone}`}>{val}</div>
+                          <div key={i} className="flex items-baseline justify-between gap-2 min-w-0 sm:block sm:bg-inset sm:rounded-lg sm:px-2.5 sm:py-1.5">
+                            <div className="text-[11px] text-ink-3 sm:text-[9px] sm:uppercase sm:tracking-wide sm:mb-0.5 truncate">{label}</div>
+                            <div className={`text-[12px] sm:text-xs font-medium num ${tone}`}>{val}</div>
                           </div>
                         ))}
                       </div>
                     )}
                     {!isEditing && livePrice && pnlPct !== null && (
-                      <div className="bg-inset border border-line rounded-lg px-3.5 py-2 flex items-center justify-between gap-3 mt-2">
+                      <div className="hidden sm:flex bg-inset border border-line rounded-lg px-3.5 py-2 items-center justify-between gap-3 mt-2">
                         <span className="text-[10px] uppercase tracking-wide text-ink-3">Avg cost → current</span>
                         <span className="text-[12px] num text-ink">
                           PKR {h.avgPrice.toFixed(2)} → PKR {livePrice.toFixed(2)}{" "}
@@ -1425,6 +1518,10 @@ export default function Dashboard({
                     open={expanded.has(key)}
                     onToggle={() => toggleRow(key, h.ticker)}
                     onRemove={() => { setHoldings(prev => prev.filter(x => x.ticker !== h.ticker)); toast(`${h.ticker} removed`); }}
+                    shares={h.shares}
+                    avgPrice={h.avgPrice}
+                    value={marketVal}
+                    pnl={pnl}
                   >
                     <StockDetailBody detail={detail} topBlock={positionBlock} onOpenNews={openNewsFor} />
                   </StockRow>
@@ -1440,8 +1537,14 @@ export default function Dashboard({
               </div>
             )}
 
-            {/* Add holding */}
-            <div className="card mt-3 py-3">
+            {/* Add holding — folded behind one row on phones */}
+            {!addHoldingOpen && (
+              <button type="button" onClick={() => setAddHoldingOpen(true)}
+                className="sm:hidden mt-3 w-full flex items-center justify-center gap-1.5 min-h-10 rounded-lg border border-dashed border-line-2 text-[13px] text-ink-2 cursor-pointer">
+                <Plus size={14} strokeWidth={2.25} aria-hidden />Add holding
+              </button>
+            )}
+            <div className={`card mt-3 py-3 ${addHoldingOpen ? "" : "hidden sm:block"}`}>
               <div className="label mb-2">Add holding</div>
               <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                 <TickerInput
@@ -1472,8 +1575,9 @@ export default function Dashboard({
         {/* ════ WATCHLIST — monitoring, not a second Opportunities: one dense row per ticker ════ */}
         {tab === "watching" && (
           <div>
-            <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-              <span className="label">Watchlist</span>
+            {portfolioSwitch}
+            <div className="flex justify-between items-center mb-2 sm:mb-3 flex-wrap gap-2">
+              <span className="label hidden sm:inline">Watchlist</span>
               {watching.length > 0 && (
                 <div className="flex gap-2 items-center">
                   <button
@@ -1499,7 +1603,7 @@ export default function Dashboard({
             </div>
 
             {watching.length > 1 && (
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-2 sm:mb-3">
                 <span className="text-[10px] text-ink-3">Sort</span>
                 {(["score", "name"] as const).map(opt => (
                   <button
@@ -1526,7 +1630,7 @@ export default function Dashboard({
             )}
 
             {watching.length > 0 && (
-              <div className="space-y-1.5">
+              <div className={LIST_CLASS}>
                 <WatchlistHeader />
                 {sortedWatch(watching).map(w => {
                   const p = prices[w.ticker];
@@ -1579,8 +1683,14 @@ export default function Dashboard({
 
             <ErrorBanner msg={watchError} onDismiss={() => setWatchError("")} />
 
-            {/* Add to watchlist */}
-            <div className="card mt-3 py-3">
+            {/* Add to watchlist — folded behind one row on phones */}
+            {!addWatchOpen && (
+              <button type="button" onClick={() => setAddWatchOpen(true)}
+                className="sm:hidden mt-3 w-full flex items-center justify-center gap-1.5 min-h-10 rounded-lg border border-dashed border-line-2 text-[13px] text-ink-2 cursor-pointer">
+                <Plus size={14} strokeWidth={2.25} aria-hidden />Add to watchlist
+              </button>
+            )}
+            <div className={`card mt-3 py-3 ${addWatchOpen ? "" : "hidden sm:block"}`}>
               <div className="label mb-2">Add ticker</div>
               <div className="flex gap-2">
                 <TickerInput

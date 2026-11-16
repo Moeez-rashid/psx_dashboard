@@ -71,14 +71,15 @@ export function Section({
   id?: string;
 }) {
   return (
-    <section id={id} className="border-t border-line pt-6 mt-6 first:border-0 first:pt-0 first:mt-0">
-      <div className="flex items-start justify-between gap-3 mb-4">
+    <section id={id} className="border-t border-line pt-5 mt-5 sm:pt-6 sm:mt-6 first:border-0 first:pt-0 first:mt-0">
+      <div className="flex items-start justify-between gap-3 mb-3 sm:mb-4">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-[13px] font-semibold text-ink tracking-tight">
             <Icon size={15} strokeWidth={2} className="text-ink-3 shrink-0" aria-hidden />
             {title}
           </h2>
-          {kicker && <p className="text-[11px] text-ink-3 mt-1 leading-snug">{kicker}</p>}
+          {/* Explanatory line: tablets and up; phones keep just the heading. */}
+          {kicker && <p className="hidden sm:block text-[11px] text-ink-3 mt-1 leading-snug">{kicker}</p>}
         </div>
         {aside && <div className="shrink-0 flex items-center gap-1.5">{aside}</div>}
       </div>

@@ -46,10 +46,12 @@ function breadthSentence(shortLabel: string, longLabel: string, ratioPct: number
 }
 
 export default function PriceBehaviorSection({
-  behavior, priceSeries,
+  behavior, priceSeries, showChart = true,
 }: {
   behavior: PriceBehavior;
   priceSeries: DeepDivePricePoint[];
+  /** Off on the stock page, which already leads with a full price chart. */
+  showChart?: boolean;
 }) {
   const windows = behavior.windows;
   const [selectedLabel, setSelectedLabel] = useState<string>(() => {
@@ -91,7 +93,7 @@ export default function PriceBehaviorSection({
           <div
             role="group"
             aria-label="Closing-range lookback period"
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2"
+            className="grid grid-cols-3 lg:grid-cols-6 gap-1.5 sm:gap-2"
           >
             {windows.map((w) => {
               const active = w.label === selected.label;
@@ -102,7 +104,7 @@ export default function PriceBehaviorSection({
                   onClick={() => setSelectedLabel(w.label)}
                   aria-pressed={active}
                   title={`${w.sessions} trading sessions, ${fmtDate(w.fromDate)} to ${fmtDate(w.toDate)}`}
-                  className={`flex flex-col items-start gap-0.5 rounded-lg border px-2.5 py-2 text-left cursor-pointer transition-colors
+                  className={`flex flex-col items-start gap-0.5 rounded-lg border px-2 py-1.5 sm:px-2.5 sm:py-2 text-left cursor-pointer transition-colors
                     outline-none focus-visible:ring-1 focus-visible:ring-up/70 focus-visible:border-up/60
                     ${active
                       ? "border-up/50 bg-up-dim text-ink"
@@ -111,10 +113,10 @@ export default function PriceBehaviorSection({
                   <span className={`text-[10px] font-semibold uppercase tracking-[0.08em] ${active ? "text-up-2" : "text-ink-3"}`}>
                     {w.label}
                   </span>
-                  <span className="text-[11px] num tabular-nums text-ink whitespace-nowrap">
+                  <span className="text-[11px] num tabular-nums text-ink whitespace-nowrap tracking-tight">
                     {fmtPrice(w.low)}–{fmtPrice(w.high)}
                   </span>
-                  <span className="text-[10px] num text-ink-3">{w.widthPct.toFixed(1)}% wide</span>
+                  <span className="hidden sm:inline text-[10px] num text-ink-3">{w.widthPct.toFixed(1)}% wide</span>
                 </button>
               );
             })}
@@ -133,9 +135,9 @@ export default function PriceBehaviorSection({
 
           {/* Chart + the selected window's numbers, together in one card. */}
           <div className="mt-4 bg-inset border border-line rounded-lg px-3 py-3">
-            <ClosingPriceChart points={chartPoints} window={selected} />
+            {showChart && <ClosingPriceChart points={chartPoints} window={selected} />}
 
-            <div className="mt-4 max-w-xl">
+            <div className={`${showChart ? "mt-4" : ""} max-w-xl`}>
               {selected.positionPct !== null ? (
                 <RangeMeter
                   low={selected.low}

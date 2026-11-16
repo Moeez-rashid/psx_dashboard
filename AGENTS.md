@@ -37,11 +37,12 @@ Reliability primitives live in `lib/cache.ts`: `cached()` (TTL + single-flight +
 
 ## Map
 
-- **Routes:** `/` dashboard (tabs: Opportunities, Watchlist, Holdings, News — `?tab=` deep-links), `/market`, `/screener`, `/deep-dive`, `/stock/[ticker]`, `/widget` (iPhone widget setup, not in the nav). Nav is defined once in `lib/nav.ts`, rendered by `components/nav/TopNav.tsx` (`NavRow`).
+- **Routes:** `/` dashboard (tabs: Opportunities, Watchlist, Holdings, News — `?tab=` deep-links), `/market`, `/screener`, `/deep-dive`, `/stock/[ticker]`, `/widget` (iPhone widget setup, not in the nav). Nav is defined once in `lib/nav.ts`. Tablets/desktops: the header row in `components/nav/TopNav.tsx` (`NavRow`). Phones (< md): `components/nav/BottomNav.tsx` (Signals · Markets · Portfolio · News · More sheet), mounted globally from `GlobalClient`; Portfolio = Holdings | Watchlist and Markets = /market | /screener via `SegmentSwitch`. The dashboard publishes its in-page tab through `lib/nav-state.ts` so the bar can highlight it.
 - **Global client layer** (`components/GlobalClient.tsx`, mounted in the root layout): command palette (⌘K), price alerts, trade calculator, toasts.
 - **Browser-local state:** `lib/local-store.ts` (watchlist, alerts, cost prefs, backup/restore) with React bindings in `lib/use-local.ts` (`useSyncExternalStore`). Holdings still live in `Dashboard.tsx` state. There are no accounts.
 - **Holdings sync + iPhone widget (opt-in):** `lib/holdings-sync-client.ts` (random key in localStorage, `useHoldingsSync` push/pull, last-edit-wins) ↔ `app/api/sync/holdings` ↔ `lib/holdings-sync.ts` (Redis `holdings:v1:<sha256(key)>`, in-memory in local dev). The Scriptable widget reads `GET /api/widget/holdings` (key in the `x-sync-key` header). Its layout is `public/scriptable/holdings-widget.js`, fetched on every run by the loader the user pastes once from `/widget`, so layout changes ship without re-pasting. Keep that file plain JS for Scriptable, with no imports.
 - **Scan pipeline:** `lib/scanner.ts` (pure) → `app/api/scan/route.ts` (GET = Vercel cron `0 4 * * 1-5` = 9am PKT with `CRON_SECRET`; POST = manual BYOK) → `lib/scan-store.ts` (Upstash Redis: `scan:latest` success-only, `scan:by-date:*`, lock) → `GET /api/scan/latest` + `lib/scan-freshness.ts`.
+- **Stock page (`/stock/[ticker]`):** price chart first (`StockPriceChart`), then `StockTabs` (Overview · Technicals · Financials · News, tab in the URL hash); on phones Watch/Alert/Plan trade are pinned above the tab bar.
 - **Deep Dive:** `lib/deepdive.ts` aggregates deterministic evidence; `lib/deepdive-ai.ts` is the optional AI interpretation over it; `components/deepdive/PsxFactsSection.tsx` renders PSX's own company record.
 
 ## Gotchas

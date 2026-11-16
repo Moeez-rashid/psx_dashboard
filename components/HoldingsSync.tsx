@@ -13,7 +13,7 @@ export default function HoldingsSync() {
   return (
     <>
       <div className="flex justify-end mb-2">
-        <button type="button" onClick={() => setOpen(true)} className={key ? "btn-accent" : "btn"}>
+        <button type="button" onClick={() => setOpen(true)} className={`${key ? "btn-accent" : "btn"} max-sm:text-[11px] max-sm:py-1 max-sm:px-2`}>
           {key ? <Cloud size={13} /> : <Smartphone size={13} />}
           {key ? "Synced · iPhone widget" : "Sync & iPhone widget"}
         </button>

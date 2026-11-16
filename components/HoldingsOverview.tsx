@@ -92,8 +92,65 @@ export default function HoldingsOverview({ holdings, prices }: {
   const exitTax = gainAfterCommission > 0 ? gainAfterCommission * (costs.cgtPct / 100) : 0;
   const netIfSold = gainAfterCommission - exitTax;
 
+  const sign = (v: number) => (v >= 0 ? "▲" : "▼");
+  const int = (v: number) => Math.round(Math.abs(v)).toLocaleString("en-US");
+
   return (
-    <div className="card mb-4">
+    <>
+    {/* ── Phones: one compact summary; the stock list below carries the per-stock numbers ── */}
+    <div className="sm:hidden card px-3.5 py-3 mb-3">
+      <div className="text-[11px] text-ink-3">Current value</div>
+      <div className="flex items-baseline gap-1 mt-0.5">
+        <span className="text-[22px] font-bold num leading-none tracking-tight">{Math.round(totalMV).toLocaleString("en-US")}</span>
+        <span className="text-[11px] text-ink-3">PKR</span>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-[12px] num">
+        <span className={pnlTone(totalPnl)}>
+          <span className="text-[9px] mr-0.5">{sign(totalPnl)}</span>{int(totalPnl)} ({Math.abs(totalPct).toFixed(1)}%)
+          <span className="text-ink-3 ml-1">All-time</span>
+        </span>
+        {anyPriced && (
+          <span className={pnlTone(dayPnl)}>
+            <span className="text-[9px] mr-0.5">{sign(dayPnl)}</span>{int(dayPnl)} ({Math.abs(dayPct).toFixed(2)}%)
+            <span className="text-ink-3 ml-1">Today</span>
+          </span>
+        )}
+      </div>
+
+      {/* Allocation: one thin bar, legend underneath */}
+      <div className="flex h-1.5 rounded-full overflow-hidden gap-px mt-3 bg-line-2">
+        {rows.map((r) => (
+          <span key={r.ticker} style={{ width: `${totalMV > 0 ? (r.marketVal / totalMV) * 100 : 0}%`, background: r.color }} />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[11px] text-ink-3">
+        {rows.map((r) => (
+          <span key={r.ticker} className="inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: r.color }} />
+            <span className="text-ink-2">{r.ticker}</span>
+            <span className="num">{totalMV > 0 ? Math.round((r.marketVal / totalMV) * 100) : 0}%</span>
+          </span>
+        ))}
+      </div>
+
+      {anyPriced && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3 pt-2.5 border-t border-line text-[12px]">
+          {([
+            ["Invested", int(totalCost), "text-ink"],
+            ["Net if sold", `${netIfSold >= 0 ? "+" : "−"}${int(netIfSold)}`, pnlTone(netIfSold)],
+            ["Dividends / yr", grossDividends > 0 ? int(netDividends) : "—", "text-ink"],
+            ["Shariah", `${shariahPct.toFixed(0)}%`, shariahPct >= 99.5 ? "text-up-2" : "text-ink"],
+          ] as const).map(([label, value, tone]) => (
+            <div key={label} className="flex items-baseline justify-between gap-2 min-w-0">
+              <dt className="text-ink-3 truncate">{label}</dt>
+              <dd className={`num font-medium ${tone}`}>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+
+    <div className="hidden sm:block card mb-4">
       <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
 
         {/* Donut */}
@@ -221,5 +278,6 @@ export default function HoldingsOverview({ holdings, prices }: {
         </div>
       </div>
     </div>
+    </>
   );
 }

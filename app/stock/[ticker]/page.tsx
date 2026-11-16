@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { CircleAlert, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { buildDeepDiveData } from "@/lib/deepdive";
 import { resolveDeepDiveAnalysis } from "@/lib/deepdive-ai";
 import { getAllStocks } from "@/lib/psx";
@@ -21,6 +21,8 @@ import AIInterpretationSection from "@/components/deepdive/AIInterpretationSecti
 import RecordResearchVisit, { MarkActiveResearch } from "@/components/deepdive/RecordResearchVisit";
 import PsxFactsSection from "@/components/deepdive/PsxFactsSection";
 import StockActions from "@/components/StockActions";
+import StockPriceChart from "@/components/deepdive/StockPriceChart";
+import StockTabs from "@/components/deepdive/StockTabs";
 
 /**
  * Deep Dive route — the research view for one ticker.
@@ -127,50 +129,70 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
   const ai = await resolveDeepDiveAnalysis(data, { generate: false });
 
   return (
-    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:py-8">
+    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-8">
       <RecordResearchVisit ticker={data.identity.ticker} name={data.identity.companyName} />
       <DeepDiveHeader identity={data.identity} technical={data.technical} />
-      <div className="mt-4">
+      <StockPriceChart series={data.technical.priceSeries} />
+      <div className="mt-3 sm:mt-4">
         <StockActions
+          bar
           ticker={data.identity.ticker}
           price={data.identity.currentPrice}
           label={data.identity.sectorName ? `${data.identity.ticker} · ${data.identity.sectorName}` : data.identity.ticker}
         />
       </div>
 
-      {/* Something upstream degraded — say which, rather than rendering a
-          silently thinner page. */}
+      {/* Something upstream degraded: say so, quietly, with the detail one tap away. */}
       {data.meta.degraded.length > 0 && (
-        <div className="flex items-start gap-2.5 bg-gold-dim border border-gold/40 rounded-lg px-3.5 py-3 mt-6">
-          <CircleAlert size={14} strokeWidth={2} className="text-gold-2 shrink-0 mt-0.5" aria-hidden />
-          <div className="min-w-0">
-            <p className="text-[12px] text-gold-2 font-medium">Some data could not be loaded</p>
-            <ul className="mt-1 space-y-0.5">
-              {data.meta.degraded.map((d, i) => (
-                <li key={i} className="text-[11px] text-ink-2 leading-relaxed">{d}</li>
-              ))}
-            </ul>
-            <p className="text-[10px] text-ink-3 mt-1.5">Everything else on this page is unaffected.</p>
-          </div>
-        </div>
+        <details className="mt-4 group">
+          <summary className="inline-flex items-center gap-1.5 cursor-pointer list-none text-[12px] text-ink-3 hover:text-ink-2">
+            <Info size={13} strokeWidth={2} aria-hidden />
+            {data.meta.degraded.length === 1 ? "1 data source didn't respond" : `${data.meta.degraded.length} data sources didn't respond`}
+            <span className="underline underline-offset-2">details</span>
+          </summary>
+          <ul className="mt-2 space-y-1 pl-5">
+            {data.meta.degraded.map((d, i) => (
+              <li key={i} className="text-[12px] text-ink-3 leading-relaxed list-disc">{d}</li>
+            ))}
+          </ul>
+          <p className="text-[12px] text-ink-3 mt-1 pl-5">Everything else on this page is unaffected.</p>
+        </details>
       )}
 
-      <div className="mt-6">
-        <TechnicalSection technical={data.technical} />
-        {/* Own boundary: PSX's company page is a separate upstream, and a slow
-            or failed fetch there must not hold back the rest of the page. */}
-        <Suspense fallback={null}>
-          <PsxFactsSection ticker={data.identity.ticker} />
-        </Suspense>
-        <PriceBehaviorSection behavior={data.priceBehavior} priceSeries={data.technical.priceSeries} />
-        <ValuationSection valuation={data.valuation} />
-        <FundamentalSection fundamentals={data.fundamentals} history={data.fundamentalHistory} />
-        <FundamentalHistorySection history={data.fundamentalHistory} />
-        <MarketContextSection market={data.marketContext} />
-        <CompanyNewsSection news={data.news} ticker={data.identity.ticker} />
-        <RiskSection risk={data.risk} />
-        <AIInterpretationSection ticker={data.identity.ticker} initialResult={ai} />
-      </div>
+      <StockTabs
+        tabs={[
+          {
+            id: "overview",
+            label: "Overview",
+            content: (
+              <>
+                <PriceBehaviorSection behavior={data.priceBehavior} priceSeries={data.technical.priceSeries} showChart={false} />
+                <MarketContextSection market={data.marketContext} />
+                <RiskSection risk={data.risk} />
+                <AIInterpretationSection ticker={data.identity.ticker} initialResult={ai} />
+              </>
+            ),
+          },
+          { id: "technicals", label: "Technicals", content: <TechnicalSection technical={data.technical} /> },
+          {
+            id: "financials",
+            label: "Financials",
+            content: (
+              <>
+                {/* Own boundary: PSX's company page is a separate upstream, and a slow
+                    or failed fetch there must not hold back the rest of the page. */}
+                <Suspense fallback={null}>
+                  <PsxFactsSection ticker={data.identity.ticker} />
+                </Suspense>
+                <ValuationSection valuation={data.valuation} />
+                <FundamentalSection fundamentals={data.fundamentals} history={data.fundamentalHistory} />
+                <FundamentalHistorySection history={data.fundamentalHistory} />
+              </>
+            ),
+          },
+          { id: "news", label: "News", content: <CompanyNewsSection news={data.news} ticker={data.identity.ticker} /> },
+        ]}
+      />
 
       {/* What this page structurally cannot know — available, not shouted. */}
       <details className="mt-8 border-t border-line pt-5 group">
@@ -190,6 +212,8 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
       <footer className="mt-6 pt-4 border-t border-line text-[10px] text-ink-3 leading-relaxed">
         Prices from {data.meta.sources.prices} · Fundamentals from {data.meta.sources.fundamentals} · News from {data.meta.sources.news}. Not financial advice.
       </footer>
+      {/* Room for the phone action bar pinned above the tab bar. */}
+      <div aria-hidden className="md:hidden h-14" />
     </main>
   );
 }
