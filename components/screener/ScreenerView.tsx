@@ -308,12 +308,12 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
 
                   <div className="flex gap-2">
                     <button type="button" onClick={() => toggleStar(r)} aria-pressed={watching.has(r.s)}
-                      className={`btn flex-1 justify-center min-h-9 text-[13px] ${watching.has(r.s) ? "border-gold/50 text-gold-2" : ""}`}>
+                      className={`btn flex-1 justify-center min-h-8 text-[12px] ${watching.has(r.s) ? "border-gold/50 text-gold-2" : ""}`}>
                       <Star size={14} strokeWidth={2} fill={watching.has(r.s) ? "currentColor" : "none"} aria-hidden />
                       {watching.has(r.s) ? "On watchlist" : "Add to watchlist"}
                     </button>
-                    <Link href={`/stock/${r.s}`} className="btn-sky flex-1 justify-center min-h-9 text-[13px]">
-                      <Telescope size={14} strokeWidth={2} aria-hidden />Open stock
+                    <Link href={`/stock/${r.s}`} className="btn-sky flex-1 justify-center min-h-8 text-[12px]">
+                      <Telescope size={14} strokeWidth={2} aria-hidden />Deep Dive
                     </Link>
                   </div>
                 </div>

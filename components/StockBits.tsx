@@ -10,6 +10,14 @@ export interface StockTech {
   volumeRatio: number; todayVolume?: number; avgVolume20d?: number;
   crossoverSignal: string; priceVsEma20: string; priceVsEma50?: string; reasons: string[];
   extensionPct?: number; trendRegime?: string;
+  /** Score parts; entry 20/20 is the scorer's own "at support, prime entry zone". */
+  components?: { trend: number; momentum: number; volume: number; entry: number };
+}
+
+/** True when the deterministic scorer rates the entry a full 20/20 (price at EMA20
+ *  support) on a stock it rates BUY or better: at support in a weak setup isn't an entry. */
+export function nearEntry(tech?: StockTech | null): boolean {
+  return tech?.components?.entry === 20 && (tech.technicalSignal === "BUY" || tech.technicalSignal === "STRONG_BUY");
 }
 
 /** Display string for the Vol chip.

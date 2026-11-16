@@ -6,8 +6,9 @@ import { openAlertFor } from "./AlertsCenter";
 import type { AskAnalystFundamentals } from "@/lib/askanalyst";
 import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreMeter } from "./ui/TechnicalScore";
-import { TechChips, FundamentalsState, type StockTech } from "./StockBits";
-import { MobileRow, Move, fmtInt } from "./ui/MobileRow";
+import { TechChips, FundamentalsState, nearEntry, fundamentalChips, type StockTech } from "./StockBits";
+import { MobileRow, Move, fmtInt, NearEntryFlag, techBrief } from "./ui/MobileRow";
+import RowActions from "./ui/RowActions";
 
 // ─── Detail payload shared by every tab ─────────────────────────────────────
 export interface SignalDetail {
@@ -146,7 +147,68 @@ function StarButton({ starred, onToggle }: { starred: boolean; onToggle: () => v
 function dedupedReasons(reasons: string[] | undefined, reason?: string): string[] {
   if (!reasons?.length) return [];
   if (!reason) return reasons.slice(1);
-  return reasons.filter((r) => r !== reason);
+  // A holding's reason carries a "· via Technicals" suffix, so match on the start.
+  return reasons.filter((r) => r !== reason && !reason.startsWith(r));
+}
+
+// ─── Phone-only pieces of the expanded body ─────────────────────────────────
+/**
+ * Phones: five key numbers in one slim strip (Score · RSI · Vol · P/E · Div),
+ * then everything else on one quiet line. Readable at a glance, ~60px tall.
+ */
+function PhoneStats({ detail }: { detail: SignalDetail }) {
+  const { tech, fundamentals: f, technicalScore, currentPrice } = detail;
+  const fund = f ? Object.fromEntries(fundamentalChips(f, currentPrice).map(([l, v, t]) => [l, { v, t }])) : {};
+  const strip: [string, string, string][] = [
+    ["Score", technicalScore !== undefined ? `${Math.round(technicalScore)}` : "—", "text-ink"],
+    ["RSI", tech ? tech.rsi.toFixed(0) : "—", tech ? (tech.rsi < 30 ? "text-up-2" : tech.rsi > 70 ? "text-down-2" : "text-ink") : "text-ink-3"],
+    ["Vol", tech ? `${tech.volumeRatio.toFixed(1)}×` : "—", tech && tech.volumeRatio >= 1.5 ? "text-up-2" : "text-ink"],
+    ["P/E", fund["P/E"]?.v ?? "—", fund["P/E"]?.t ?? "text-ink-3"],
+    ["Div", fund["Div"]?.v ?? "—", fund["Div"]?.t ?? "text-ink-3"],
+  ];
+  const more = [
+    tech?.trendRegime ? `Trend ${tech.trendRegime}` : null,
+    tech ? `EMA20 ${tech.ema20.toFixed(2)}` : null,
+    tech ? `EMA50 ${tech.ema50.toFixed(2)}` : null,
+    fund["ROE"] ? `ROE ${fund["ROE"].v}` : null,
+    fund["D/E"] ? `D/E ${fund["D/E"].v}` : null,
+    fund["PBV"] ? `PBV ${fund["PBV"].v}` : null,
+  ].filter(Boolean);
+  return (
+    <div className="sm:hidden">
+      <dl className="grid grid-cols-5 divide-x divide-line border-y border-line">
+        {strip.map(([label, value, tone]) => (
+          <div key={label} className="px-1 py-1.5 text-center min-w-0">
+            <dt className="text-[9px] uppercase tracking-wide text-ink-3">{label}</dt>
+            <dd className={`text-[13px] font-semibold num truncate ${tone}`}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {more.length > 0 && <p className="text-[10.5px] text-ink-3 num mt-1.5 leading-snug">{more.join(" · ")}</p>}
+      {f === null && <p className="text-[10.5px] text-ink-3 mt-0.5">Fundamentals unavailable for this ticker</p>}
+    </div>
+  );
+}
+
+function ReasonList({ reasons }: { reasons: string[] }) {
+  const [all, setAll] = useState(false);
+  return (
+    <div>
+      <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1 sm:mb-1.5"><span className="sm:hidden">Why</span><span className="hidden sm:inline">Key technical reasons</span></div>
+      <ul className="space-y-0.5 sm:space-y-1">
+        {reasons.map((r, i) => (
+          <li key={i} className={`text-[11px] text-ink-2 leading-snug pl-3 relative before:content-['·'] before:absolute before:left-0 before:text-ink-3 ${i >= 2 && !all ? "hidden sm:list-item" : ""}`}>
+            {r}
+          </li>
+        ))}
+      </ul>
+      {reasons.length > 2 && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); setAll((v) => !v); }} className="sm:hidden mt-1 text-[11px] text-sky-2 cursor-pointer">
+          {all ? "Show fewer" : `Show all ${reasons.length}`}
+        </button>
+      )}
+    </div>
+  );
 }
 
 // ─── Expanded inline detail body ─────────────────────────────────────────────
@@ -164,26 +226,19 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
   const hasRisks = (risks?.length ?? 0) > 0;
 
   return (
-    <div className="space-y-3 pt-2.5">
+    <div className="space-y-2.5 sm:space-y-3 pt-2.5">
       {topBlock}
 
       {reason && (
-        <p className={`text-[13px] leading-snug border-l-2 pl-3 italic ${hue.text} border-current`}>{reason}</p>
+        <p className={`text-[12px] sm:text-[13px] leading-snug border-l-2 pl-2.5 sm:pl-3 sm:italic max-sm:text-ink-2 max-sm:line-clamp-2 ${hue.text} border-current`}>{reason}</p>
       )}
 
-      {/* Key technical reasons — the deterministic explanation behind the score, stated once. */}
-      {reasons.length > 0 && (
-        <div>
-          <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1.5">Key technical reasons</div>
-          <ul className="space-y-1">
-            {reasons.map((r, i) => (
-              <li key={i} className="text-[11px] text-ink-2 leading-snug pl-3 relative before:content-['·'] before:absolute before:left-0 before:text-ink-3">
-                {r}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Phones: the key numbers at a glance, in place of the chip rows below. */}
+      <PhoneStats detail={detail} />
+
+      {/* Key technical reasons — the deterministic explanation behind the score, stated once.
+          Phones show the first two, with the rest one tap away. */}
+      {reasons.length > 0 && <ReasonList reasons={reasons} />}
 
       {/* AI perspective — shown only when the AI pass actually produced its own
           catalysts/risks framing (never fabricated from technicals). */}
@@ -204,8 +259,8 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
         </div>
       )}
 
-      {/* Secondary technicals | Fundamentals — tertiary detail, one row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
+      {/* Secondary technicals | Fundamentals — tertiary detail, one row (phones: PhoneStats above) */}
+      <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
         <div>
           {tech && <>
             <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1.5">Technicals</div>
@@ -232,7 +287,7 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
       {/* Deep Dive — the one route out of a row into the full research view.
           Lives in the shared detail body so Opportunities, Watchlist and
           Holdings all get the same affordance in the same place. */}
-      <div className="flex items-center justify-between gap-3 flex-wrap pt-0.5">
+      <div className="hidden sm:flex items-center justify-between gap-3 flex-wrap pt-0.5">
         {footer ? (
           <span className="hidden sm:inline text-[10px] text-ink-3 min-w-0">
             Fundamentals from askanalyst.com.pk · Technicals from PSX price history · Not financial advice
@@ -263,29 +318,10 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
 }
 
 // ─── Two-tier collapsed card → expands inline ───────────────────────────────
-/** Phone-sized remove: first tap arms, second tap removes; arming expires after 4s. */
-function MobileRemove({ label, onConfirm }: { label: string; onConfirm: () => void }) {
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 4000);
-    return () => clearTimeout(t);
-  }, [armed]);
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); if (armed) onConfirm(); else setArmed(true); }}
-      className={`btn flex-1 justify-center min-h-10 text-[13px] ${armed ? "border-down/60 text-down-2" : ""}`}
-    >
-      <X size={14} strokeWidth={2} aria-hidden />{armed ? "Tap again to remove" : label}
-    </button>
-  );
-}
-
 export function StockRow({
   variant, signal, ticker, sector, technicalScore, pnlPct,
   spark, price, change, starred, onToggleStar, onRemove, tier2, open, onToggle, children,
-  shares, avgPrice, value, pnl,
+  shares, avgPrice, value, pnl, tech,
 }: {
   variant: "signal" | "holding";
   signal?: string;
@@ -308,6 +344,8 @@ export function StockRow({
   avgPrice?: number;
   value?: number | null;
   pnl?: number | null;
+  /** Phone row: RSI and volume in the sub-line, and the Near entry flag. */
+  tech?: StockTech | null;
 }) {
   const hue = hueOf(signal);
   const isSignal = variant === "signal";
@@ -336,12 +374,14 @@ export function StockRow({
           <MobileRow
             ticker={ticker}
             tone={hue.text}
+            flag={nearEntry(tech) ? <NearEntryFlag /> : undefined}
             sub={<>
-              <span className={hue.text}>{badgeLabel(signal)}{technicalScore !== undefined ? ` · ${Math.round(technicalScore)}` : ""}</span>
-              {sector && <> · {sector}</>}
+              <span className={hue.text}>{badgeLabel(signal)}{technicalScore !== undefined ? ` ${Math.round(technicalScore)}` : ""}</span>
+              {techBrief(tech) ? <> · {techBrief(tech)}</> : sector ? <> · {sector}</> : null}
             </>}
             top={price !== undefined ? price.toFixed(2) : "—"}
             bottom={<Move pct={change} />}
+            spark={spark}
           />
         ) : (
           <MobileRow
@@ -349,6 +389,7 @@ export function StockRow({
             sub={shares !== undefined && avgPrice !== undefined ? `${shares.toLocaleString("en-US")} × ${avgPrice.toFixed(2)}` : sector}
             top={value !== undefined && value !== null ? fmtInt(value) : price !== undefined ? price.toFixed(2) : "—"}
             bottom={<Move pct={pnlPct} abs={pnl} digits={1} />}
+            spark={spark}
           />
         )}
 
@@ -429,35 +470,21 @@ export function StockRow({
       {open && (
         <div className="px-4 sm:px-3.5 pb-3.5 border-t border-line animate-fade-in">
           {/* Phones: the one-line summary and the row's own action, which the compact row has no room for. */}
-          <div className="sm:hidden pt-3 space-y-3">
-            {/* Holdings already show the position block below; this line would repeat it. */}
-            {isSignal && <p className="flex items-start gap-1.5 text-[13px] text-ink-2 leading-snug">
-              <Tier2Icon size={14} strokeWidth={2} className="shrink-0 text-ink-3 mt-0.5" aria-hidden />
-              <span>
-                {tier2.text}
-                {tier2.fragment && <span className={tier2.fragment.className}> · {tier2.fragment.text}</span>}
-              </span>
-            </p>}
-            <div className="flex gap-2">
-              {isSignal ? (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onToggleStar?.(); }}
-                  aria-pressed={!!starred}
-                  className={`btn flex-1 justify-center min-h-10 text-[13px] ${starred ? "border-gold/50 text-gold-2" : ""}`}
-                >
-                  <Star size={14} strokeWidth={2} fill={starred ? "currentColor" : "none"} aria-hidden />
-                  {starred ? "On watchlist" : "Add to watchlist"}
-                </button>
-              ) : onRemove ? (
-                <MobileRemove label="Remove holding" onConfirm={onRemove} />
-              ) : null}
-              <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-10 text-[13px]">
-                <Telescope size={14} strokeWidth={2} aria-hidden />Open stock
-              </Link>
-            </div>
-          </div>
+          {/* Phones: the one-line summary first; holdings show their position block instead. */}
+          {isSignal && (
+            <p className="sm:hidden pt-2.5 text-[12px] text-ink-2 leading-snug line-clamp-2">
+              {tier2.text}
+              {tier2.fragment && <span className={tier2.fragment.className}> · {tier2.fragment.text}</span>}
+            </p>
+          )}
           {children}
+          <RowActions
+            ticker={ticker}
+            price={price}
+            watching={isSignal ? !!starred : undefined}
+            onToggleWatch={isSignal ? () => onToggleStar?.() : undefined}
+            onRemove={!isSignal ? onRemove : undefined}
+          />
         </div>
       )}
     </article>

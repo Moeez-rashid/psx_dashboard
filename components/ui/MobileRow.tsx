@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Sparkline } from "./primitives";
 
 /**
  * The phone list row, shared by Signals, Holdings and Watchlist so they read
@@ -6,7 +7,7 @@ import type { ReactNode } from "react";
  * right-aligned figures. Flat (the list draws hairlines between rows), about
  * 52px tall. Phones only; wider screens keep the card grids.
  */
-export function MobileRow({ ticker, sub, top, bottom, tone }: {
+export function MobileRow({ ticker, sub, top, bottom, tone, spark, flag }: {
   ticker: string;
   /** One line under the ticker: score and sector, or "200 × 480.00". */
   sub?: ReactNode;
@@ -16,6 +17,10 @@ export function MobileRow({ ticker, sub, top, bottom, tone }: {
   bottom?: ReactNode;
   /** Text colour class for the ticker mark, e.g. the signal hue. */
   tone?: string;
+  /** ~30 daily closes; drawn as a small trend line, green or red by direction. */
+  spark?: number[];
+  /** Small marker after the ticker, e.g. "Near entry". */
+  flag?: ReactNode;
 }) {
   return (
     <div className="sm:hidden flex items-center gap-2.5 px-4 py-2 min-h-[52px]">
@@ -26,10 +31,17 @@ export function MobileRow({ ticker, sub, top, bottom, tone }: {
         {ticker.slice(0, 2)}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-semibold tracking-tight leading-tight">{ticker}</div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[14px] font-semibold tracking-tight leading-tight">{ticker}</span>
+          {flag}
+        </div>
         {sub && <div className="text-[11px] text-ink-3 leading-tight mt-0.5 truncate">{sub}</div>}
       </div>
-      <div className="text-right shrink-0 leading-tight">
+      {spark && spark.length >= 5 && (
+        <Sparkline data={spark} width={52} height={22} opacity={1}
+          color={spark[spark.length - 1] >= spark[0] ? MUTED_UP : MUTED_DOWN} />
+      )}
+      <div className="text-right shrink-0 leading-tight min-w-[64px]">
         <div className="text-[14px] font-semibold num">{top}</div>
         {bottom && <div className="text-[11px] num mt-0.5">{bottom}</div>}
       </div>
@@ -53,6 +65,27 @@ export function Move({ pct, abs, digits = 2 }: { pct?: number | null; abs?: numb
 /** 308812.4 → "308,812". */
 export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString("en-US");
+}
+
+/** Chart colours a step darker than the price text, so lines sit quietly in the dark theme. */
+export const MUTED_UP = "color-mix(in srgb, var(--color-up) 62%, #000)";
+export const MUTED_DOWN = "color-mix(in srgb, var(--color-down) 62%, #000)";
+/** Same treatment for any palette colour (allocation donut). */
+export const muted = (c: string) => `color-mix(in srgb, ${c} 62%, #000)`;
+
+/** "Near entry": the scorer rates the price at EMA20 support (entry 20/20). */
+export function NearEntryFlag({ title }: { title?: string }) {
+  return (
+    <span title={title ?? "Price at EMA20 support: the Technical Score's best entry rating"}
+      className="shrink-0 text-[9px] font-semibold text-sky-2 bg-sky-dim rounded px-1 leading-[14px]">
+      Near entry
+    </span>
+  );
+}
+
+/** Phone sub-line technicals: "RSI 64 · Vol 1.3×". */
+export function techBrief(t?: { rsi: number; volumeRatio: number } | null): string | null {
+  return t ? `RSI ${t.rsi.toFixed(0)} · Vol ${t.volumeRatio.toFixed(1)}×` : null;
 }
 
 /** Hairline-separated, edge-to-edge list on phones; the usual spaced cards from sm up. */

@@ -3,6 +3,7 @@ import type { StockQuote } from "@/lib/psx";
 import { fmtPKR } from "@/lib/format";
 import { resolveSectorName } from "@/lib/sectors";
 import { useCostPrefs } from "@/lib/use-local";
+import { muted } from "./ui/MobileRow";
 
 export interface Holding { ticker: string; name: string; shares: number; avgPrice: number; shariah: boolean; }
 
@@ -99,6 +100,8 @@ export default function HoldingsOverview({ holdings, prices }: {
     <>
     {/* ── Phones: one compact summary; the stock list below carries the per-stock numbers ── */}
     <div className="sm:hidden card px-3.5 py-3 mb-3">
+      <div className="flex items-start gap-3">
+      <div className="min-w-0 flex-1">
       <div className="text-[11px] text-ink-3">Current value</div>
       <div className="flex items-baseline gap-1 mt-0.5">
         <span className="text-[22px] font-bold num leading-none tracking-tight">{Math.round(totalMV).toLocaleString("en-US")}</span>
@@ -117,16 +120,16 @@ export default function HoldingsOverview({ holdings, prices }: {
         )}
       </div>
 
-      {/* Allocation: one thin bar, legend underneath */}
-      <div className="flex h-1.5 rounded-full overflow-hidden gap-px mt-3 bg-line-2">
-        {rows.map((r) => (
-          <span key={r.ticker} style={{ width: `${totalMV > 0 ? (r.marketVal / totalMV) * 100 : 0}%`, background: r.color }} />
-        ))}
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[11px] text-ink-3">
+      {/* Allocation donut — the chart only; the legend below names the slices */}
+      <svg viewBox="0 0 120 120" width={68} height={68} className="shrink-0" aria-label="Allocation by holding">
+        {slices.map((s, i) => <path key={i} d={s.path} fill={muted(s.color)} />)}
+      </svg>
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-[11px] text-ink-3">
         {rows.map((r) => (
           <span key={r.ticker} className="inline-flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: r.color }} />
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: muted(r.color) }} />
             <span className="text-ink-2">{r.ticker}</span>
             <span className="num">{totalMV > 0 ? Math.round((r.marketVal / totalMV) * 100) : 0}%</span>
           </span>

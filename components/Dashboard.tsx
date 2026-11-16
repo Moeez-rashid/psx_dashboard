@@ -21,6 +21,7 @@ import { publishDashboardTab } from "@/lib/nav-state";
 import SegmentSwitch from "./nav/SegmentSwitch";
 import { LIST_CLASS } from "./ui/MobileRow";
 import { useIsPhone } from "@/lib/use-media";
+import SignalsPulse from "./SignalsPulse";
 import { SET_TAB_EVENT } from "./CommandPalette";
 import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
@@ -1104,6 +1105,9 @@ export default function Dashboard({
               );
             })()}
 
+            {/* Phones: market in a line and today's news in two, above the picks */}
+            {isPhone && !scanning && <SignalsPulse na={na ?? null} onOpenNews={() => goTab("news")} />}
+
             {/* Scanner controls — the tab's primary action stays on top */}
             <div className="hidden sm:flex gap-2.5 mb-4 flex-wrap items-center">
               <button onClick={runFullScan} disabled={scanning} className="btn-accent font-semibold px-4 py-2">
@@ -1322,6 +1326,7 @@ export default function Dashboard({
                       ticker={tech.symbol}
                       sector={sectorOf(tech.symbol)}
                       technicalScore={tech.technicalScore}
+                      tech={tech}
                       spark={sparks[tech.symbol]}
                       price={liveQuote?.currentPrice ?? tech.currentPrice}
                       change={liveQuote?.changePercent}
@@ -1360,6 +1365,7 @@ export default function Dashboard({
                     ticker={sig.ticker}
                     sector={sectorOf(sig.ticker)}
                     technicalScore={sigTech?.technicalScore}
+                    tech={sigTech}
                     spark={sparks[sig.ticker]}
                     price={displayPrice}
                     change={displayChange}
@@ -1429,8 +1435,12 @@ export default function Dashboard({
 
                 const positionBlock = (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[9px] uppercase tracking-wide text-ink-3">Position</span>
+                    <div className="flex items-center justify-between mb-0 sm:mb-2">
+                      <span className="text-[9px] uppercase tracking-wide text-ink-3">
+                        Position
+                        {/* Phones: the row already shows shares × avg, value and P&L — only cost basis is new */}
+                        {!isEditing && <span className="sm:hidden normal-case tracking-normal text-[11px] text-ink-2 ml-1.5 num">cost PKR {Math.round(cost).toLocaleString()}</span>}
+                      </span>
                       {!isEditing && (
                         <button
                           onClick={() => setEditingHolding({ ticker: h.ticker, shares: String(h.shares), avg: String(h.avgPrice) })}
@@ -1475,7 +1485,7 @@ export default function Dashboard({
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 sm:gap-2">
+                      <div className="hidden sm:grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 sm:gap-2">
                         {([
                           ["Shares", h.shares.toLocaleString(), "text-ink"],
                           ["Avg cost", `PKR ${h.avgPrice.toFixed(2)}`, "text-ink"],
@@ -1578,8 +1588,19 @@ export default function Dashboard({
             {portfolioSwitch}
             <div className="flex justify-between items-center mb-2 sm:mb-3 flex-wrap gap-2">
               <span className="label hidden sm:inline">Watchlist</span>
+              {/* Phones: sort sits in the same row as the actions */}
+              {watching.length > 1 && (
+                <div className="sm:hidden flex gap-1">
+                  {(["score", "name"] as const).map(opt => (
+                    <button key={opt} onClick={() => setSortWatch(opt)}
+                      className={`btn text-[10px] px-2 py-1 ${sortWatch === opt ? "bg-raised text-ink border-line-2" : ""}`}>
+                      {opt === "score" ? "Score ↓" : "A–Z"}
+                    </button>
+                  ))}
+                </div>
+              )}
               {watching.length > 0 && (
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-1.5 sm:gap-2 items-center">
                   <button
                     onClick={async () => { await fetchWatchTech(); fetchPrices(); }}
                     disabled={loadingWatchTech || runningWatchAI}
@@ -1596,14 +1617,14 @@ export default function Dashboard({
                     title={!settings.apiKey ? "Set your API key in Settings first" : "Run AI analysis on your watchlist"}
                   >
                     <Sparkles size={11} strokeWidth={2.25} className={runningWatchAI ? "animate-pulse" : ""} aria-hidden />
-                    {runningWatchAI ? "Analysing…" : "AI Analysis"}
+                    {runningWatchAI ? "Analysing…" : <><span className="sm:hidden">AI</span><span className="hidden sm:inline">AI Analysis</span></>}
                   </button>
                 </div>
               )}
             </div>
 
             {watching.length > 1 && (
-              <div className="flex items-center gap-2 mb-2 sm:mb-3">
+              <div className="hidden sm:flex items-center gap-2 mb-3">
                 <span className="text-[10px] text-ink-3">Sort</span>
                 {(["score", "name"] as const).map(opt => (
                   <button
@@ -1628,6 +1649,28 @@ export default function Dashboard({
                 />
               </div>
             )}
+
+            {/* Phones: the watchlist's day in one line */}
+            {watching.length > 1 && (() => {
+              const moves = watching
+                .map((w) => ({ t: w.ticker, c: prices[w.ticker]?.changePercent }))
+                .filter((m): m is { t: string; c: number } => typeof m.c === "number");
+              if (moves.length < 2) return null;
+              const up = moves.filter((m) => m.c > 0).length;
+              const down = moves.filter((m) => m.c < 0).length;
+              const best = moves.reduce((a, m) => (m.c > a.c ? m : a));
+              const worst = moves.reduce((a, m) => (m.c < a.c ? m : a));
+              const sgn = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}%`;
+              return (
+                <div className="sm:hidden card px-3 py-2 mb-2 flex items-center gap-3 text-[11px] num">
+                  <span className="text-ink-3">Today</span>
+                  <span><span className="text-up-2">{up}</span> up · <span className="text-down-2">{down}</span> down</span>
+                  <span className="flex-1" />
+                  <span className="text-ink-2">{best.t} <span className={best.c >= 0 ? "text-up-2" : "text-down-2"}>{sgn(best.c)}</span></span>
+                  {worst.t !== best.t && <span className="text-ink-2">{worst.t} <span className={worst.c >= 0 ? "text-up-2" : "text-down-2"}>{sgn(worst.c)}</span></span>}
+                </div>
+              );
+            })()}
 
             {watching.length > 0 && (
               <div className={LIST_CLASS}>
