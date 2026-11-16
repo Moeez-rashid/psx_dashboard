@@ -97,7 +97,8 @@ export default function TechnicalSection({ technical }: { technical: DeepDiveTec
               <ChartNoAxesColumn size={14} strokeWidth={2} className="text-ink-3 mt-0.5 shrink-0" aria-hidden />
               <div>
                 <h3 className="text-[12px] font-semibold text-ink">Supplementary indicators</h3>
-                <p className="text-[11px] text-ink-3 mt-0.5 leading-snug">
+                <p className="sm:hidden text-[11px] text-ink-3 mt-0.5 leading-snug">Context only: <strong className="text-ink-2 font-medium">not part of the Technical Score</strong>.</p>
+                <p className="hidden sm:block text-[11px] text-ink-3 mt-0.5 leading-snug">
                   Additional context computed from the same price history. These are <strong className="text-ink-2 font-medium">not part of the Technical Score</strong> above — read them for confluence, not as inputs.
                 </p>
               </div>
@@ -119,7 +120,7 @@ export default function TechnicalSection({ technical }: { technical: DeepDiveTec
               <Metric label="EMA crossover" value={t.crossoverSignal ? t.crossoverSignal : DASH} tone={t.crossoverSignal === "bullish" ? "text-up-2" : t.crossoverSignal === "bearish" ? "text-down-2" : "text-ink-2"} hint="Within last 10 sessions" />
             </MetricGrid>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 mt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 sm:gap-y-5 mt-4 sm:mt-6">
               {/* MACD */}
               <Group title="MACD (12, 26, 9)">
                 {t.macd ? (

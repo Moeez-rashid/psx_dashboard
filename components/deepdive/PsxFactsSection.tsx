@@ -168,17 +168,22 @@ export default async function PsxFactsSection({ ticker }: { ticker: string }) {
               const k = KIND_LABEL[a.kind];
               const body = (
                 <>
-                  <span className="text-[10px] text-ink-3 num w-[68px] shrink-0 pt-px">{a.date}</span>
-                  <span className={`text-[9px] font-semibold border rounded px-1.5 py-px shrink-0 mt-px ${k.cls}`}>{k.text}</span>
-                  <span className="text-[11px] text-ink-2 leading-snug flex-1 min-w-0">{a.title}</span>
+                  {/* Phones: badge and date on one line, the title (two lines max) under it */}
+                  <span className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start sm:gap-2.5">
+                    <span className="flex items-center gap-1.5 sm:contents">
+                      <span className="text-[10px] text-ink-3 num sm:w-[68px] shrink-0 sm:pt-px sm:order-none order-2">{a.date}</span>
+                      <span className={`text-[9px] font-semibold border rounded px-1.5 py-px shrink-0 sm:mt-px order-1 sm:order-none ${k.cls}`}>{k.text}</span>
+                    </span>
+                    <span className="text-[11px] text-ink-2 leading-snug flex-1 min-w-0 mt-0.5 sm:mt-0 max-sm:line-clamp-2">{a.title}</span>
+                  </span>
                   {a.pdfUrl && <FileText size={12} strokeWidth={2} className="text-ink-3 shrink-0 mt-0.5" aria-hidden />}
                 </>
               );
               return (
-                <li key={i}>
+                <li key={i} className={i >= 5 ? "max-sm:hidden" : ""}>
                   {a.pdfUrl
-                    ? <a href={a.pdfUrl} target="_blank" rel="noreferrer" className="flex items-start gap-2.5 py-2 hover:bg-inset -mx-2 px-2 rounded-md" title="Open the filed document (PDF)">{body}</a>
-                    : <div className="flex items-start gap-2.5 py-2">{body}</div>}
+                    ? <a href={a.pdfUrl} target="_blank" rel="noreferrer" className="flex items-start gap-2.5 py-1.5 sm:py-2 hover:bg-inset -mx-2 px-2 rounded-md" title="Open the filed document (PDF)">{body}</a>
+                    : <div className="flex items-start gap-2.5 py-1.5 sm:py-2">{body}</div>}
                 </li>
               );
             })}

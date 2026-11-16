@@ -32,35 +32,35 @@ export default function ValuationSection({ valuation }: { valuation: DeepDiveVal
     >
       {/* ── Headline comparison ── */}
       {hasSectorComparison ? (
-        <div className="bg-inset border border-line rounded-xl px-4 py-4 mb-5">
-          <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+        <div className="bg-inset border border-line rounded-xl px-3 py-3 sm:px-4 sm:py-4 mb-4 sm:mb-5">
+          <div className="flex flex-wrap items-end gap-x-6 sm:gap-x-8 gap-y-2.5 sm:gap-y-4">
             <div>
               <div className="label mb-1">This stock</div>
-              <div className="text-[28px] font-bold num tabular-nums text-ink leading-none">
-                {v.pe!.toFixed(2)}<span className="text-[16px] text-ink-3 font-semibold">×</span>
+              <div className="text-[20px] sm:text-[28px] font-bold num tabular-nums text-ink leading-none">
+                {v.pe!.toFixed(2)}<span className="text-[13px] sm:text-[16px] text-ink-3 font-semibold">×</span>
               </div>
-              <div className="text-[10px] text-ink-3 mt-1.5">
+              <div className="text-[10px] text-ink-3 mt-1.5 max-sm:max-w-[8.5rem] max-sm:truncate">
                 {v.peSource === "derived-from-eps" ? "P/E derived from price ÷ EPS" : "P/E as reported"}
               </div>
             </div>
 
             <div>
               <div className="label mb-1">Sector median</div>
-              <div className="text-[28px] font-bold num tabular-nums text-ink-2 leading-none">
-                {v.sector!.medianPE!.toFixed(2)}<span className="text-[16px] text-ink-3 font-semibold">×</span>
+              <div className="text-[20px] sm:text-[28px] font-bold num tabular-nums text-ink-2 leading-none">
+                {v.sector!.medianPE!.toFixed(2)}<span className="text-[13px] sm:text-[16px] text-ink-3 font-semibold">×</span>
               </div>
-              <div className="text-[10px] text-ink-3 mt-1.5">
+              <div className="text-[10px] text-ink-3 mt-1.5 max-sm:max-w-[8.5rem] max-sm:truncate">
                 {v.sector!.sectorName} · {v.sector!.sampleSize} of {v.sector!.totalConstituents} constituents
               </div>
             </div>
 
             <div className="flex-1 min-w-[12rem]">
-              <div className={`text-[15px] font-semibold leading-snug ${prem < 0 ? "text-up-2" : prem > 0 ? "text-gold-2" : "text-ink-2"}`}>
+              <div className={`text-[13px] sm:text-[15px] font-semibold leading-snug ${prem < 0 ? "text-up-2" : prem > 0 ? "text-gold-2" : "text-ink-2"}`}>
                 {prem === 0
                   ? "In line with its sector median"
                   : `${Math.abs(prem).toFixed(1)}% ${prem < 0 ? "below" : "above"} sector median`}
               </div>
-              <p className="text-[10px] text-ink-3 mt-1.5 leading-relaxed">
+              <p className="hidden sm:block text-[10px] text-ink-3 mt-1.5 leading-relaxed">
                 A discount is not automatically an opportunity — it can reflect lower growth, weaker balance sheet or earnings quality. Read it alongside the fundamentals below.
               </p>
             </div>

@@ -93,7 +93,7 @@ export default function AIInterpretationSection({
 
 function LoadingState() {
   return (
-    <div className="border border-dashed border-line-2 rounded-xl px-4 py-8 text-center bg-inset/40">
+    <div className="border border-dashed border-line-2 rounded-xl px-4 py-5 sm:py-8 text-center bg-inset/40">
       <Loader2 size={18} strokeWidth={2} className="text-ink-3 animate-spin mx-auto mb-3" aria-hidden />
       <p className="text-[12px] text-ink-2">Analyzing the available evidence…</p>
       <p className="text-[11px] text-ink-3 mt-1.5">One pass over the technical, valuation, fundamental and market evidence above.</p>
@@ -121,7 +121,7 @@ function RequestState({
   const copy = STATUS_COPY[status];
   const buttonLabel = { generate: "Analyze with AI", retry: "Try again", check: "Check again" }[copy.retry ?? "generate"];
   return (
-    <div className="border border-dashed border-line-2 rounded-xl px-4 py-6 text-center bg-inset/40">
+    <div className="border border-dashed border-line-2 rounded-xl px-3 py-3.5 sm:px-4 sm:py-6 text-center bg-inset/40">
       <p className="text-[12px] text-ink-2">{copy.title}</p>
       {detail && <p className="text-[11px] text-ink-3 mt-2 leading-relaxed max-w-lg mx-auto">{detail}</p>}
       {copy.retry && (

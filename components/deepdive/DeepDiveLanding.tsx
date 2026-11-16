@@ -83,14 +83,14 @@ export default function DeepDiveLanding() {
   };
 
   return (
-    <main className="flex-1 flex items-center justify-center px-4 relative overflow-hidden min-h-[calc(100vh-6.5rem)]">
+    <main className="flex-1 flex items-start sm:items-center justify-center px-4 relative overflow-hidden sm:min-h-[calc(100vh-6.5rem)]">
       <DeepDiveBackground />
 
-      <div className="relative w-full max-w-xl mx-auto text-center py-16">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-ink">Deep Dive</h1>
-        <p className="text-sm text-ink-2 mt-3">Search a stock to investigate</p>
+      <div className="relative w-full max-w-xl mx-auto text-left sm:text-center pt-5 pb-8 sm:py-16">
+        <h1 className="text-[22px] sm:text-5xl font-bold tracking-tight text-ink">Deep Dive</h1>
+        <p className="text-[13px] sm:text-sm text-ink-2 mt-1 sm:mt-3">Search a stock for its full research page</p>
 
-        <div ref={wrapRef} className="relative mt-9 text-left">
+        <div ref={wrapRef} className="relative mt-4 sm:mt-9 text-left">
           <div className="relative">
             <Search size={16} strokeWidth={2} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden />
             <input
@@ -113,7 +113,7 @@ export default function DeepDiveLanding() {
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
-              className="w-full bg-card border border-line-2 rounded-2xl pl-11 pr-4 py-4 text-[15px] text-ink
+              className="w-full bg-card border border-line-2 rounded-xl sm:rounded-2xl pl-11 pr-4 py-3 sm:py-4 text-[15px] text-ink
                          placeholder:text-ink-3 outline-none focus:border-up/50 transition-colors shadow-2xl shadow-black/40"
             />
           </div>
@@ -142,11 +142,11 @@ export default function DeepDiveLanding() {
 
         {recent.length > 0 && (
           <div className="mt-10">
-            <div className="flex items-center justify-center gap-1.5 text-[10px] uppercase tracking-[0.08em] text-ink-3 mb-3">
+            <div className="flex items-center sm:justify-center gap-1.5 text-[10px] uppercase tracking-[0.08em] text-ink-3 mb-2 sm:mb-3">
               <Clock3 size={11} strokeWidth={2} aria-hidden />
               Recent research
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="flex flex-wrap items-center sm:justify-center gap-2">
               {recent.map((r) => (
                 <button
                   key={r.ticker}
