@@ -21,6 +21,7 @@ import { publishDashboardTab } from "@/lib/nav-state";
 import SegmentSwitch from "./nav/SegmentSwitch";
 import { LIST_CLASS } from "./ui/MobileRow";
 import { useIsPhone } from "@/lib/use-media";
+import SignalsPulse from "./SignalsPulse";
 import { SET_TAB_EVENT } from "./CommandPalette";
 import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
@@ -1104,6 +1105,9 @@ export default function Dashboard({
               );
             })()}
 
+            {/* Phones: market in a line and today's news in two, above the picks */}
+            {isPhone && !scanning && <SignalsPulse na={na ?? null} onOpenNews={() => goTab("news")} />}
+
             {/* Scanner controls — the tab's primary action stays on top */}
             <div className="hidden sm:flex gap-2.5 mb-4 flex-wrap items-center">
               <button onClick={runFullScan} disabled={scanning} className="btn-accent font-semibold px-4 py-2">
@@ -1628,6 +1632,28 @@ export default function Dashboard({
                 />
               </div>
             )}
+
+            {/* Phones: the watchlist's day in one line */}
+            {watching.length > 1 && (() => {
+              const moves = watching
+                .map((w) => ({ t: w.ticker, c: prices[w.ticker]?.changePercent }))
+                .filter((m): m is { t: string; c: number } => typeof m.c === "number");
+              if (moves.length < 2) return null;
+              const up = moves.filter((m) => m.c > 0).length;
+              const down = moves.filter((m) => m.c < 0).length;
+              const best = moves.reduce((a, m) => (m.c > a.c ? m : a));
+              const worst = moves.reduce((a, m) => (m.c < a.c ? m : a));
+              const sgn = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}%`;
+              return (
+                <div className="sm:hidden card px-3 py-2 mb-2 flex items-center gap-3 text-[11px] num">
+                  <span className="text-ink-3">Today</span>
+                  <span><span className="text-up-2">{up}</span> up · <span className="text-down-2">{down}</span> down</span>
+                  <span className="flex-1" />
+                  <span className="text-ink-2">{best.t} <span className={best.c >= 0 ? "text-up-2" : "text-down-2"}>{sgn(best.c)}</span></span>
+                  {worst.t !== best.t && <span className="text-ink-2">{worst.t} <span className={worst.c >= 0 ? "text-up-2" : "text-down-2"}>{sgn(worst.c)}</span></span>}
+                </div>
+              );
+            })()}
 
             {watching.length > 0 && (
               <div className={LIST_CLASS}>

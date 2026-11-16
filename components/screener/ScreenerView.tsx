@@ -313,7 +313,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
                       {watching.has(r.s) ? "On watchlist" : "Add to watchlist"}
                     </button>
                     <Link href={`/stock/${r.s}`} className="btn-sky flex-1 justify-center min-h-9 text-[13px]">
-                      <Telescope size={14} strokeWidth={2} aria-hidden />Open stock
+                      <Telescope size={14} strokeWidth={2} aria-hidden />Deep Dive
                     </Link>
                   </div>
                 </div>

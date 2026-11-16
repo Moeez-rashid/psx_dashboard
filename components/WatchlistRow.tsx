@@ -1,7 +1,8 @@
 "use client";
 import { MobileRow, Move } from "./ui/MobileRow";
 import Link from "next/link";
-import { Star, ChevronDown, RefreshCw, Sparkles, Telescope } from "lucide-react";
+import { Star, ChevronDown, RefreshCw, Sparkles, Telescope, Bell } from "lucide-react";
+import { openAlertFor } from "./AlertsCenter";
 import { hueOf, StockDetailBody, type SignalDetail } from "./StockRow";
 import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreChip } from "./ui/TechnicalScore";
@@ -85,6 +86,7 @@ export function WatchlistRow({
           ) : sector}
           top={price !== undefined ? price.toFixed(2) : "—"}
           bottom={<Move pct={change} />}
+          spark={spark}
         />
       <div className="hidden sm:grid grid-cols-[56px_120px_112px_minmax(0,1fr)_64px_80px_22px_14px] gap-x-3 items-center px-3.5 py-3">
         <div className="flex justify-center min-w-0">
@@ -146,10 +148,14 @@ export function WatchlistRow({
           {/* Phones: the row's actions, which the compact row has no room for. */}
           <div className="sm:hidden flex gap-2 pt-3">
             <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(); }} className="btn flex-1 justify-center min-h-10 text-[13px] border-gold/50 text-gold-2">
-              <Star size={14} strokeWidth={2} fill="currentColor" aria-hidden />Remove from watchlist
+              <Star size={14} strokeWidth={2} fill="currentColor" aria-hidden />Unwatch
+            </button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); openAlertFor(ticker, price); }}
+              aria-label={`Price alert for ${ticker}`} title="Price alert" className="btn w-10 justify-center min-h-10 px-0 shrink-0">
+              <Bell size={14} strokeWidth={2} aria-hidden />
             </button>
             <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-10 text-[13px]">
-              <Telescope size={14} strokeWidth={2} aria-hidden />Open stock
+              <Telescope size={14} strokeWidth={2} aria-hidden />Deep Dive
             </Link>
           </div>
           {hasData ? (

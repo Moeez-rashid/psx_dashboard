@@ -8,6 +8,7 @@ import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreMeter } from "./ui/TechnicalScore";
 import { TechChips, FundamentalsState, type StockTech } from "./StockBits";
 import { MobileRow, Move, fmtInt } from "./ui/MobileRow";
+import { effectivePE } from "@/lib/askanalyst";
 
 // ─── Detail payload shared by every tab ─────────────────────────────────────
 export interface SignalDetail {
@@ -149,6 +150,57 @@ function dedupedReasons(reasons: string[] | undefined, reason?: string): string[
   return reasons.filter((r) => r !== reason);
 }
 
+// ─── Phone-only pieces of the expanded body ─────────────────────────────────
+/** Six key numbers in a tight grid: what the desktop shows as two chip rows. */
+function PhoneStats({ detail }: { detail: SignalDetail }) {
+  const { tech, fundamentals: f, technicalScore, currentPrice } = detail;
+  const pe = f ? effectivePE(f, currentPrice) : null;
+  const trend = tech
+    ? tech.trendRegime
+      ? tech.trendRegime.replace(/_/g, " ")
+      : tech.priceVsEma20 === "above" ? "Above EMA20" : "Below EMA20"
+    : null;
+  const cells: [string, string, string][] = [
+    ["Score", technicalScore !== undefined ? `${Math.round(technicalScore)}` : "—", "text-ink"],
+    ["RSI", tech ? tech.rsi.toFixed(0) : "—", tech ? (tech.rsi < 30 ? "text-up-2" : tech.rsi > 70 ? "text-down-2" : "text-ink") : "text-ink-3"],
+    ["Volume", tech ? `${tech.volumeRatio.toFixed(1)}× avg` : "—", tech && tech.volumeRatio >= 1.5 ? "text-up-2" : "text-ink"],
+    ["Trend", trend ?? "—", "text-ink"],
+    ["P/E", pe !== null && pe > 0 ? `${pe.toFixed(1)}×` : "—", "text-ink"],
+    ["Dividend", f?.dividendYield ? `${f.dividendYield.toFixed(1)}%` : "—", f?.dividendYield && f.dividendYield >= 5 ? "text-up-2" : "text-ink"],
+  ];
+  return (
+    <dl className="sm:hidden grid grid-cols-3 gap-x-3 gap-y-1.5 rounded-lg bg-inset px-3 py-2">
+      {cells.map(([label, value, tone]) => (
+        <div key={label} className="min-w-0">
+          <dt className="text-[10px] text-ink-3">{label}</dt>
+          <dd className={`text-[12px] font-medium num truncate ${label === "Trend" ? "capitalize" : ""} ${tone}`}>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function ReasonList({ reasons }: { reasons: string[] }) {
+  const [all, setAll] = useState(false);
+  return (
+    <div>
+      <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1.5">Key technical reasons</div>
+      <ul className="space-y-1">
+        {reasons.map((r, i) => (
+          <li key={i} className={`text-[11px] text-ink-2 leading-snug pl-3 relative before:content-['·'] before:absolute before:left-0 before:text-ink-3 ${i >= 2 && !all ? "hidden sm:list-item" : ""}`}>
+            {r}
+          </li>
+        ))}
+      </ul>
+      {reasons.length > 2 && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); setAll((v) => !v); }} className="sm:hidden mt-1 text-[11px] text-sky-2 cursor-pointer">
+          {all ? "Show fewer" : `Show all ${reasons.length}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Expanded inline detail body ─────────────────────────────────────────────
 export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }: {
   detail: SignalDetail;
@@ -168,22 +220,15 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
       {topBlock}
 
       {reason && (
-        <p className={`text-[13px] leading-snug border-l-2 pl-3 italic ${hue.text} border-current`}>{reason}</p>
+        <p className={`text-[12px] sm:text-[13px] leading-snug border-l-2 pl-2.5 sm:pl-3 sm:italic ${hue.text} border-current`}>{reason}</p>
       )}
 
-      {/* Key technical reasons — the deterministic explanation behind the score, stated once. */}
-      {reasons.length > 0 && (
-        <div>
-          <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1.5">Key technical reasons</div>
-          <ul className="space-y-1">
-            {reasons.map((r, i) => (
-              <li key={i} className="text-[11px] text-ink-2 leading-snug pl-3 relative before:content-['·'] before:absolute before:left-0 before:text-ink-3">
-                {r}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Phones: the key numbers at a glance, in place of the chip rows below. */}
+      <PhoneStats detail={detail} />
+
+      {/* Key technical reasons — the deterministic explanation behind the score, stated once.
+          Phones show the first two, with the rest one tap away. */}
+      {reasons.length > 0 && <ReasonList reasons={reasons} />}
 
       {/* AI perspective — shown only when the AI pass actually produced its own
           catalysts/risks framing (never fabricated from technicals). */}
@@ -204,8 +249,8 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
         </div>
       )}
 
-      {/* Secondary technicals | Fundamentals — tertiary detail, one row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
+      {/* Secondary technicals | Fundamentals — tertiary detail, one row (phones: PhoneStats above) */}
+      <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
         <div>
           {tech && <>
             <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-1.5">Technicals</div>
@@ -232,7 +277,7 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
       {/* Deep Dive — the one route out of a row into the full research view.
           Lives in the shared detail body so Opportunities, Watchlist and
           Holdings all get the same affordance in the same place. */}
-      <div className="flex items-center justify-between gap-3 flex-wrap pt-0.5">
+      <div className="hidden sm:flex items-center justify-between gap-3 flex-wrap pt-0.5">
         {footer ? (
           <span className="hidden sm:inline text-[10px] text-ink-3 min-w-0">
             Fundamentals from askanalyst.com.pk · Technicals from PSX price history · Not financial advice
@@ -277,7 +322,7 @@ function MobileRemove({ label, onConfirm }: { label: string; onConfirm: () => vo
       onClick={(e) => { e.stopPropagation(); if (armed) onConfirm(); else setArmed(true); }}
       className={`btn flex-1 justify-center min-h-10 text-[13px] ${armed ? "border-down/60 text-down-2" : ""}`}
     >
-      <X size={14} strokeWidth={2} aria-hidden />{armed ? "Tap again to remove" : label}
+      <X size={14} strokeWidth={2} aria-hidden />{armed ? "Tap again" : label}
     </button>
   );
 }
@@ -342,6 +387,7 @@ export function StockRow({
             </>}
             top={price !== undefined ? price.toFixed(2) : "—"}
             bottom={<Move pct={change} />}
+            spark={spark}
           />
         ) : (
           <MobileRow
@@ -349,6 +395,7 @@ export function StockRow({
             sub={shares !== undefined && avgPrice !== undefined ? `${shares.toLocaleString("en-US")} × ${avgPrice.toFixed(2)}` : sector}
             top={value !== undefined && value !== null ? fmtInt(value) : price !== undefined ? price.toFixed(2) : "—"}
             bottom={<Move pct={pnlPct} abs={pnl} digits={1} />}
+            spark={spark}
           />
         )}
 
@@ -444,16 +491,20 @@ export function StockRow({
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onToggleStar?.(); }}
                   aria-pressed={!!starred}
-                  className={`btn flex-1 justify-center min-h-10 text-[13px] ${starred ? "border-gold/50 text-gold-2" : ""}`}
+                  className={`btn flex-1 justify-center min-h-10 text-[13px] whitespace-nowrap ${starred ? "border-gold/50 text-gold-2" : ""}`}
                 >
                   <Star size={14} strokeWidth={2} fill={starred ? "currentColor" : "none"} aria-hidden />
-                  {starred ? "On watchlist" : "Add to watchlist"}
+                  {starred ? "Watching" : "Watch"}
                 </button>
               ) : onRemove ? (
-                <MobileRemove label="Remove holding" onConfirm={onRemove} />
+                <MobileRemove label="Remove" onConfirm={onRemove} />
               ) : null}
+              <button type="button" onClick={(e) => { e.stopPropagation(); openAlertFor(ticker, price); }}
+                aria-label={`Price alert for ${ticker}`} title="Price alert" className="btn w-10 justify-center min-h-10 px-0 shrink-0">
+                <Bell size={14} strokeWidth={2} aria-hidden />
+              </button>
               <Link href={`/stock/${ticker}`} onClick={(e) => e.stopPropagation()} className="btn-sky flex-1 justify-center min-h-10 text-[13px]">
-                <Telescope size={14} strokeWidth={2} aria-hidden />Open stock
+                <Telescope size={14} strokeWidth={2} aria-hidden />Deep Dive
               </Link>
             </div>
           </div>
