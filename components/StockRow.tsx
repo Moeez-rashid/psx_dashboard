@@ -234,7 +234,7 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
           Holdings all get the same affordance in the same place. */}
       <div className="flex items-center justify-between gap-3 flex-wrap pt-0.5">
         {footer ? (
-          <span className="text-[10px] text-ink-3 min-w-0">
+          <span className="hidden sm:inline text-[10px] text-ink-3 min-w-0">
             Fundamentals from askanalyst.com.pk · Technicals from PSX price history · Not financial advice
           </span>
         ) : <span />}
@@ -430,13 +430,14 @@ export function StockRow({
         <div className="px-4 sm:px-3.5 pb-3.5 border-t border-line animate-fade-in">
           {/* Phones: the one-line summary and the row's own action, which the compact row has no room for. */}
           <div className="sm:hidden pt-3 space-y-3">
-            <p className="flex items-start gap-1.5 text-[13px] text-ink-2 leading-snug">
+            {/* Holdings already show the position block below; this line would repeat it. */}
+            {isSignal && <p className="flex items-start gap-1.5 text-[13px] text-ink-2 leading-snug">
               <Tier2Icon size={14} strokeWidth={2} className="shrink-0 text-ink-3 mt-0.5" aria-hidden />
               <span>
                 {tier2.text}
                 {tier2.fragment && <span className={tier2.fragment.className}> · {tier2.fragment.text}</span>}
               </span>
-            </p>
+            </p>}
             <div className="flex gap-2">
               {isSignal ? (
                 <button

@@ -1,5 +1,4 @@
 "use client";
-import { MarketsSwitch } from "@/components/nav/SegmentSwitch";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { TrendingUp, TrendingDown, Plus, Check, ChevronDown, ArrowUpToLine, ArrowDownToLine, RefreshCw } from "lucide-react";
@@ -11,6 +10,7 @@ import { Skeleton, EmptyState } from "@/components/ui/primitives";
 import { toast } from "@/components/ui/Toast";
 import type { MarketMover, SectorPerformance } from "@/app/api/market/route";
 import type { IndexRow, MarketStatus, CircuitBoard } from "@/lib/psx-market";
+import { MarketsSwitch } from "@/components/nav/SegmentSwitch";
 
 interface MarketData {
   breadth: { advancing: number; declining: number; unchanged: number; total: number };
@@ -72,12 +72,14 @@ function IndexTile({ ix }: { ix: IndexRow }) {
   );
 }
 
-function MoverList({ title, movers, watching, onAdd, showVolume }: {
+function MoverList({ title, movers, watching, onAdd, showVolume, bare }: {
   title: string; movers: MarketMover[]; watching: Set<string>; onAdd: (m: MarketMover) => void; showVolume?: boolean;
+  /** Phones: the switch above names the list, so no title row. */
+  bare?: boolean;
 }) {
   return (
     <div className="card p-0 overflow-hidden">
-      <div className="label px-3.5 py-2.5 border-b border-line">{title}</div>
+      {!bare && <div className="label px-3.5 py-2.5 border-b border-line">{title}</div>}
       <div className="px-2 py-1">
         {movers.length === 0 && <p className="text-[11px] text-ink-3 px-1.5 py-3">Nothing to show.</p>}
         {movers.map((m) => (
@@ -110,6 +112,9 @@ export default function MarketView() {
   const [loading, setLoading] = useState(false);
   const [shariahOnly, setShariahOnly] = useState(false);
   const [allIndices, setAllIndices] = useState(false);
+  // Phones: one movers list at a time, and the first 10 sectors until asked for all.
+  const [moverTab, setMoverTab] = useState<"gainers" | "losers" | "active">("gainers");
+  const [allSectors, setAllSectors] = useState(false);
   const watching = useWatchSet();
 
   // Only ever sets state from the fetch callbacks, never synchronously.
@@ -153,22 +158,22 @@ export default function MarketView() {
   const others = (data?.indices ?? []).filter((i) => !HEADLINE.includes(i.code));
 
   return (
-    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5 space-y-6 text-[13px]">
+    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5 space-y-4 sm:space-y-6 text-[13px]">
       <MarketsSwitch active="overview" />
 
       {/* ── Session status ── */}
-      <section className="card py-3 px-3.5">
-        <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
+      <section className="card py-2.5 px-3 sm:py-3 sm:px-3.5">
+        <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap">
           {st ? (
             <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${st.isOpen ? "border-up/50 text-up-2 bg-up-dim" : "border-line-2 text-ink-2"}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${st.isOpen ? "bg-up animate-pulse" : "bg-ink-3"}`} />
               Market {st.state.toLowerCase()}
             </span>
           ) : <Skeleton className="h-6 w-28" />}
-          {st && <span className="text-[11px] text-ink-3 num">PSX summary · {st.date}, {st.time}</span>}
+          {st && <span className="text-[11px] text-ink-3 num"><span className="hidden sm:inline">PSX summary · </span>{st.date}, {st.time}</span>}
           <span className="flex-1" />
           {st && (
-            <div className="flex gap-4 text-[11px] num">
+            <div className="flex gap-3 sm:gap-4 text-[11px] num order-last sm:order-none basis-full sm:basis-auto">
               <span><span className="text-ink-3">Trades </span><span className="text-ink">{st.trades.toLocaleString()}</span></span>
               <span><span className="text-ink-3">Volume </span><span className="text-ink">{fmtVol(st.volume)}</span></span>
               <span><span className="text-ink-3">Value </span><span className="text-ink">PKR {fmtPKR(st.value)}</span></span>
@@ -179,7 +184,7 @@ export default function MarketView() {
           </button>
         </div>
         {b && b.total > 0 && (
-          <div className="mt-3">
+          <div className="mt-2 sm:mt-3">
             <div className="flex h-1.5 rounded-full overflow-hidden bg-line-2/70" role="img"
               aria-label={`${b.advancing} advancing, ${b.declining} declining, ${b.unchanged} unchanged`}>
               <div className="bg-up" style={{ width: `${(b.advancing / b.total) * 100}%` }} />
@@ -206,13 +211,23 @@ export default function MarketView() {
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {/* Phones: one line per index */}
+        <div className="sm:hidden card p-0 divide-y divide-line">
+          {data ? headline.map((ix) => (
+            <div key={ix.code} className="flex items-center gap-3 px-3 py-2">
+              <span className="text-[13px] text-ink flex-1 truncate">{INDEX_NAMES[ix.code] ?? ix.code}</span>
+              <span className="text-[13px] font-semibold num">{ix.value.toLocaleString("en-PK", { maximumFractionDigits: 2 })}</span>
+              <span className={`text-[12px] num w-16 text-right ${tone(ix.changePercent)}`}>{signed(ix.changePercent)}%</span>
+            </div>
+          )) : <Skeleton className="h-36" />}
+        </div>
+        <div className="hidden sm:grid grid-cols-2 lg:grid-cols-4 gap-2.5">
           {data ? headline.map((ix) => <IndexTile key={ix.code} ix={ix} />) : [...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
         </div>
         {allIndices && (
           <div className="card p-0 mt-2.5 divide-y divide-line">
             {others.map((ix) => (
-              <div key={ix.code} className="flex items-center gap-3 px-3.5 py-2">
+              <div key={ix.code} className="flex items-center gap-3 px-3 sm:px-3.5 py-2">
                 <span className="text-xs text-ink flex-1 truncate">{INDEX_NAMES[ix.code] ?? ix.code}</span>
                 <span className="text-[11px] text-ink-2 num">{ix.value.toLocaleString("en-PK", { maximumFractionDigits: 2 })}</span>
                 <span className={`text-[11px] num w-16 text-right ${tone(ix.changePercent)}`}>{signed(ix.changePercent)}%</span>
@@ -228,20 +243,20 @@ export default function MarketView() {
           <h2 className="label">Sectors</h2>
           <span className="text-[10px] text-ink-3 text-right">cap-weighted day change<span className="hidden sm:inline"> · tap a sector to screen it</span></span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5 sm:gap-2">
           {data
-            ? data.sectors.slice(0, 20).map((s) => (
+            ? data.sectors.slice(0, 20).map((s, i) => (
                 <Link
                   key={s.code}
                   href={`/screener?sector=${s.code}`}
-                  className="rounded-xl border border-line hover:border-line-2 px-3 py-2.5 transition-colors min-w-0"
+                  className={`rounded-lg sm:rounded-xl border border-line hover:border-line-2 px-2.5 py-2 sm:px-3 sm:py-2.5 transition-colors min-w-0 ${i >= 10 && !allSectors ? "hidden sm:block" : ""}`}
                   style={{ background: heat(s.changePercent) }}
                 >
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-[11px] font-semibold text-ink truncate">{s.name}</span>
                     <span className={`text-xs font-bold num shrink-0 ${tone(s.changePercent)}`}>{signed(s.changePercent)}%</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2 mt-1 text-[10px] text-ink-2 num">
+                  <div className="hidden sm:flex items-center justify-between gap-2 mt-1 text-[10px] text-ink-2 num">
                     <span>{s.advancing}↑ {s.declining}↓ · {s.count}</span>
                     <span className="truncate">PKR {fmtPKR(s.marketCap)}</span>
                   </div>
@@ -249,6 +264,11 @@ export default function MarketView() {
               ))
             : [...Array(8)].map((_, i) => <Skeleton key={i} className="h-14" />)}
         </div>
+        {data && data.sectors.length > 10 && (
+          <button onClick={() => setAllSectors((v) => !v)} className="sm:hidden mt-1.5 w-full text-[12px] text-ink-3 py-1.5 cursor-pointer">
+            {allSectors ? "Fewer sectors" : `All ${Math.min(20, data.sectors.length)} sectors`}
+          </button>
+        )}
       </section>
 
       {/* ── Movers ── */}
@@ -266,8 +286,23 @@ export default function MarketView() {
             {shariahOnly && <Check size={11} strokeWidth={2.5} aria-hidden />}Shariah only
           </button>
         </div>
+        {data && (
+          <div className="sm:hidden">
+            <div role="tablist" aria-label="Movers" className="grid grid-cols-3 gap-0.5 p-0.5 mb-2 rounded-lg bg-inset border border-line">
+              {([["gainers", "Gainers"], ["losers", "Losers"], ["active", "Most active"]] as const).map(([k, l]) => (
+                <button key={k} type="button" role="tab" aria-selected={moverTab === k} onClick={() => setMoverTab(k)}
+                  className={`min-h-8 rounded-md text-[12px] font-medium cursor-pointer ${moverTab === k ? "bg-raised text-ink" : "text-ink-3"}`}>{l}</button>
+              ))}
+            </div>
+            <MoverList
+              title={moverTab === "gainers" ? "Top gainers" : moverTab === "losers" ? "Top losers" : "Most active · by value"}
+              movers={pick(moverTab === "gainers" ? data.gainers : moverTab === "losers" ? data.losers : data.mostActive)}
+              watching={watching} onAdd={onAdd} showVolume={moverTab === "active"} bare
+            />
+          </div>
+        )}
         {data ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
+          <div className="hidden sm:grid grid-cols-1 lg:grid-cols-3 gap-2.5">
             <MoverList title="Top gainers" movers={pick(data.gainers)} watching={watching} onAdd={onAdd} />
             <MoverList title="Top losers" movers={pick(data.losers)} watching={watching} onAdd={onAdd} />
             <MoverList title="Most active · by value" movers={pick(data.mostActive)} watching={watching} onAdd={onAdd} showVolume />
@@ -280,14 +315,14 @@ export default function MarketView() {
         <section>
           <div className="flex items-baseline justify-between mb-2 gap-3">
             <h2 className="label">At circuit limits</h2>
-            <span className="text-[10px] text-ink-3">PSX halts a share at ±10% from its previous close</span>
+            <span className="hidden sm:inline text-[10px] text-ink-3">PSX halts a share at ±10% from its previous close</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {([
               ["Upper lock", data.circuit.upper, ArrowUpToLine, "text-up-2", "border-up/40"],
               ["Lower lock", data.circuit.lower, ArrowDownToLine, "text-down-2", "border-down/40"],
             ] as const).map(([title, rows, Icon, color, border]) => (
-              <div key={title} className="card py-3 px-3.5">
+              <div key={title} className="card py-2.5 px-3 sm:py-3 sm:px-3.5">
                 <div className={`flex items-center gap-1.5 text-[11px] font-semibold mb-2 ${color}`}>
                   <Icon size={13} strokeWidth={2.25} aria-hidden />{title}
                   <span className="text-ink-3 font-normal num">· {rows.length}</span>

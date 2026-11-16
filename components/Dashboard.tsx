@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
   TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
-  Radar, X, Pencil, Sparkles, CircleAlert, TriangleAlert, ChevronDown,
+  Radar, X, Pencil, Plus, Sparkles, CircleAlert, TriangleAlert, ChevronDown,
 } from "lucide-react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
@@ -274,6 +274,9 @@ export default function Dashboard({
   // Phones: the picks list is always open (rows are compact), and the AI note is a tap-to-read chip.
   const isPhone = useIsPhone();
   const [aiNoteOpen, setAiNoteOpen] = useState(false);
+  // Phones: the add forms stay folded behind a "+ Add" row until wanted.
+  const [addHoldingOpen, setAddHoldingOpen] = useState(false);
+  const [addWatchOpen, setAddWatchOpen] = useState(false);
   // Inline row expansion — keys are prefixed per tab ("opp:MEBL", "hold:MEBL", "watch:MEBL")
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleRow = (key: string, ticker: string) => {
@@ -1472,7 +1475,7 @@ export default function Dashboard({
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 sm:gap-2">
                         {([
                           ["Shares", h.shares.toLocaleString(), "text-ink"],
                           ["Avg cost", `PKR ${h.avgPrice.toFixed(2)}`, "text-ink"],
@@ -1481,15 +1484,15 @@ export default function Dashboard({
                           ["P&L", pnl !== null ? `${pnl >= 0 ? "+" : ""}PKR ${Math.round(pnl).toLocaleString()}` : "—", pnl !== null ? (pnl >= 0 ? "text-up-2" : "text-down-2") : "text-ink"],
                           ["P&L %", pnlPct !== null ? `${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%` : "—", pnlPct !== null ? (pnlPct >= 0 ? "text-up-2" : "text-down-2") : "text-ink"],
                         ] as [string, string, string][]).map(([label, val, tone], i) => (
-                          <div key={i} className="bg-inset rounded-lg px-2.5 py-1.5">
-                            <div className="text-[9px] uppercase tracking-wide text-ink-3 mb-0.5">{label}</div>
-                            <div className={`text-[11px] sm:text-xs font-medium num ${tone}`}>{val}</div>
+                          <div key={i} className="flex items-baseline justify-between gap-2 min-w-0 sm:block sm:bg-inset sm:rounded-lg sm:px-2.5 sm:py-1.5">
+                            <div className="text-[11px] text-ink-3 sm:text-[9px] sm:uppercase sm:tracking-wide sm:mb-0.5 truncate">{label}</div>
+                            <div className={`text-[12px] sm:text-xs font-medium num ${tone}`}>{val}</div>
                           </div>
                         ))}
                       </div>
                     )}
                     {!isEditing && livePrice && pnlPct !== null && (
-                      <div className="bg-inset border border-line rounded-lg px-3.5 py-2 flex items-center justify-between gap-3 mt-2">
+                      <div className="hidden sm:flex bg-inset border border-line rounded-lg px-3.5 py-2 items-center justify-between gap-3 mt-2">
                         <span className="text-[10px] uppercase tracking-wide text-ink-3">Avg cost → current</span>
                         <span className="text-[12px] num text-ink">
                           PKR {h.avgPrice.toFixed(2)} → PKR {livePrice.toFixed(2)}{" "}
@@ -1534,8 +1537,14 @@ export default function Dashboard({
               </div>
             )}
 
-            {/* Add holding */}
-            <div className="card mt-3 py-3">
+            {/* Add holding — folded behind one row on phones */}
+            {!addHoldingOpen && (
+              <button type="button" onClick={() => setAddHoldingOpen(true)}
+                className="sm:hidden mt-3 w-full flex items-center justify-center gap-1.5 min-h-10 rounded-lg border border-dashed border-line-2 text-[13px] text-ink-2 cursor-pointer">
+                <Plus size={14} strokeWidth={2.25} aria-hidden />Add holding
+              </button>
+            )}
+            <div className={`card mt-3 py-3 ${addHoldingOpen ? "" : "hidden sm:block"}`}>
               <div className="label mb-2">Add holding</div>
               <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                 <TickerInput
@@ -1567,8 +1576,8 @@ export default function Dashboard({
         {tab === "watching" && (
           <div>
             {portfolioSwitch}
-            <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-              <span className="label">Watchlist</span>
+            <div className="flex justify-between items-center mb-2 sm:mb-3 flex-wrap gap-2">
+              <span className="label hidden sm:inline">Watchlist</span>
               {watching.length > 0 && (
                 <div className="flex gap-2 items-center">
                   <button
@@ -1594,7 +1603,7 @@ export default function Dashboard({
             </div>
 
             {watching.length > 1 && (
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-2 sm:mb-3">
                 <span className="text-[10px] text-ink-3">Sort</span>
                 {(["score", "name"] as const).map(opt => (
                   <button
@@ -1674,8 +1683,14 @@ export default function Dashboard({
 
             <ErrorBanner msg={watchError} onDismiss={() => setWatchError("")} />
 
-            {/* Add to watchlist */}
-            <div className="card mt-3 py-3">
+            {/* Add to watchlist — folded behind one row on phones */}
+            {!addWatchOpen && (
+              <button type="button" onClick={() => setAddWatchOpen(true)}
+                className="sm:hidden mt-3 w-full flex items-center justify-center gap-1.5 min-h-10 rounded-lg border border-dashed border-line-2 text-[13px] text-ink-2 cursor-pointer">
+                <Plus size={14} strokeWidth={2.25} aria-hidden />Add to watchlist
+              </button>
+            )}
+            <div className={`card mt-3 py-3 ${addWatchOpen ? "" : "hidden sm:block"}`}>
               <div className="label mb-2">Add ticker</div>
               <div className="flex gap-2">
                 <TickerInput

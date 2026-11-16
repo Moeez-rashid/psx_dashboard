@@ -1,5 +1,4 @@
 "use client";
-import { MarketsSwitch } from "@/components/nav/SegmentSwitch";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, Star, X, ArrowUp, ArrowDown, RefreshCw, SlidersHorizontal, Check, Telescope } from "lucide-react";
@@ -11,6 +10,8 @@ import { Skeleton, EmptyState } from "@/components/ui/primitives";
 import { TechnicalScoreChip } from "@/components/ui/TechnicalScore";
 import { toast } from "@/components/ui/Toast";
 import type { ScreenerRow } from "@/app/api/screener/route";
+import { MarketsSwitch } from "@/components/nav/SegmentSwitch";
+import { Move } from "@/components/ui/MobileRow";
 
 type SortKey = "s" | "p" | "chg" | "y1" | "mc" | "pe" | "dy" | "ts" | "av";
 
@@ -69,6 +70,8 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
   const [technicals, setTechnicals] = useState(true);
   const [sessionDate, setSessionDate] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  // Phones: tapping a row opens its actions in place; it never navigates by itself.
+  const [openRow, setOpenRow] = useState<string | null>(null);
   const [f, setF] = useState<Filters>({ ...EMPTY, sector: initialSector });
   const [sort, setSort] = useState<SortKey>("mc");
   const [dir, setDir] = useState<1 | -1>(-1);
@@ -167,27 +170,27 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
       </div>
 
       {/* Filters */}
-      <div className="card py-3 px-3.5 mb-3">
-        <div className="flex gap-2 flex-wrap items-center">
+      <div className="card p-2.5 sm:py-3 sm:px-3.5 mb-3">
+        <div className="flex gap-1.5 sm:gap-2 flex-wrap items-center">
           <div className="relative flex-1 min-w-44">
             <Search size={13} strokeWidth={2} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden />
-            <input className="input pl-8 text-xs" placeholder="Symbol or company" value={f.q}
+            <input className="input pl-8 text-xs max-sm:py-1.5" placeholder="Symbol or company" value={f.q}
               onChange={(e) => set({ q: e.target.value })} aria-label="Search by symbol or company name" />
           </div>
           <button onClick={() => set({ shariah: !f.shariah })} aria-pressed={f.shariah}
             title="KMI All Share constituents — PSX's Shariah-compliant universe"
-            className={`btn text-[11px] ${f.shariah ? "border-up/60 text-up-2 bg-up-dim" : ""}`}>
+            className={`btn text-[11px] max-sm:py-1.5 ${f.shariah ? "border-up/60 text-up-2 bg-up-dim" : ""}`}>
             {f.shariah && <Check size={12} strokeWidth={2.5} aria-hidden />}Shariah
           </button>
-          <select className="input w-auto text-xs cursor-pointer" value={f.index} onChange={(e) => set({ index: e.target.value })} aria-label="Index">
+          <select className="input w-auto text-xs max-sm:py-1.5 cursor-pointer" value={f.index} onChange={(e) => set({ index: e.target.value })} aria-label="Index">
             {INDEX_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
-          <select className="input w-auto max-w-44 text-xs cursor-pointer" value={f.sector} onChange={(e) => set({ sector: e.target.value })} aria-label="Sector">
+          <select className="input max-sm:flex-1 max-sm:min-w-0 w-auto max-w-44 text-xs max-sm:py-1.5 cursor-pointer" value={f.sector} onChange={(e) => set({ sector: e.target.value })} aria-label="Sector">
             <option value="">Any sector</option>
             {sectors.map(([c, name]) => <option key={c} value={c}>{name}</option>)}
           </select>
           <button onClick={() => setMore((v) => !v)} aria-expanded={more}
-            className={`btn text-[11px] ${more ? "bg-raised text-ink" : ""}`}>
+            className={`btn text-[11px] max-sm:py-1.5 ${more ? "bg-raised text-ink" : ""}`}>
             <SlidersHorizontal size={12} strokeWidth={2} aria-hidden />More
           </button>
           {(activeCount > 0 || f.q) && (
@@ -219,7 +222,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
         )}
       </div>
 
-      <div className="flex items-baseline justify-between mb-2 gap-3 flex-wrap">
+      <div className="hidden md:flex items-baseline justify-between mb-2 gap-3 flex-wrap">
         <span className="text-[11px] text-ink-2 num">
           {rows ? <>{filtered.length} of {rows.length} stocks</> : "Loading the market…"}
         </span>
@@ -243,8 +246,10 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
       </div>
       {/* Mobile sort */}
       <div className="md:hidden flex items-center gap-2 mb-2">
-        <span className="text-[10px] text-ink-3">Sort</span>
-        <select className="input w-auto text-xs cursor-pointer" value={sort} aria-label="Sort by"
+        <span className="text-[11px] text-ink-2 num">{rows ? <>{filtered.length} of {rows.length}</> : "Loading…"}</span>
+        <span className="flex-1" />
+        <span className="text-[11px] text-ink-3">Sort</span>
+        <select className="input w-auto text-xs py-1 cursor-pointer" value={sort} aria-label="Sort by"
           onChange={(e) => { const k = e.target.value as SortKey; setSort(k); setDir(k === "s" || k === "pe" ? 1 : -1); }}>
           <option value="mc">Market cap</option><option value="ts">Technical Score</option><option value="chg">Day change</option>
           <option value="y1">1-year change</option><option value="dy">Dividend yield</option><option value="pe">P/E (low first)</option>
@@ -259,32 +264,58 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
           description="Loosen a filter or clear them all to see the whole market." />
       )}
 
-      <div className="space-y-1.5">
+      <div className="-mx-4 md:mx-0 border-y border-line divide-y divide-line md:border-0 md:divide-y-0 md:space-y-1.5">
         {shown.map((r) => (
-          <div key={r.s} className="bg-card border border-line hover:border-line-2 rounded-lg transition-colors">
-            <div className="grid grid-cols-[22px_minmax(0,1fr)_auto] gap-x-2 items-center px-3.5 py-2.5 md:hidden">
-              <StarBtn on={watching.has(r.s)} onClick={() => toggleStar(r)} symbol={r.s} />
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-[13px] font-bold tracking-tight">{r.s}</span>
-                  {r.sh && <span className="text-[8px] font-bold tracking-wide text-up-2 border border-up/40 rounded px-1 py-px shrink-0">SHARIAH</span>}
-                  {r.fl.map((x) => <span key={x} className="text-[8px] font-bold text-gold-2 border border-gold/40 rounded px-1 py-px shrink-0">{x}</span>)}
+          <div key={r.s} className={`md:bg-card md:border md:border-line md:hover:border-line-2 md:rounded-lg transition-colors ${openRow === r.s ? "bg-card" : ""}`}>
+            {/* Phones: compact row; tap for its actions */}
+            <div className="md:hidden">
+              <button
+                type="button"
+                onClick={() => setOpenRow((o) => (o === r.s ? null : r.s))}
+                aria-expanded={openRow === r.s}
+                className="w-full flex items-center gap-2.5 px-4 py-2 min-h-[52px] text-left cursor-pointer"
+              >
+                <span aria-hidden className={`w-8 h-8 shrink-0 rounded-full bg-raised border border-line-2 flex items-center justify-center text-[10px] font-bold tracking-tight ${watching.has(r.s) ? "text-gold-2" : "text-ink-2"}`}>
+                  {r.s.slice(0, 2)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[14px] font-semibold tracking-tight leading-tight">{r.s}</span>
+                    {r.sh && <span className="text-[8px] font-bold tracking-wide text-up-2 border border-up/40 rounded px-1 shrink-0">SHARIAH</span>}
+                    {r.fl.map((x) => <span key={x} className="text-[8px] font-bold text-gold-2 border border-gold/40 rounded px-1 shrink-0">{x}</span>)}
+                    {watching.has(r.s) && <Star size={10} strokeWidth={2} fill="currentColor" className="text-gold-2 shrink-0" aria-label="On watchlist" />}
+                  </span>
+                  <span className="block text-[11px] text-ink-3 leading-tight mt-0.5 truncate">
+                    {r.ts !== null && <span className="text-ink-2 num">{r.ts} · </span>}{r.n}
+                  </span>
+                </span>
+                <span className="text-right shrink-0 leading-tight">
+                  <span className="block text-[14px] font-semibold num">{r.p.toFixed(2)}</span>
+                  <span className="block text-[11px] num mt-0.5"><Move pct={r.chg} /></span>
+                </span>
+              </button>
+              {openRow === r.s && (
+                <div className="px-4 pb-3 animate-fade-in">
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink-3 num mb-2.5">
+                    <span>Tech score <span className="text-ink-2">{r.ts ?? "—"}</span></span>
+                    <span>P/E <span className="text-ink-2">{r.pe > 0 ? r.pe.toFixed(1) : "—"}</span></span>
+                    <span>Yield <span className="text-ink-2">{r.dy > 0 ? `${r.dy.toFixed(1)}%` : "—"}</span></span>
+                    <span>Cap <span className="text-ink-2">{r.mc > 0 ? fmtPKR(r.mc) : "—"}</span></span>
+                    <span>1Y <span className={tone(r.y1)}>{r.y1 === 0 ? "—" : pct(r.y1)}</span></span>
+                    <span className="basis-full truncate">{resolveSectorName(r.sec)}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => toggleStar(r)} aria-pressed={watching.has(r.s)}
+                      className={`btn flex-1 justify-center min-h-9 text-[13px] ${watching.has(r.s) ? "border-gold/50 text-gold-2" : ""}`}>
+                      <Star size={14} strokeWidth={2} fill={watching.has(r.s) ? "currentColor" : "none"} aria-hidden />
+                      {watching.has(r.s) ? "On watchlist" : "Add to watchlist"}
+                    </button>
+                    <Link href={`/stock/${r.s}`} className="btn-sky flex-1 justify-center min-h-9 text-[13px]">
+                      <Telescope size={14} strokeWidth={2} aria-hidden />Open stock
+                    </Link>
+                  </div>
                 </div>
-                <div className="text-[10px] text-ink-3 truncate">{r.n}</div>
-                <div className="flex items-center gap-2 mt-0.5 text-[10px] num text-ink-3 flex-wrap">
-                  {r.ts !== null && <span className="text-ink-2">Tech {r.ts}/100</span>}
-                  {r.pe > 0 && <span>P/E {r.pe.toFixed(1)}</span>}
-                  {r.dy > 0 && <span>Yield {r.dy.toFixed(1)}%</span>}
-                  <span>{fmtPKR(r.mc)}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="text-right leading-tight">
-                  <div className="text-[14px] font-semibold num">{r.p.toFixed(2)}</div>
-                  <div className={`text-[10px] num ${tone(r.chg)}`}>{pct(r.chg)}</div>
-                </div>
-                <DeepDiveBtn symbol={r.s} />
-              </div>
+              )}
             </div>
             <div className={`hidden md:grid ${GRID} gap-x-3 items-center px-3.5 py-2`}>
               <StarBtn on={watching.has(r.s)} onClick={() => toggleStar(r)} symbol={r.s} />
@@ -318,7 +349,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
       {rows && (
         <p className="text-[10px] text-ink-3 mt-4 leading-relaxed">
           Prices, valuation and index membership from the Pakistan Stock Exchange data portal. Shariah = KMI All Share constituent.
-          Use the telescope button on a row to open its Deep Dive. Technical Score is this app&apos;s deterministic 0–100 setup score from price and volume — not a recommendation. Not financial advice.
+          To open a stock, tap its row on a phone or use the telescope button on a wider screen. Technical Score is this app&apos;s deterministic 0–100 setup score from price and volume — not a recommendation. Not financial advice.
         </p>
       )}
     </main>
