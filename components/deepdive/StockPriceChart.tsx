@@ -55,7 +55,7 @@ export default function StockPriceChart({ series }: { series: DeepDivePricePoint
   const at = points[idx];
   const change = ((at.close - first) / first) * 100;
   const up = points[n - 1].close >= first;
-  const stroke = up ? "var(--color-up-2)" : "var(--color-down-2)";
+  const stroke = up ? "var(--color-up)" : "var(--color-down)"; // the darker chart tones, as on the mini charts
 
   const toIndex = (clientX: number, el: Element) => {
     const r = el.getBoundingClientRect();

@@ -26,12 +26,12 @@ function Trend({ points, format }: { points: YearPoint[]; format: (v: number) =>
   const delta = prior ? latest.value - prior.value : null;
 
   return (
-    <div className="flex items-baseline gap-2">
-      <span className="text-[15px] font-semibold num tabular-nums text-ink">{format(latest.value)}</span>
+    <div className="flex items-baseline gap-x-2 flex-wrap">
+      <span className="text-[13px] sm:text-[15px] font-semibold num tabular-nums text-ink">{format(latest.value)}</span>
       <span className="text-[10px] text-ink-3 num">FY{latest.year}</span>
       {delta !== null && (
         <span className={`text-[10px] num ${signTone(delta)}`}>
-          {signedDelta(delta, format)} vs FY{prior!.year}
+          {signedDelta(delta, format)}<span className="hidden sm:inline"> vs FY{prior!.year}</span>
         </span>
       )}
     </div>
@@ -49,17 +49,17 @@ function HistoryChart({
 }) {
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-3 mb-2">
-        <h3 className="label">{title}</h3>
-        {points.length > 0 && <span className="text-[10px] text-ink-3 num">{points.length} yrs</span>}
+      <div className="flex items-baseline justify-between gap-2 mb-1.5 sm:mb-2 min-w-0">
+        <h3 className="label truncate">{title}</h3>
+        {points.length > 0 && <span className="hidden sm:inline text-[10px] text-ink-3 num">{points.length} yrs</span>}
       </div>
       {points.length === 0 ? (
         <p className="text-[11px] text-ink-3 py-4">Not reported for this company.</p>
       ) : (
         <>
-          <div className="mb-2"><Trend points={points} format={format} /></div>
-          <YearBars years={years} points={points} format={format} height={56} />
-          {note && <p className="text-[10px] text-ink-3 mt-2 leading-snug">{note}</p>}
+          <div className="mb-1.5 sm:mb-2"><Trend points={points} format={format} /></div>
+          <YearBars years={years} points={points} format={format} height={44} />
+          {note && <p className="hidden sm:block text-[10px] text-ink-3 mt-2 leading-snug">{note}</p>}
         </>
       )}
     </div>
@@ -83,7 +83,7 @@ export default function FundamentalHistorySection({ history }: { history: DeepDi
         <Unavailable>No multi-year fundamental history is available for this ticker.</Unavailable>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-7">
+          <div className="grid grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4 sm:gap-y-7">
             <HistoryChart title="Earnings per share" points={h.eps} years={h.years} format={(v) => fmtNum(v, 2)} />
             <HistoryChart title="EPS growth" points={h.epsGrowth} years={h.years} format={(v) => fmtSignedPercent(v, 1)} note="Bars below the line are years earnings shrank." />
             <HistoryChart title="Dividend per share" points={h.dps} years={h.years} format={(v) => fmtNum(v, 2)} />

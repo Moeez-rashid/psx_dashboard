@@ -206,6 +206,12 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
               {l}
             </li>
           ))}
+          {/* Phones: Risk's "Deliberately not calculated" box lives here instead */}
+          {data.risk.notComputed.map((l, i) => (
+            <li key={`nc${i}`} className="sm:hidden text-[11px] text-ink-3 leading-relaxed pl-3 relative before:content-['·'] before:absolute before:left-0">
+              Not calculated: {l}
+            </li>
+          ))}
         </ul>
       </details>
 

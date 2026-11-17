@@ -20,9 +20,9 @@ export default function StockActions({ ticker, price, label, bar = false }: {
   };
 
   const btn = bar
-    ? "flex-1 justify-center whitespace-nowrap px-2 min-h-9 text-[13px] md:flex-none md:min-h-0 md:px-3 md:text-[11px]"
+    ? "flex-1 justify-center whitespace-nowrap px-2 min-h-8 text-[12px] md:flex-none md:min-h-0 md:px-3 md:text-[11px]"
     : "text-[11px]";
-  const icon = bar ? 14 : 12;
+  const icon = bar ? 13 : 12;
   const buttons = (
     <>
       <button onClick={toggle} aria-pressed={watching} className={`btn ${btn} ${watching ? "border-gold/50 text-gold-2" : ""}`}>
@@ -46,7 +46,7 @@ export default function StockActions({ ticker, price, label, bar = false }: {
     <>
       {/* Phones: fixed just above the tab bar (the page adds the matching spacer at its end). */}
       <div className="fixed md:static inset-x-0 z-30 bottom-[calc(52px+env(safe-area-inset-bottom))]
-                      flex gap-2 px-4 py-2 md:p-0 bg-surface/92 md:bg-transparent backdrop-blur-md md:backdrop-blur-none
+                      flex gap-2 px-4 py-1.5 md:p-0 bg-surface/92 md:bg-transparent backdrop-blur-md md:backdrop-blur-none
                       border-t border-line md:border-0">
         {buttons}
       </div>

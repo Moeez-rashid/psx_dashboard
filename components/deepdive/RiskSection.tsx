@@ -81,7 +81,8 @@ export default function RiskSection({ risk }: { risk: DeepDiveRisk }) {
           </Group>
 
           <div className="mt-5">
-            <NotComputed title="Deliberately not calculated" items={r.notComputed} />
+            {/* Phones: listed under "What this page can and cannot tell you" at the end instead */}
+            <div className="hidden sm:block"><NotComputed title="Deliberately not calculated" items={r.notComputed} /></div>
           </div>
         </>
       )}

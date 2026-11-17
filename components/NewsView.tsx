@@ -333,10 +333,28 @@ export default function NewsView({
 
       {statusCard}
 
+      {/* Phones: one title row, the same pattern as Signals ("Today's picks") */}
+      {na && (
+        <div className="sm:hidden -mb-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[15px] font-semibold text-ink">Today&rsquo;s briefing</h2>
+            <span className="flex-1" />
+            <SentimentBadge na={na} />
+            {hasKey && (
+              <button onClick={onRefreshNews} disabled={scanning} aria-label="Refresh news" title="Re-analyse today's news"
+                className="w-8 h-8 inline-flex items-center justify-center rounded-full text-ink-3 active:bg-raised cursor-pointer">
+                <RefreshCw size={15} strokeWidth={2.25} className={scanning ? "animate-spin" : ""} aria-hidden />
+              </button>
+            )}
+          </div>
+          {updatedAt && <p className="text-[11px] text-ink-3 -mt-0.5">Updated {updatedAt} · {newsSources.length > 0 ? `${newsSources.length} sources` : "RSS feeds"}</p>}
+        </div>
+      )}
+
       {/* ── 2. Today's briefing ── */}
       {na && (
       <section className="card max-sm:p-3">
-        <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
+        <div className="hidden sm:flex items-center justify-between gap-2 mb-2 sm:mb-3">
           <span className="label">Today&rsquo;s briefing</span>
           <div className="flex items-center gap-2">
             {updatedAt && <span className="text-[9px] text-ink-3 bg-raised px-2 py-px rounded-full num">updated {updatedAt}</span>}

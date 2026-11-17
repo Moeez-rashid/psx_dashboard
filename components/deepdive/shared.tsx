@@ -91,8 +91,9 @@ export function Section({
 /** A labelled group inside a section — the level between "section" and "metric". */
 export function Group({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
-    <div className="mb-5 last:mb-0">
-      <div className="flex items-center justify-between gap-2 mb-2.5">
+    // Phones: a group whose only metrics are hidden bank-schema gaps disappears with them.
+    <div className="mb-4 sm:mb-5 last:mb-0 max-sm:[&:has(.metric-bankgap):not(:has(.metric-shown))]:hidden">
+      <div className="flex items-center justify-between gap-2 mb-2 sm:mb-2.5">
         <h3 className="label">{title}</h3>
         {aside}
       </div>
@@ -106,10 +107,10 @@ export function Group({ title, children, aside }: { title: string; children: Rea
 export function MetricGrid({ children, cols = 4 }: { children: ReactNode; cols?: 2 | 3 | 4 }) {
   const colClass = {
     2: "grid-cols-2",
-    3: "grid-cols-2 sm:grid-cols-3",
-    4: "grid-cols-2 sm:grid-cols-4",
+    3: "grid-cols-3",
+    4: "grid-cols-3 sm:grid-cols-4",
   }[cols];
-  return <div className={`grid ${colClass} gap-x-4 gap-y-4`}>{children}</div>;
+  return <div className={`grid ${colClass} gap-x-4 gap-y-2.5 sm:gap-y-4`}>{children}</div>;
 }
 
 /**
@@ -127,15 +128,18 @@ export function Metric({
   hint?: string;
   naReason?: string;
 }) {
+  // Phones drop the bank-schema placeholders: the section's own note already says
+  // which ratios banks don't report, and ten identical boxes cost a screen.
+  const bankSchemaGap = naReason?.toLowerCase().startsWith("not reported under bank schema");
   return (
-    <div className="min-w-0">
-      <div className="label mb-1 truncate" title={label}>{label}</div>
+    <div className={`min-w-0 ${bankSchemaGap ? "max-sm:hidden metric-bankgap" : "metric-shown"}`}>
+      <div className="label mb-0.5 sm:mb-1 truncate" title={label}>{label}</div>
       {naReason ? (
         <div className="text-[11px] text-ink-3 leading-snug italic">{naReason}</div>
       ) : (
         <>
-          <div className={`text-[15px] font-semibold num tabular-nums leading-none ${tone}`}>{value}</div>
-          {hint && <div className="text-[10px] text-ink-3 mt-1 leading-snug">{hint}</div>}
+          <div className={`text-[13px] sm:text-[15px] font-semibold num tabular-nums leading-none ${tone}`}>{value}</div>
+          {hint && <div className="text-[10px] text-ink-3 mt-0.5 sm:mt-1 leading-snug truncate sm:whitespace-normal">{hint}</div>}
         </>
       )}
     </div>
@@ -331,7 +335,7 @@ export function CompareBars({
 }) {
   const max = Math.max(...rows.map((r) => r.value ?? 0), 0.0001);
   return (
-    <div className="space-y-3">
+    <div className="space-y-2 sm:space-y-3">
       {rows.map((r) => (
         <div key={r.label}>
           <div className="flex items-baseline justify-between gap-3 mb-1">
