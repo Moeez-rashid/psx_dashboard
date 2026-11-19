@@ -9,6 +9,7 @@ import { TechnicalScoreMeter } from "./ui/TechnicalScore";
 import { TechChips, FundamentalsState, nearEntry, fundamentalChips, type StockTech } from "./StockBits";
 import { MobileRow, Move, fmtInt, NearEntryFlag, techBrief } from "./ui/MobileRow";
 import { Briefcase } from "lucide-react";
+import MosqueIcon from "./ui/MosqueIcon";
 import RowActions from "./ui/RowActions";
 
 // ─── Detail payload shared by every tab ─────────────────────────────────────
@@ -324,10 +325,7 @@ function RowFlags({ shariah, nearEntry: near, owned, watching }: { shariah?: boo
   if (!shariah && !near && !owned && !watching) return null;
   return (
     <span className="inline-flex items-center gap-1 shrink-0">
-      {shariah && (
-        <span title="Shariah-compliant (KMI All Share, per PSX)"
-          className="text-[8px] font-bold tracking-wide text-up-2 border border-up/40 rounded px-1 leading-[13px]">SHARIAH</span>
-      )}
+      {shariah && <MosqueIcon size={12} className="text-up-2" />}
       {near && <NearEntryFlag />}
       {owned && <Briefcase size={11} strokeWidth={2.25} className="text-sky-2" aria-label="In your holdings" />}
       {watching && <Star size={11} strokeWidth={2} fill="currentColor" className="text-gold-2" aria-label="On your watchlist" />}

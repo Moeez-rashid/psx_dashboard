@@ -22,7 +22,7 @@ import SegmentSwitch from "./nav/SegmentSwitch";
 import { LIST_CLASS } from "./ui/MobileRow";
 import { useIsPhone } from "@/lib/use-media";
 import SignalsPulse from "./SignalsPulse";
-import TopPickCard from "./TopPickCard";
+import ScanChanges from "./ScanChanges";
 import { SET_TAB_EVENT } from "./CommandPalette";
 import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
@@ -947,6 +947,10 @@ export default function Dashboard({
     const a = s.toLowerCase(), b = sectorName.toLowerCase();
     return a === b || a.includes(b) || b.includes(a);
   };
+  // The slate Signals shows, in order — what ScanChanges compares with the previous scan.
+  const pickTickers = scanResult
+    ? (scanResult.signals.length > 0 ? scanResult.signals.map(s => s.ticker) : scanResult.technicalData.slice(0, 8).map(t => t.symbol))
+    : [];
   const visibleOpps = (sigs: AISignal[]) =>
     sortedOpps(oppSectorFilter ? sigs.filter(s => sectorMatches(s.ticker, oppSectorFilter)) : sigs);
 
@@ -1102,6 +1106,7 @@ export default function Dashboard({
                       <span className="text-gold-2"> · data {tradingSessionsBehind} session{tradingSessionsBehind === 1 ? "" : "s"} old</span>
                     )}
                   </p>
+                  <ScanChanges scanDate={scanResult.scanDate} tickers={pickTickers} />
                   {scanResult.aiError && aiNoteOpen && (
                     <p className="mt-1.5 text-[11px] text-ink-2 leading-snug bg-raised rounded-lg px-2.5 py-2 animate-fade-in">
                       The AI commentary didn&apos;t run for this scan, so the picks are ranked by Technical Score alone. That score uses price and volume only, so it&apos;s unaffected.
@@ -1114,24 +1119,6 @@ export default function Dashboard({
             {/* Phones: market in a line and today's news in two, above the picks */}
             {isPhone && !scanning && <SignalsPulse na={na ?? null} onOpenNews={() => goTab("news")} />}
 
-            {/* Phones: the #1 pick and why it ranks first — the scanner's headline result */}
-            {isPhone && !scanning && scanResult && (() => {
-              const first = scanResult.signals.length > 0
-                ? scanResult.technicalData.find(t => t.symbol === sortedOpps(scanResult.signals)[0]?.ticker)
-                : scanResult.technicalData[0];
-              if (!first) return null;
-              const q = prices[first.symbol];
-              return (
-                <TopPickCard
-                  tech={first}
-                  price={q?.currentPrice ?? first.currentPrice}
-                  change={q?.changePercent}
-                  spark={sparks[first.symbol]}
-                  sector={sectorOf(first.symbol)}
-                  shariah={q?.shariah}
-                />
-              );
-            })()}
 
             {/* Scanner controls — the tab's primary action stays on top */}
             <div className="hidden sm:flex gap-2.5 mb-4 flex-wrap items-center">
@@ -1165,6 +1152,7 @@ export default function Dashboard({
                         {scanResult.expandedSectors.length > 0 && ` · expanded: ${scanResult.expandedSectors.join(", ")}`}
                       </span>
                     </span>
+                    <ScanChanges scanDate={scanResult.scanDate} tickers={pickTickers} className="!text-[10px]" />
                     {stale && (
                       <span className="flex items-center gap-1.5 text-[10px] text-gold-2">
                         <TriangleAlert size={11} strokeWidth={2} aria-hidden />

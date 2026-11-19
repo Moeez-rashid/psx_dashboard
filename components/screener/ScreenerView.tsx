@@ -13,6 +13,7 @@ import type { ScreenerRow } from "@/app/api/screener/route";
 import { MarketsSwitch } from "@/components/nav/SegmentSwitch";
 import { Move } from "@/components/ui/MobileRow";
 import FlagBubble from "@/components/ui/FlagBubble";
+import MosqueIcon from "@/components/ui/MosqueIcon";
 
 type SortKey = "s" | "p" | "chg" | "y1" | "mc" | "pe" | "dy" | "ts" | "av";
 
@@ -282,7 +283,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5 min-w-0">
                     <span className="text-[14px] font-semibold tracking-tight leading-tight">{r.s}</span>
-                    {r.sh && <span className="text-[8px] font-bold tracking-wide text-up-2 border border-up/40 rounded px-1 shrink-0">SHARIAH</span>}
+                    {r.sh && <MosqueIcon size={12} className="text-up-2" />}
                     {r.fl.map((x) => <FlagBubble key={x} code={x} />)}
                     {watching.has(r.s) && <Star size={10} strokeWidth={2} fill="currentColor" className="text-gold-2 shrink-0" aria-label="On watchlist" />}
                   </span>
