@@ -75,11 +75,19 @@ export default function TradeTools() {
   const [sharesIn, setSharesIn] = useState("");
   const [showFees, setShowFees] = useState(false);
   const [showOwnShares, setShowOwnShares] = useState(false);
+  /** Set when the stop/target were filled from a stock's exit plan. */
+  const [prefilled, setPrefilled] = useState(false);
 
   useEffect(() => {
     const onOpen = (e: Event) => {
-      const d = (e as CustomEvent<{ entry?: number } | undefined>).detail;
-      if (d?.entry) setEntry(d.entry.toFixed(2));
+      const d = (e as CustomEvent<{ entry?: number; stop?: number; target?: number } | undefined>).detail;
+      if (d?.entry) {
+        // A new stock: its own levels, never the previous stock's.
+        setEntry(d.entry.toFixed(2));
+        setStop(d.stop ? d.stop.toFixed(2) : "");
+        setTarget(d.target ? d.target.toFixed(2) : "");
+        setPrefilled(!!(d.stop && d.target));
+      }
       setOpen(true);
     };
     window.addEventListener(OPEN_TOOLS_EVENT, onOpen);
@@ -92,10 +100,10 @@ export default function TradeTools() {
     saveCostPrefs({ ...prefs, [k]: Math.min(100, num(v)) });
   };
   const fillExample = () => {
-    setCapital("500000"); setRiskPct("1"); setCustomRisk(""); setEntry("100"); setStop("95"); setTarget("112"); setSharesIn("");
+    setCapital("500000"); setRiskPct("1"); setCustomRisk(""); setEntry("100"); setStop("95"); setTarget("112"); setSharesIn(""); setPrefilled(false);
   };
   const reset = () => {
-    setCapital(""); setRiskPct("1"); setCustomRisk(""); setEntry(""); setStop(""); setTarget(""); setSharesIn(""); setShowOwnShares(false);
+    setCapital(""); setRiskPct("1"); setCustomRisk(""); setEntry(""); setStop(""); setTarget(""); setSharesIn(""); setShowOwnShares(false); setPrefilled(false);
   };
 
   const cap = num(capital), e = num(entry), s = num(stop), t = num(target);
@@ -170,6 +178,11 @@ export default function TradeTools() {
         <Question n={4} title="At what price will you sell if it goes wrong?"
           hint="Your stop-loss: if the price falls to here, you sell to cap the loss. It must be below your buy price.">
           <NumInput label="Stop-loss price" value={stop} onChange={setStop} placeholder="e.g. 95.00" prefix="PKR" />
+          {prefilled && (
+            <p className="text-[11px] text-ink-3 mt-1.5 leading-snug">
+              Stop and target filled from the stock&apos;s exit plan (2× its average daily range). Change them freely.
+            </p>
+          )}
           {stopBad && <Warn>The stop-loss has to be lower than the buy price ({price(e)}).</Warn>}
         </Question>
 

@@ -11,11 +11,10 @@
  * None of this feeds into Technical Score. It's supplementary context for
  * the Deep Dive page only.
  *
- * Historical data gap: PSX's EOD feed gives close/open/volume only, no daily
- * high/low. That rules out ADX, ATR and anything wick-based (real candlestick
- * patterns, true intraday support/resistance) — see AGENTS.md. Everything
- * below is close-based only, and named accordingly (e.g. "closing range",
- * not "support/resistance") so it never implies data we don't have.
+ * Everything below is close-based, and named accordingly (e.g. "closing
+ * range", not "support/resistance"). The market-summary files do carry a
+ * daily high/low; the only thing built on it is the ATR in lib/technicals.ts
+ * (exit plan). ADX and candlestick patterns are still not computed.
  */
 
 import type { EODPoint } from "./psx";

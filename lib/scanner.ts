@@ -178,7 +178,10 @@ async function getNewsAnalysisWithCache(config: ProviderConfig): Promise<{
 
 interface ScanOptions {
   minTechnicalScore?: number;   // default 45
-  minAvgVolume?: number;        // default 200_000
+  /** Liquidity floor: average PKR traded per day over the prior 20 sessions.
+   *  Rupees, not shares — 200k shares of a PKR 5 stock is PKR 1M, of a PKR 1,000
+   *  stock PKR 200M. See scripts/backtest.ts for the comparison. */
+  minAvgValue?: number;         // default 5_000_000
   maxPicks?: number;            // default 8
   skipNewsPass?: boolean;       // for faster manual refresh
 }
@@ -191,7 +194,7 @@ interface ScanOptions {
 async function fetchAndScore(
   symbols: string[],
   minScore: number,
-  minAvgVolume: number
+  minAvgValue: number
 ): Promise<{ scored: TechnicalScore[]; sessionDate: string | null; withHistory: number; withoutHistory: string[] }> {
   const histories = await getAllHistories(HISTORY_SESSIONS.technicals);
   const results: TechnicalScore[] = [];
@@ -204,8 +207,8 @@ async function fetchAndScore(
     if (!history || history.length === 0) { withoutHistory.push(symbol); continue; }
     withHistory++;
     if (!sessionDate || history[0].date > sessionDate) sessionDate = history[0].date;
-    const score = scoreStock(symbol, history, minAvgVolume);
-    if (score) results.push(score);
+    const score = scoreStock(symbol, history, 0);
+    if (score && score.avgValue20d >= minAvgValue) results.push(score);
   }
 
   if (symbols.length > 0 && withHistory === 0) {
@@ -280,7 +283,7 @@ export async function runFullScan(
 ): Promise<ScanResult> {
   const {
     minTechnicalScore = 45,
-    minAvgVolume = 200_000,
+    minAvgValue = 5_000_000,
     maxPicks = 8,
     skipNewsPass = false,
   } = options;
@@ -360,7 +363,7 @@ export async function runFullScan(
   const { scored: scoredStocks, sessionDate, withHistory, withoutHistory } = await fetchAndScore(
     allSymbols,
     minTechnicalScore,
-    minAvgVolume
+    minAvgValue
   );
 
   // --- Pass 2 continued: AI signal generation ---

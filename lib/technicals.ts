@@ -56,6 +56,13 @@ export interface TechnicalScore {
   priceVsEma50: "above" | "below";
   emaGapPct: number;          // (EMA20 − EMA50) / EMA50, in %
   trendRegime: "uptrend" | "flat" | "recovering" | "downtrend";
+  /** Average rupee turnover (close × volume) over the PRIOR 20 sessions. */
+  avgValue20d: number;
+  /** 14-session Average True Range in PKR, from the EOD high/low; null when
+   *  the history carries no high/low. Informational — not part of the score. */
+  atr14: number | null;
+  /** 200-session simple moving average; null with fewer than 200 sessions. */
+  sma200: number | null;
   components: TechnicalComponents;
   technicalScore: number;     // 0-100 — the Opportunities ranking metric
   technicalSignal: "STRONG_BUY" | "BUY" | "NEUTRAL" | "AVOID";
@@ -132,6 +139,38 @@ function detectCrossover(
   return "neutral";
 }
 
+/** Simple moving average of the last `period` values (oldest first); null when too short. */
+export function calcSMA(values: number[], period: number): number | null {
+  if (values.length < period) return null;
+  let sum = 0;
+  for (let i = values.length - period; i < values.length; i++) sum += values[i];
+  return sum / period;
+}
+
+/**
+ * Wilder's 14-session Average True Range from daily high/low/close (oldest
+ * first). True range covers overnight gaps: max(high−low, |high−prevClose|,
+ * |low−prevClose|). Returns null when high/low are missing.
+ */
+export function calcATR(
+  bars: Array<{ price: number; high?: number; low?: number }>,
+  period = 14
+): number | null {
+  if (bars.length < period + 1) return null;
+  const tr: number[] = [];
+  for (let i = 1; i < bars.length; i++) {
+    const { high, low } = bars[i];
+    if (high === undefined || low === undefined || !(high > 0) || !(low > 0)) return null;
+    const pc = bars[i - 1].price;
+    tr.push(Math.max(high - low, Math.abs(high - pc), Math.abs(low - pc)));
+  }
+  let atr = 0;
+  for (let i = 0; i < period; i++) atr += tr[i];
+  atr /= period;
+  for (let i = period; i < tr.length; i++) atr = (atr * (period - 1) + tr[i]) / period;
+  return atr;
+}
+
 /** Standard deviation of the last `n` daily returns, expressed in percent. */
 function dailyVolatility(closes: number[], n = 20): number {
   const rets: number[] = [];
@@ -188,6 +227,12 @@ export function scoreStock(
     avgVolume20d > 0 ? round1(todayVolume / avgVolume20d) : 0;
 
   if (avgVolume20d < minAvgVolume) return null; // illiquid — not tradeable
+
+  const priorValues = priorVols.map((v, i) => v * closes[last - priorVols.length + i]);
+  const avgValue20d =
+    priorValues.length > 0 ? priorValues.reduce((a, b) => a + b, 0) / priorValues.length : 0;
+  const atrRaw = calcATR(oldest);
+  const smaRaw = calcSMA(closes, 200);
 
   const ema20SlopePct =
     Number.isFinite(ema20s[last - 5]) && ema20s[last - 5] > 0
@@ -422,6 +467,9 @@ export function scoreStock(
     priceVsEma50,
     emaGapPct,
     trendRegime,
+    avgValue20d: Math.round(avgValue20d),
+    atr14: atrRaw === null ? null : parseFloat(atrRaw.toFixed(2)),
+    sma200: smaRaw === null ? null : parseFloat(smaRaw.toFixed(2)),
     components,
     technicalScore,
     technicalSignal,

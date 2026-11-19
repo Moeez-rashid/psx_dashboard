@@ -26,6 +26,7 @@
  *     so no consumer can present year-old annual data as if it were live.
  */
 
+import { exitPlan, type ExitPlan } from "./exit-plan";
 import {
   getAllStocks,
   getHistory,
@@ -241,6 +242,10 @@ export interface DeepDiveRisk {
    *  Technical Score's Entry component already scores. */
   extensionPct: number | null;
   entryQualityScore: number | null; // 0-20, the Entry component of the score
+  /** 14-session average true range in PKR, from PSX's daily high/low. */
+  atr14: number | null;
+  /** ATR stop / 2R target from lib/exit-plan — a risk rule, not a forecast. */
+  exitPlan: ExitPlan | null;
   liquidity: LiquidityMetric | null;
   liquidityTier: LiquidityTier | null;
   /** Risk measures deliberately NOT computed, and why. Surfaced so a consumer
@@ -283,7 +288,7 @@ export interface DeepDiveData {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const STRUCTURAL_LIMITATIONS = [
-  "The indicators on this page are computed from daily closing prices and volume. ATR, ADX, candlestick patterns and intraday support/resistance are not computed.",
+  "The indicators on this page are computed from daily closing prices and volume; only the average true range (ATR) also uses the daily high and low. ADX, candlestick patterns and intraday support/resistance are not computed.",
   "The 52-week range is derived from closing prices, not intraday highs/lows.",
   "Fundamentals are annual fiscal-year figures from askanalyst.com.pk — they can be up to a year old and are never intraday.",
   "No index-level earnings data is available, so the market valuation figure is a KMI-30 median proxy, not the KSE-100 P/E.",
@@ -292,8 +297,8 @@ const STRUCTURAL_LIMITATIONS = [
 ];
 
 const RISK_NOT_COMPUTED = [
-  "ATR and ATR-based stop levels — not computed; this page's indicators use closing prices only.",
-  "Reward/risk ratio — requires a defensible stop and target, which need price levels this data can't honestly produce.",
+  "Probability of reaching the exit plan's target — the levels are placed by a fixed volatility rule, not forecast.",
+  "Support/resistance-based stops — the exit plan uses volatility (ATR) only, not chart levels.",
 ];
 
 /** Fields the bank ratio schema simply doesn't report. Empirical, from
@@ -497,6 +502,8 @@ export function buildRiskSection(
     maxDrawdown1y: supp?.drawdown1y ?? null,
     extensionPct: tech?.extensionPct ?? null,
     entryQualityScore: tech?.components.entry ?? null,
+    atr14: tech?.atr14 ?? null,
+    exitPlan: exitPlan(tech?.currentPrice, tech?.atr14),
     liquidity,
     liquidityTier: liquidityTierOf(liquidity),
     notComputed: [...RISK_NOT_COMPUTED],

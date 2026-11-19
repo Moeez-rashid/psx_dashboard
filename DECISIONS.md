@@ -2,6 +2,16 @@
 
 Reasoning behind significant choices, newest first. This is *why*, not *what* — for what changed, read `git log`.
 
+## Backtested the Technical Score before adding trader rules (2026-11-19)
+
+**Decided:** candidate rules are tested against history before they reach the app. `scripts/backtest.ts` replays `lib/technicals.ts` day by day over ~480 sessions of PSX daily files (only data available on each day) and compares each label with the average Shariah stock. The first run is in `docs/backtest-2026-11-19.md`.
+
+**What it found:** over Oct 2025 – Nov 2026 the score showed no measurable edge. STRONG BUY, BUY and AVOID all landed within ±0.2% of the average stock, and the daily top-8 beat it in 7 of 14 months. Nothing was re-tuned to that output, because fitting weights to one year would only fit that year.
+
+**Adopted:** a rupee liquidity floor (PKR 5M/day traded) instead of 200k shares. Shares misjudge both ends: liquid high-priced stocks were excluded, while penny stocks qualified even though their returns came from five outliers (median 0%). Also adopted: an ATR exit plan (stop 2× ATR, target 2× the risk) in `lib/exit-plan.ts`, as a risk tool only. It matched plain holding while capping each loss at a known size.
+
+**Rejected after testing:** capping STRONG BUY in weak markets (picks did *better* when breadth was under 30%) and capping it below the 200-day average (no worse). Don't re-propose either without new evidence; rerun the script first.
+
 ## Holdings sync uses a secret key, not accounts (2026-11)
 
 **Decided:** to put holdings on an iPhone widget (Scriptable), holdings can optionally be stored server-side under a random 192-bit key that works like a secret link. There is no login. Redis is keyed by the key's SHA-256, so the stored data can't be turned back into working keys. Edits on any device are pushed and pulled with last-edit-wins on `updatedAt`.
