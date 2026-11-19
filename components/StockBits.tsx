@@ -10,6 +10,8 @@ export interface StockTech {
   volumeRatio: number; todayVolume?: number; avgVolume20d?: number;
   crossoverSignal: string; priceVsEma20: string; priceVsEma50?: string; reasons: string[];
   extensionPct?: number; trendRegime?: string;
+  /** 14-session average true range (PKR); feeds the exit plan, not the score. Absent on older scans. */
+  atr14?: number | null;
   /** Score parts; entry 20/20 is the scorer's own "at support, prime entry zone". */
   components?: { trend: number; momentum: number; volume: number; entry: number };
 }

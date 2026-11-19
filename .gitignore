@@ -45,3 +45,6 @@ next-env.d.ts
 
 # local dev logs
 dev-server.log
+
+# backtest session-file cache (scripts/backtest.ts)
+/.backtest-cache/

@@ -11,6 +11,7 @@ import { MobileRow, Move, fmtInt, NearEntryFlag, techBrief } from "./ui/MobileRo
 import { Briefcase } from "lucide-react";
 import MosqueIcon from "./ui/MosqueIcon";
 import RowActions from "./ui/RowActions";
+import ExitPlanLine from "./ui/ExitPlanLine";
 
 // ─── Detail payload shared by every tab ─────────────────────────────────────
 export interface SignalDetail {
@@ -237,6 +238,9 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
 
       {/* Phones: the key numbers at a glance, in place of the chip rows below. */}
       <PhoneStats detail={detail} />
+
+      {/* ATR stop / 2R target — a risk rule beside the numbers, opens the calculator pre-filled. */}
+      <ExitPlanLine price={currentPrice ?? tech?.currentPrice} atr={tech?.atr14} />
 
       {/* Key technical reasons — the deterministic explanation behind the score, stated once.
           Phones show the first two, with the rest one tap away. */}

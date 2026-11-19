@@ -1,5 +1,6 @@
 import { ShieldAlert } from "lucide-react";
 import type { DeepDiveRisk } from "@/lib/deepdive";
+import { EXIT_PLAN_NOTE, type ExitPlan } from "@/lib/exit-plan";
 import {
   Group, Metric, MetricGrid, NotComputed, Section, Unavailable,
   DASH, fmtPKRLarge, fmtPercent, fmtSignedPercent,
@@ -14,12 +15,12 @@ const TIER_COPY: Record<string, { label: string; tone: string; hint: string }> =
 
 /**
  * Answers "what could go wrong?" — and, just as importantly, states what this
- * app deliberately does not calculate. The unavailable-by-design list is not
- * an apology: computing an ATR stop from a feed with no daily high or low
- * would produce a confident number that means nothing.
+ * app deliberately does not calculate. The exit plan is an ATR stop and a 2R
+ * target from PSX's daily high/low: a risk rule, not a price forecast.
  */
-export default function RiskSection({ risk }: { risk: DeepDiveRisk }) {
+export default function RiskSection({ risk, plan }: { risk: DeepDiveRisk; plan?: ExitPlan | null }) {
   const r = risk;
+  const p = plan === undefined ? (r.exitPlan ?? null) : plan;
   const tier = r.liquidityTier ? TIER_COPY[r.liquidityTier] : null;
   const hasAny = r.dailyVolatilityPct !== null || r.maxDrawdown1y !== null || r.liquidity !== null;
 
@@ -60,6 +61,17 @@ export default function RiskSection({ risk }: { risk: DeepDiveRisk }) {
               hint="Chase risk — how far above trend price has run; scored as Entry quality in the Technical picture above"
             />
           </MetricGrid>
+
+          {p && (
+            <div className="my-4 sm:my-5"><Group title="Exit plan">
+              <MetricGrid cols={3}>
+                <Metric label="Stop-loss" value={p.stop.toFixed(2)} tone="text-down-2" hint={`${p.stopPct.toFixed(1)}% from ${p.entry.toFixed(2)}`} />
+                <Metric label="Target" value={p.target.toFixed(2)} tone="text-up-2" hint={`+${p.targetPct.toFixed(1)}% · 2× the risk`} />
+                <Metric label="Avg daily range" value={`${p.atrPct.toFixed(1)}%`} hint={r.atr14 ? `ATR 14 · PKR ${r.atr14.toFixed(2)}` : "ATR 14"} />
+              </MetricGrid>
+              <p className="text-[10px] text-ink-3 mt-2 leading-relaxed">{EXIT_PLAN_NOTE} Plan trade fills these in.</p>
+            </Group></div>
+          )}
 
           <Group title="Liquidity">
             <div className="flex flex-wrap items-end gap-x-8 gap-y-3">

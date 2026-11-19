@@ -21,6 +21,7 @@ import AIInterpretationSection from "@/components/deepdive/AIInterpretationSecti
 import RecordResearchVisit, { MarkActiveResearch } from "@/components/deepdive/RecordResearchVisit";
 import PsxFactsSection from "@/components/deepdive/PsxFactsSection";
 import StockActions from "@/components/StockActions";
+import { exitPlan } from "@/lib/exit-plan";
 import StockPriceChart from "@/components/deepdive/StockPriceChart";
 import StockTabs from "@/components/deepdive/StockTabs";
 
@@ -127,6 +128,9 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
   // page view must never trigger AI generation; only the explicit button in
   // AIInterpretationSection does that, via the same /api/deepdive route.
   const ai = await resolveDeepDiveAnalysis(data, { generate: false });
+  // Exit plan on the live price where there is one, so the page and the
+  // calculator quote the same levels.
+  const plan = exitPlan(data.identity.currentPrice, data.risk.atr14 ?? null) ?? data.risk.exitPlan ?? null;
 
   return (
     <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-8">
@@ -138,6 +142,8 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
           bar
           ticker={data.identity.ticker}
           price={data.identity.currentPrice}
+          stop={plan?.stop}
+          target={plan?.target}
           label={data.identity.sectorName ? `${data.identity.ticker} · ${data.identity.sectorName}` : data.identity.ticker}
         />
       </div>
@@ -168,7 +174,7 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
               <>
                 <PriceBehaviorSection behavior={data.priceBehavior} priceSeries={data.technical.priceSeries} showChart={false} />
                 <MarketContextSection market={data.marketContext} />
-                <RiskSection risk={data.risk} />
+                <RiskSection risk={data.risk} plan={plan} />
                 <AIInterpretationSection ticker={data.identity.ticker} initialResult={ai} />
               </>
             ),

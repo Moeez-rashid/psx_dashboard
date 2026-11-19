@@ -262,7 +262,8 @@ const historyCache = new Map<string, Map<string, EODPoint[]>>();
 /** Below this an LDCP/previous-close gap is rounding, not a corporate action. */
 const ADJUST_THRESHOLD = 0.005;
 
-function assemble(days: EodDay[]): Map<string, EODPoint[]> {
+/** Exported for scripts/backtest.ts, which replays the scorer over saved session files. */
+export function assemble(days: EodDay[]): Map<string, EODPoint[]> {
   const out = new Map<string, EODPoint[]>(); // oldest first while building
   for (let i = days.length - 1; i >= 0; i--) {
     const day = days[i];

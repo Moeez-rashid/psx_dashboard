@@ -7,8 +7,10 @@ import { openAlertFor } from "@/components/AlertsCenter";
 import { toast } from "@/components/ui/Toast";
 
 /** Watchlist / alert / calculator shortcuts for one stock. */
-export default function StockActions({ ticker, price, label, bar = false }: {
+export default function StockActions({ ticker, price, label, bar = false, stop, target }: {
   ticker: string; price?: number | null; label?: string;
+  /** Exit-plan levels to pre-fill in the trade calculator. */
+  stop?: number; target?: number;
   /** Stock page on phones: pinned above the tab bar as three equal, thumb-sized buttons. */
   bar?: boolean;
 }) {
@@ -33,7 +35,7 @@ export default function StockActions({ ticker, price, label, bar = false }: {
         <Bell size={icon} strokeWidth={2} aria-hidden />Alert
       </button>
       <button
-        onClick={() => window.dispatchEvent(new CustomEvent(OPEN_TOOLS_EVENT, { detail: { entry: price ?? undefined } }))}
+        onClick={() => window.dispatchEvent(new CustomEvent(OPEN_TOOLS_EVENT, { detail: { entry: price ?? undefined, stop, target } }))}
         className={`btn ${btn}`}
       >
         <Calculator size={icon} strokeWidth={2} aria-hidden />Plan trade

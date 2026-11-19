@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     try {
       const result = await runFullScan(config, {
         minTechnicalScore: 45,
-        minAvgVolume: 200_000,
+        minAvgValue: 5_000_000,
         maxPicks: 8,
       });
 
@@ -201,7 +201,7 @@ export async function GET(req: NextRequest) {
 
     const results = await runFullScan(
       scanConfig,
-      { minTechnicalScore: 45, minAvgVolume: 200_000, maxPicks: 8 }
+      { minTechnicalScore: 45, minAvgValue: 5_000_000, maxPicks: 8 }
     );
     cachedScan = { result: results, at: Date.now() };
 
