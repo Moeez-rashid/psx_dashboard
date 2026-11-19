@@ -17,11 +17,12 @@ import { ErrorBanner, Skeleton, EmptyState, IconButton } from "./ui/primitives";
 import { toast } from "./ui/Toast";
 import { BrandMark, GlobalActions, NavRow } from "./nav/TopNav";
 import { COPY_SNAPSHOT_EVENT, OPEN_METRICS_EVENT, OPEN_SETTINGS_EVENT, isDashboardTab, type DashboardTab } from "@/lib/nav";
-import { publishDashboardTab } from "@/lib/nav-state";
+import { publishDashboardTab, takeRequestedTab, takeSettingsRequest } from "@/lib/nav-state";
 import SegmentSwitch from "./nav/SegmentSwitch";
 import { LIST_CLASS } from "./ui/MobileRow";
 import { useIsPhone } from "@/lib/use-media";
 import SignalsPulse from "./SignalsPulse";
+import TopPickCard from "./TopPickCard";
 import { SET_TAB_EVENT } from "./CommandPalette";
 import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
@@ -691,9 +692,14 @@ export default function Dashboard({
     setSettings(loadSettings());
     const params = new URLSearchParams(window.location.search);
     const urlTab = params.get("tab");
-    if (isDashboardTab(urlTab)) setTab(urlTab);
+    // A tapped nav link beats the URL, which Next may have restored from the first visit.
+    const requestedTab = takeRequestedTab();
+    if (requestedTab) {
+      setTab(requestedTab);
+      window.history.replaceState(null, "", requestedTab === "opportunities" ? "/" : `/?tab=${requestedTab}`);
+    } else if (isDashboardTab(urlTab)) setTab(urlTab);
     // "Settings" in the phone More sheet, chosen from another page.
-    if (params.get("settings") === "1") {
+    if (takeSettingsRequest() || params.get("settings") === "1") {
       setShowSettings(true);
       window.history.replaceState(null, "", isDashboardTab(urlTab) && urlTab !== "opportunities" ? `/?tab=${urlTab}` : "/");
     }
@@ -1108,6 +1114,25 @@ export default function Dashboard({
             {/* Phones: market in a line and today's news in two, above the picks */}
             {isPhone && !scanning && <SignalsPulse na={na ?? null} onOpenNews={() => goTab("news")} />}
 
+            {/* Phones: the #1 pick and why it ranks first — the scanner's headline result */}
+            {isPhone && !scanning && scanResult && (() => {
+              const first = scanResult.signals.length > 0
+                ? scanResult.technicalData.find(t => t.symbol === sortedOpps(scanResult.signals)[0]?.ticker)
+                : scanResult.technicalData[0];
+              if (!first) return null;
+              const q = prices[first.symbol];
+              return (
+                <TopPickCard
+                  tech={first}
+                  price={q?.currentPrice ?? first.currentPrice}
+                  change={q?.changePercent}
+                  spark={sparks[first.symbol]}
+                  sector={sectorOf(first.symbol)}
+                  shariah={q?.shariah}
+                />
+              );
+            })()}
+
             {/* Scanner controls — the tab's primary action stays on top */}
             <div className="hidden sm:flex gap-2.5 mb-4 flex-wrap items-center">
               <button onClick={runFullScan} disabled={scanning} className="btn-accent font-semibold px-4 py-2">
@@ -1327,6 +1352,8 @@ export default function Dashboard({
                       sector={sectorOf(tech.symbol)}
                       technicalScore={tech.technicalScore}
                       tech={tech}
+                      shariah={liveQuote?.shariah}
+                      owned={holdings.some(h => h.ticker === tech.symbol)}
                       spark={sparks[tech.symbol]}
                       price={liveQuote?.currentPrice ?? tech.currentPrice}
                       change={liveQuote?.changePercent}
@@ -1366,6 +1393,8 @@ export default function Dashboard({
                     sector={sectorOf(sig.ticker)}
                     technicalScore={sigTech?.technicalScore}
                     tech={sigTech}
+                    shariah={liveQuote?.shariah}
+                    owned={holdings.some(h => h.ticker === sig.ticker)}
                     spark={sparks[sig.ticker]}
                     price={displayPrice}
                     change={displayChange}

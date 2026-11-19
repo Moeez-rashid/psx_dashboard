@@ -225,7 +225,9 @@ function moversLine(parent, d, size) {
 
 // ---- frame ----------------------------------------------------------------
 function background(w, d) {
-  const p = d && d.totals ? d.totals.dayPnlPct : null;
+  // Market view (nothing held): tint by the KSE-100 instead of the portfolio.
+  const mv = d && d.marketView && d.marketView.kse100;
+  const p = mv ? mv.changePercent : d && d.totals ? d.totals.dayPnlPct : null;
   const top = p > 0.25 ? "#10241a" : p < -0.25 ? "#2a1218" : "#18181f";
   const g = new LinearGradient();
   g.colors = [new Color(top), new Color("#0a0a0d")]; g.locations = [0, 0.85];
@@ -460,12 +462,116 @@ function largeFew(w, d) {
   w.addSpacer();
 }
 
+// ---- nothing held: the market instead -------------------------------------
+function indexLine(parent, name, ix, size) {
+  if (!ix) return;
+  const r = hstack(parent, 5);
+  txt(r, name, size - 1, C.muted, "semibold");
+  r.addSpacer();
+  txt(r, Math.round(ix.value).toLocaleString("en-US"), size, C.text, "bold", { rounded: true });
+  txt(r, pct(ix.changePercent), size - 1, tone(ix.changePercent), "semibold", { rounded: true });
+}
+function breadthBar(parent, b, w) {
+  const total = b.advancing + b.declining + b.unchanged || 1;
+  const ctx = new DrawContext();
+  ctx.size = new Size(w, 5); ctx.opaque = false; ctx.respectScreenScale = true;
+  let x = 0;
+  [[b.advancing, "#2ea15c"], [b.unchanged, "#4b4b57"], [b.declining, "#dc4d44"]].forEach(([n, col]) => {
+    const bw = (n / total) * w;
+    if (bw > 0) { ctx.setFillColor(new Color(col)); ctx.fillRect(new Rect(x, 0, bw, 5)); }
+    x += bw;
+  });
+  image(parent, ctx.getImage(), w, 5);
+  parent.addSpacer(3);
+  const r = hstack(parent, 3);
+  txt(r, String(b.advancing), 10, C.up, "semibold", { rounded: true });
+  txt(r, "up ·", 10, C.faint, "medium");
+  txt(r, String(b.declining), 10, C.down, "semibold", { rounded: true });
+  txt(r, "down", 10, C.faint, "medium");
+  r.addSpacer();
+}
+function moverRows(parent, list, size) {
+  list.forEach((m) => {
+    const r = hstack(parent, 4);
+    r.url = SITE + "/stock/" + encodeURIComponent(m.ticker);
+    txt(r, m.ticker, size, C.text, "semibold");
+    r.addSpacer();
+    txt(r, pct(m.changePercent), size - 1, tone(m.changePercent), "semibold", { rounded: true });
+  });
+}
+function marketBlock(parent, mv, big) {
+  const k = mv.kse100;
+  txt(parent, "Market today", 11, C.muted, "semibold");
+  if (k) {
+    const r = parent.addStack(); r.layoutHorizontally(); r.bottomAlignContent(); r.spacing = 4;
+    txt(r, "KSE-100", Math.round((big ? 26 : 22) * 0.42), C.muted, "semibold", { rounded: true });
+    txt(r, Math.round(k.value).toLocaleString("en-US"), big ? 26 : 22, C.text, "bold", { rounded: true });
+    r.addSpacer();
+    parent.addSpacer(3);
+    const p = hstack(parent); pill(p, signed(k.change) + "  " + pct(k.changePercent), k.change, 11); p.addSpacer();
+  }
+}
+function marketWidget(w, d) {
+  const mv = d.marketView;
+  w.addSpacer(8);
+  if (fam === "small") {
+    marketBlock(w, mv, false);
+    w.addSpacer();
+    breadthBar(w, mv.breadth, SW);
+  } else if (fam === "medium") {
+    const body = hstack(w, 16); body.topAlignContent();
+    const left = vstack(body); left.size = new Size(150, 0);
+    marketBlock(left, mv, false);
+    left.addSpacer(8);
+    indexLine(left, "KMI-30", mv.kmi30, 11);
+    left.addSpacer(8);
+    breadthBar(left, mv.breadth, 150);
+    const right = vstack(body, 3);
+    txt(right, "Top movers", 9, C.faint, "bold");
+    moverRows(right, mv.gainers.slice(0, 3), 11);
+    moverRows(right, mv.losers.slice(0, 3), 11);
+    w.addSpacer();
+  } else {
+    marketBlock(w, mv, true);
+    w.addSpacer(8);
+    indexLine(w, "KMI-30 · Shariah", mv.kmi30, 13);
+    w.addSpacer(10);
+    breadthBar(w, mv.breadth, MW);
+    w.addSpacer(14);
+    const cols = hstack(w, 18); cols.topAlignContent();
+    const g = vstack(cols, 5); g.size = new Size((MW - 18) / 2, 0);
+    txt(g, "Top gainers", 10, C.faint, "bold");
+    moverRows(g, mv.gainers, 13);
+    const l = vstack(cols, 5); l.size = new Size((MW - 18) / 2, 0);
+    txt(l, "Top losers", 10, C.faint, "bold");
+    moverRows(l, mv.losers, 13);
+    w.addSpacer();
+  }
+  w.addSpacer(4);
+  txt(w, "No holdings · showing the market", 9, C.faint, "medium");
+}
+
 // ---- lock screen ----------------------------------------------------------
 function accessory(d, error) {
   const w = new ListWidget();
   w.url = OPEN_URL;
   if (!d) { txt(w, error || "PSX", 11, Color.white()); return w; }
   const t = d.totals;
+  const k = !d.holdings.length && d.marketView && d.marketView.kse100;
+  if (k) {
+    if (fam === "accessoryInline") txt(w, "KSE-100 " + pct(k.changePercent), 12, Color.white());
+    else if (fam === "accessoryCircular") {
+      w.addSpacer();
+      const s = hstack(w); s.addSpacer(); txt(s, "KSE", 9, Color.white(), "semibold"); s.addSpacer();
+      const p = hstack(w); p.addSpacer(); txt(p, pct(k.changePercent).replace("%", ""), 12, Color.white(), "bold", { rounded: true }); p.addSpacer();
+      w.addSpacer();
+    } else {
+      txt(w, "KSE-100 · " + Math.round(k.value).toLocaleString("en-US"), 12, Color.white(), "semibold", { rounded: true });
+      txt(w, signed(k.change) + "  " + pct(k.changePercent), 12, Color.white(), "medium", { rounded: true });
+      txt(w, (d.market.open ? "Live · " : "Closed · ") + time(d.asOf), 10, Color.white());
+    }
+    return w;
+  }
   if (fam === "accessoryInline") {
     txt(w, "PSX " + signed(t.dayPnl) + " (" + pct(t.dayPnlPct) + ")", 12, Color.white());
   } else if (fam === "accessoryCircular") {
@@ -498,6 +604,11 @@ function build(d, error) {
   w.setPadding(14, 15, 14, 15);
   header(w, d);
   if (!d) { w.addSpacer(); txt(w, error || "No data yet", 12, C.muted, "medium", { lines: 3 }); w.addSpacer(); return w; }
+  if (!d.holdings.length && d.marketView) {
+    marketWidget(w, d);
+    footerError(w, error);
+    return w;
+  }
   if (!d.holdings.length) {
     w.addSpacer();
     txt(w, d.missing && d.missing.length ? "No prices yet for " + d.missing.join(", ") : "No holdings yet.", 13, C.text, "semibold", { lines: 2 });

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getHistory, getQuotes } from "@/lib/psx";
 import { HISTORY_SESSIONS } from "@/lib/psx-eod";
-import { getMarketStatus } from "@/lib/psx-market";
+import { getIndices, getMarketStatus } from "@/lib/psx-market";
+import { getAllStocks } from "@/lib/psx";
 import { isPKTOpen } from "@/lib/format";
 import { loadHoldings, syncKeyFrom, SyncUnavailableError } from "@/lib/holdings-sync";
 
@@ -10,6 +11,39 @@ export const maxDuration = 60;
 
 const SPARK_HOLDINGS = 12;   // the widget never draws more rows than this
 const SPARK_WAIT_MS = 8_000; // sparklines are decoration: never hold the widget up for them
+
+/**
+ * The market at a glance, for when there is nothing to value (no holdings, or
+ * none priced): KSE-100 and KMI-30, the advance/decline count, and the three
+ * biggest liquid gainers and losers — the same filters as the Market page.
+ */
+async function marketView() {
+  const [stocksR, indicesR, statusR] = await Promise.allSettled([getAllStocks(), getIndices(), getMarketStatus()]);
+  const all = stocksR.status === "fulfilled" ? stocksR.value : [];
+  const indices = indicesR.status === "fulfilled" ? indicesR.value.value : [];
+  const status = statusR.status === "fulfilled" ? statusR.value.value : null;
+  const idx = (code: string) => {
+    const i = indices.find((x) => x.code === code);
+    return i ? { value: i.value, change: i.change, changePercent: i.changePercent } : null;
+  };
+  const active = all.filter((s) => s.currentPrice > 0 && s.volume > 0);
+  const liquid = active.filter((s) => s.volume >= 50_000 && s.currentPrice >= 5);
+  const slim = (s: (typeof all)[number]) => ({ ticker: s.symbol, price: s.currentPrice, changePercent: s.changePercent });
+  const breadth = status && status.advancing + status.declining > 0
+    ? { advancing: status.advancing, declining: status.declining, unchanged: status.unchanged }
+    : {
+        advancing: active.filter((s) => s.changePercent > 0).length,
+        declining: active.filter((s) => s.changePercent < 0).length,
+        unchanged: active.filter((s) => s.changePercent === 0).length,
+      };
+  return {
+    kse100: idx("KSE100"),
+    kmi30: idx("KMI30"),
+    breadth,
+    gainers: [...liquid].sort((a, b) => b.changePercent - a.changePercent).slice(0, 3).map(slim),
+    losers: [...liquid].sort((a, b) => a.changePercent - b.changePercent).slice(0, 3).map(slim),
+  };
+}
 
 /** Last ~30 closes per ticker, oldest first, ending at the current price. Empty when history is slow or missing. */
 async function sparklines(prices: Record<string, number>): Promise<Record<string, number[]>> {
@@ -75,6 +109,8 @@ export async function GET(req: Request) {
     rows.sort((a, b) => b.value - a.value);
     const sparks = await sparklines(Object.fromEntries(rows.slice(0, SPARK_HOLDINGS).map((r) => [r.ticker, r.price])));
     const holdings = rows.map((r) => ({ ...r, spark: sparks[r.ticker] ?? null }));
+    // Nothing to value (sold everything, or no prices): show the market instead.
+    const market = holdings.length === 0 ? await marketView() : null;
 
     return NextResponse.json({
       asOf: new Date().toISOString(),
@@ -93,6 +129,7 @@ export async function GET(req: Request) {
       },
       holdings,
       missing,
+      marketView: market,
     }, { headers });
   } catch (err) {
     if (err instanceof SyncUnavailableError) return NextResponse.json({ error: err.message }, { status: 503, headers });
