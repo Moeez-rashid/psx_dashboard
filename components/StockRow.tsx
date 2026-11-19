@@ -8,6 +8,8 @@ import { Sparkline } from "./ui/primitives";
 import { TechnicalScoreMeter } from "./ui/TechnicalScore";
 import { TechChips, FundamentalsState, nearEntry, fundamentalChips, type StockTech } from "./StockBits";
 import { MobileRow, Move, fmtInt, NearEntryFlag, techBrief } from "./ui/MobileRow";
+import { Briefcase } from "lucide-react";
+import MosqueIcon from "./ui/MosqueIcon";
 import RowActions from "./ui/RowActions";
 
 // ─── Detail payload shared by every tab ─────────────────────────────────────
@@ -243,7 +245,7 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
       {/* AI perspective — shown only when the AI pass actually produced its own
           catalysts/risks framing (never fabricated from technicals). */}
       {(hasCats || hasRisks) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2 pt-0.5">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-0.5">
           {hasCats && (
             <div>
               <div className="text-[9px] uppercase tracking-wide text-up-2 mb-1">AI: why it works</div>
@@ -318,10 +320,23 @@ export function StockDetailBody({ detail, topBlock, onOpenNews, footer = true }:
 }
 
 // ─── Two-tier collapsed card → expands inline ───────────────────────────────
+/** The small markers after a ticker on phones: Shariah, Near entry, owned, watching. */
+function RowFlags({ shariah, nearEntry: near, owned, watching }: { shariah?: boolean; nearEntry?: boolean; owned?: boolean; watching?: boolean }) {
+  if (!shariah && !near && !owned && !watching) return null;
+  return (
+    <span className="inline-flex items-center gap-1 shrink-0">
+      {shariah && <MosqueIcon size={12} className="text-up-2" />}
+      {near && <NearEntryFlag />}
+      {owned && <Briefcase size={11} strokeWidth={2.25} className="text-sky-2" aria-label="In your holdings" />}
+      {watching && <Star size={11} strokeWidth={2} fill="currentColor" className="text-gold-2" aria-label="On your watchlist" />}
+    </span>
+  );
+}
+
 export function StockRow({
   variant, signal, ticker, sector, technicalScore, pnlPct,
   spark, price, change, starred, onToggleStar, onRemove, tier2, open, onToggle, children,
-  shares, avgPrice, value, pnl, tech,
+  shares, avgPrice, value, pnl, tech, shariah, owned,
 }: {
   variant: "signal" | "holding";
   signal?: string;
@@ -346,6 +361,10 @@ export function StockRow({
   pnl?: number | null;
   /** Phone row: RSI and volume in the sub-line, and the Near entry flag. */
   tech?: StockTech | null;
+  /** KMI All Share constituent, per PSX. */
+  shariah?: boolean;
+  /** Signal rows: the user already holds this stock. */
+  owned?: boolean;
 }) {
   const hue = hueOf(signal);
   const isSignal = variant === "signal";
@@ -374,7 +393,7 @@ export function StockRow({
           <MobileRow
             ticker={ticker}
             tone={hue.text}
-            flag={nearEntry(tech) ? <NearEntryFlag /> : undefined}
+            flag={<RowFlags shariah={shariah} nearEntry={nearEntry(tech)} owned={owned} watching={!!starred} />}
             sub={<>
               <span className={hue.text}>{badgeLabel(signal)}{technicalScore !== undefined ? ` ${Math.round(technicalScore)}` : ""}</span>
               {techBrief(tech) ? <> · {techBrief(tech)}</> : sector ? <> · {sector}</> : null}

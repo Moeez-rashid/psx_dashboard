@@ -223,3 +223,19 @@ export async function getLatestTradingDate(): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * The newest successful scan for a trading date BEFORE `beforeDate`
+ * (YYYY-MM-DD), walking back up to `maxDays` calendar days. Used to show
+ * what changed between two scans. Never throws; null when none is found.
+ */
+export async function getPreviousSuccess(beforeDate: string, maxDays = 14): Promise<PersistedScan | null> {
+  const d = new Date(`${beforeDate}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  for (let i = 1; i <= maxDays; i++) {
+    const day = new Date(d.getTime() - i * 86_400_000).toISOString().slice(0, 10);
+    const scan = await getScanAttempt(day);
+    if (scan?.status === "success" && scan.results) return scan;
+  }
+  return null;
+}

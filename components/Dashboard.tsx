@@ -17,11 +17,12 @@ import { ErrorBanner, Skeleton, EmptyState, IconButton } from "./ui/primitives";
 import { toast } from "./ui/Toast";
 import { BrandMark, GlobalActions, NavRow } from "./nav/TopNav";
 import { COPY_SNAPSHOT_EVENT, OPEN_METRICS_EVENT, OPEN_SETTINGS_EVENT, isDashboardTab, type DashboardTab } from "@/lib/nav";
-import { publishDashboardTab } from "@/lib/nav-state";
+import { publishDashboardTab, takeRequestedTab, takeSettingsRequest } from "@/lib/nav-state";
 import SegmentSwitch from "./nav/SegmentSwitch";
 import { LIST_CLASS } from "./ui/MobileRow";
 import { useIsPhone } from "@/lib/use-media";
 import SignalsPulse from "./SignalsPulse";
+import ScanChanges from "./ScanChanges";
 import { SET_TAB_EVENT } from "./CommandPalette";
 import { readWatchlist, WATCH_EVENT } from "@/lib/local-store";
 import TickerInput from "./ui/TickerInput";
@@ -691,9 +692,14 @@ export default function Dashboard({
     setSettings(loadSettings());
     const params = new URLSearchParams(window.location.search);
     const urlTab = params.get("tab");
-    if (isDashboardTab(urlTab)) setTab(urlTab);
+    // A tapped nav link beats the URL, which Next may have restored from the first visit.
+    const requestedTab = takeRequestedTab();
+    if (requestedTab) {
+      setTab(requestedTab);
+      window.history.replaceState(null, "", requestedTab === "opportunities" ? "/" : `/?tab=${requestedTab}`);
+    } else if (isDashboardTab(urlTab)) setTab(urlTab);
     // "Settings" in the phone More sheet, chosen from another page.
-    if (params.get("settings") === "1") {
+    if (takeSettingsRequest() || params.get("settings") === "1") {
       setShowSettings(true);
       window.history.replaceState(null, "", isDashboardTab(urlTab) && urlTab !== "opportunities" ? `/?tab=${urlTab}` : "/");
     }
@@ -941,6 +947,10 @@ export default function Dashboard({
     const a = s.toLowerCase(), b = sectorName.toLowerCase();
     return a === b || a.includes(b) || b.includes(a);
   };
+  // The slate Signals shows, in order — what ScanChanges compares with the previous scan.
+  const pickTickers = scanResult
+    ? (scanResult.signals.length > 0 ? scanResult.signals.map(s => s.ticker) : scanResult.technicalData.slice(0, 8).map(t => t.symbol))
+    : [];
   const visibleOpps = (sigs: AISignal[]) =>
     sortedOpps(oppSectorFilter ? sigs.filter(s => sectorMatches(s.ticker, oppSectorFilter)) : sigs);
 
@@ -1096,6 +1106,7 @@ export default function Dashboard({
                       <span className="text-gold-2"> · data {tradingSessionsBehind} session{tradingSessionsBehind === 1 ? "" : "s"} old</span>
                     )}
                   </p>
+                  <ScanChanges scanDate={scanResult.scanDate} tickers={pickTickers} />
                   {scanResult.aiError && aiNoteOpen && (
                     <p className="mt-1.5 text-[11px] text-ink-2 leading-snug bg-raised rounded-lg px-2.5 py-2 animate-fade-in">
                       The AI commentary didn&apos;t run for this scan, so the picks are ranked by Technical Score alone. That score uses price and volume only, so it&apos;s unaffected.
@@ -1107,6 +1118,7 @@ export default function Dashboard({
 
             {/* Phones: market in a line and today's news in two, above the picks */}
             {isPhone && !scanning && <SignalsPulse na={na ?? null} onOpenNews={() => goTab("news")} />}
+
 
             {/* Scanner controls — the tab's primary action stays on top */}
             <div className="hidden sm:flex gap-2.5 mb-4 flex-wrap items-center">
@@ -1140,6 +1152,7 @@ export default function Dashboard({
                         {scanResult.expandedSectors.length > 0 && ` · expanded: ${scanResult.expandedSectors.join(", ")}`}
                       </span>
                     </span>
+                    <ScanChanges scanDate={scanResult.scanDate} tickers={pickTickers} className="!text-[10px]" />
                     {stale && (
                       <span className="flex items-center gap-1.5 text-[10px] text-gold-2">
                         <TriangleAlert size={11} strokeWidth={2} aria-hidden />
@@ -1327,6 +1340,8 @@ export default function Dashboard({
                       sector={sectorOf(tech.symbol)}
                       technicalScore={tech.technicalScore}
                       tech={tech}
+                      shariah={liveQuote?.shariah}
+                      owned={holdings.some(h => h.ticker === tech.symbol)}
                       spark={sparks[tech.symbol]}
                       price={liveQuote?.currentPrice ?? tech.currentPrice}
                       change={liveQuote?.changePercent}
@@ -1366,6 +1381,8 @@ export default function Dashboard({
                     sector={sectorOf(sig.ticker)}
                     technicalScore={sigTech?.technicalScore}
                     tech={sigTech}
+                    shariah={liveQuote?.shariah}
+                    owned={holdings.some(h => h.ticker === sig.ticker)}
                     spark={sparks[sig.ticker]}
                     price={displayPrice}
                     change={displayChange}

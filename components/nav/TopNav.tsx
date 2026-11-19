@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, Bell, Calculator } from "lucide-react";
 import { ACTIVE_EVENT, getActiveResearch } from "@/lib/recent-research";
+import { requestDashboardTab } from "@/lib/nav-state";
 import { NAV_ITEMS, OPEN_ALERTS_EVENT, OPEN_PALETTE_EVENT, OPEN_TOOLS_EVENT, type NavItem } from "@/lib/nav";
 
 /** Brand mark shared by both headers. */
@@ -88,7 +89,8 @@ export function NavRow({ active, counts, onTab }: {
         return item.tab && onTab ? (
           <button key={item.id} onClick={() => onTab(item)} className={cls} aria-current={isActive ? "page" : undefined}>{inner}</button>
         ) : (
-          <Link key={item.id} href={hrefFor(item)} className={cls} aria-current={isActive ? "page" : undefined}>{inner}</Link>
+          <Link key={item.id} href={hrefFor(item)} className={cls} aria-current={isActive ? "page" : undefined}
+            onClick={() => { if (item.tab) requestDashboardTab(item.tab); }}>{inner}</Link>
         );
       })}
     </nav>

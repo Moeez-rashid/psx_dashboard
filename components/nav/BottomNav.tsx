@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { SET_TAB_EVENT } from "@/components/CommandPalette";
 import { Modal, ModalHeader } from "@/components/ui/primitives";
-import { useDashboardTab } from "@/lib/nav-state";
+import { requestDashboardTab, requestSettings, useDashboardTab } from "@/lib/nav-state";
 import {
   COPY_SNAPSHOT_EVENT, OPEN_ALERTS_EVENT, OPEN_METRICS_EVENT, OPEN_SETTINGS_EVENT, OPEN_TOOLS_EVENT,
   type DashboardTab,
@@ -80,7 +80,8 @@ export default function BottomNav() {
                 {inner}
               </button>
             ) : (
-              <Link key={item.id} href={item.href} className={cls(active)} aria-current={active ? "page" : undefined}>
+              <Link key={item.id} href={item.href} className={cls(active)} aria-current={active ? "page" : undefined}
+                onClick={() => { if (item.tab) requestDashboardTab(item.tab); }}>
                 {inner}
               </Link>
             );
@@ -117,7 +118,7 @@ function MoreSheet({ onClose, onDashboard }: { onClose: () => void; onDashboard:
           {onDashboard ? (
             <Row icon={SettingsIcon} label="Settings" sub="AI key, backup and restore" onClick={fire(OPEN_SETTINGS_EVENT)} />
           ) : (
-            <Row icon={SettingsIcon} label="Settings" sub="AI key, backup and restore" href="/?settings=1" onClose={onClose} />
+            <Row icon={SettingsIcon} label="Settings" sub="AI key, backup and restore" href="/?settings=1" onClose={() => { requestSettings(); onClose(); }} />
           )}
           {onDashboard && <Row icon={Clipboard} label="Copy snapshot for AI" sub="Paste into Claude or ChatGPT" onClick={fire(COPY_SNAPSHOT_EVENT)} />}
           {onDashboard && <Row icon={BookOpen} label="Metrics guide" sub="What each number means" onClick={fire(OPEN_METRICS_EVENT)} />}

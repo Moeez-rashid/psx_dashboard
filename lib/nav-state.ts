@@ -24,3 +24,18 @@ export function useDashboardTab(): DashboardTab | null {
     () => null
   );
 }
+
+/**
+ * The tab a nav link asked for, read once when the dashboard mounts.
+ * Needed because Next reuses the dashboard's first URL for "/": open the
+ * site on /?tab=holdings (the widget does), go to Markets, tap Signals, and
+ * the router lands on /?tab=holdings again. The tapped tab wins over that.
+ */
+let requested: DashboardTab | null = null;
+export function requestDashboardTab(tab: DashboardTab): void { requested = tab; }
+export function takeRequestedTab(): DashboardTab | null { const t = requested; requested = null; return t; }
+
+/** Same idea for "Settings" in the More sheet: its ?settings=1 can be lost the same way. */
+let settingsRequested = false;
+export function requestSettings(): void { settingsRequested = true; }
+export function takeSettingsRequest(): boolean { const s = settingsRequested; settingsRequested = false; return s; }
