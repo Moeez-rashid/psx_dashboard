@@ -251,7 +251,8 @@ export const SECTOR_NAME_TO_CODE: Record<string, string> = {
  * wrong code (observed: "Banking" tagged 0801, which is Automobile), and a
  * wrong code silently expands the scan into the wrong sector.
  */
-export function resolveSectorCode(sectorName: string, suppliedCode?: string): string | null {
+export function resolveSectorCode(sectorName: string | undefined, suppliedCode?: string): string | null {
+  if (typeof sectorName !== "string" || !sectorName.trim()) return null;
   const byName = SECTOR_NAME_TO_CODE[sectorName.trim().toLowerCase()];
   if (byName) return byName;
   if (suppliedCode && /^08\d\d$/.test(suppliedCode)) {
