@@ -19,7 +19,7 @@ import { BrandMark, GlobalActions, NavRow } from "./nav/TopNav";
 import { COPY_SNAPSHOT_EVENT, OPEN_METRICS_EVENT, OPEN_SETTINGS_EVENT, isDashboardTab, type DashboardTab } from "@/lib/nav";
 import { publishDashboardTab, takeRequestedTab, takeSettingsRequest } from "@/lib/nav-state";
 import SegmentSwitch from "./nav/SegmentSwitch";
-import { LIST_CLASS } from "./ui/MobileRow";
+import { LIST_CLASS, PICKS_LIST_CLASS } from "./ui/MobileRow";
 import { useIsPhone } from "@/lib/use-media";
 import SignalsPulse from "./SignalsPulse";
 import ScanChanges from "./ScanChanges";
@@ -100,7 +100,7 @@ interface ScanState {
  * since then (or a newer scheduled one) disappears until a full reload.
  */
 let sessionScan: ScanState | null = null;
-const OPP_EXPANDED_KEY = "psx_opp_expanded";
+const OPP_EXPANDED_KEY = "psx_opp_expanded.v2"; // v2: open by default (2026-11-21); the old key held the collapsed default
 const SCAN_RECHECK_MS = 5 * 60_000;
 
 /** Whichever scan ran later; ties keep `current` so nothing re-renders for no reason. */
@@ -342,14 +342,14 @@ export default function Dashboard({
     setTab(t);
     window.history.replaceState(null, "", t === "opportunities" ? "/" : `/?tab=${t}`);
   };
-  // Opportunities starts collapsed to a compact ticker/price preview — expanding
-  // reveals the existing detailed cards unchanged. Navigating in from News (a
+  // Opportunities starts open (full rows); it can be folded to a compact
+  // ticker/price preview. Navigating in from News (a
   // specific ticker, or a sector filter) always force-opens it, since the row
   // or filtered list being navigated to needs to actually be visible.
   // The user's last expand/collapse choice is remembered, so the tab doesn't
   // fold back to the preview every time they return to it.
   const [oppExpanded, setOppExpanded] = useState(() => {
-    try { return localStorage.getItem(OPP_EXPANDED_KEY) === "1"; } catch { return false; }
+    try { return localStorage.getItem(OPP_EXPANDED_KEY) !== "0"; } catch { return true; }
   });
   useEffect(() => {
     try { localStorage.setItem(OPP_EXPANDED_KEY, oppExpanded ? "1" : "0"); } catch { /* private mode */ }
@@ -1028,7 +1028,7 @@ export default function Dashboard({
 
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line pt-[env(safe-area-inset-top)]">
-        <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between gap-2 py-2.5">
+        <div className="max-w-[1600px] mx-auto px-4 lg:px-8 h-13 flex items-center justify-between gap-2 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2">
               <BrandMark />
@@ -1065,7 +1065,7 @@ export default function Dashboard({
       </header>
 
       {/* ── MAIN ── */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5">
+      <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 lg:px-8 py-3 sm:py-5">
 
         {/* ════ BUY OPPORTUNITIES ════ */}
         {tab === "opportunities" && (
@@ -1320,7 +1320,7 @@ export default function Dashboard({
                 No fabricated catalysts/risks here — StockDetailBody already shows the
                 full tech.reasons list, so there's nothing genuine to add in that slot. */}
             {scanResult && scanResult.signals.length === 0 && scanResult.technicalData.length > 0 && (
-              <div className={LIST_CLASS}>
+              <div className={PICKS_LIST_CLASS}>
                 {scanResult.technicalData.slice(0, 8).map((tech) => {
                   const liveQuote = prices[tech.symbol];
                   const key = `opp:${tech.symbol}`;
@@ -1359,7 +1359,7 @@ export default function Dashboard({
             )}
 
             {/* Signal rows — collapsed by default, expand inline */}
-            <div className={LIST_CLASS}>
+            <div className={PICKS_LIST_CLASS}>
               {scanResult && visibleOpps(scanResult.signals).map((sig) => {
                 const sigTech = scanResult.technicalData?.find(t => t.symbol === sig.ticker);
                 const liveQuote = prices[sig.ticker];
@@ -1799,7 +1799,7 @@ export default function Dashboard({
 
       {/* ── FOOTER ── */}
       <footer className="border-t border-line">
-        <div className="max-w-5xl mx-auto px-4 py-2.5 flex justify-between items-center text-[10px] text-ink-3">
+        <div className="max-w-[1600px] mx-auto px-4 lg:px-8 py-2.5 flex justify-between items-center text-[10px] text-ink-3">
           <span>{lastUpdated ? `Prices updated ${lastUpdated}` : "Connecting to PSX…"}</span>
           <span className="md:hidden"><PKTClock /></span>
           <span className="hidden md:inline">PSX Scanner · Data from dps.psx.com.pk · Not financial advice</span>

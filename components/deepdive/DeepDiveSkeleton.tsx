@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/primitives";
  */
 export default function DeepDiveSkeleton() {
   return (
-    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:py-8">
+    <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 lg:px-8 py-6 sm:py-8">
       <div className="pb-6 border-b border-line">
         <Skeleton className="h-3 w-28 mb-5" />
         <div className="flex flex-wrap items-start justify-between gap-6">
