@@ -90,3 +90,4 @@ export function techBrief(t?: { rsi: number; volumeRatio: number } | null): stri
 
 /** Hairline-separated, edge-to-edge list on phones; the usual spaced cards from sm up. */
 export const LIST_CLASS = "-mx-4 sm:mx-0 border-y border-line divide-y divide-line sm:border-0 sm:divide-y-0 sm:space-y-2";
+

@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   RefreshCw, Clipboard, HelpCircle, Settings as SettingsIcon,
   TrendingUp, Briefcase, Eye, Newspaper as NewspaperIcon,
-  Radar, X, Pencil, Plus, Sparkles, CircleAlert, TriangleAlert, ChevronDown,
+  Radar, X, Pencil, Plus, Sparkles, CircleAlert, TriangleAlert,
 } from "lucide-react";
 import Settings, { loadSettings, defaultSettings, type UserSettings } from "./Settings";
 import type { AISignal, NewsAnalysis } from "@/lib/providers/types";
@@ -100,7 +100,6 @@ interface ScanState {
  * since then (or a newer scheduled one) disappears until a full reload.
  */
 let sessionScan: ScanState | null = null;
-const OPP_EXPANDED_KEY = "psx_opp_expanded";
 const SCAN_RECHECK_MS = 5 * 60_000;
 
 /** Whichever scan ran later; ties keep `current` so nothing re-renders for no reason. */
@@ -300,10 +299,10 @@ export default function Dashboard({
   // A card's catalyst strip → News tab, headline feed filtered to that ticker.
   const openNewsFor = (ticker: string) => { setNewsFilterTicker(ticker); setTab("news"); };
   // A News sector-watch row → Buy Opportunities filtered to that sector.
-  const filterOppsBySector = (sectorName: string) => { setOppSectorFilter(sectorName); setOppExpanded(true); setTab("opportunities"); };
+  const filterOppsBySector = (sectorName: string) => { setOppSectorFilter(sectorName); setTab("opportunities"); };
   // A News headline row → the stock's own expanded card on whichever tab holds it.
   const openTickerCard = (ticker: string) => {
-    if (scanResult?.signals.some(s => s.ticker === ticker)) { setTab("opportunities"); setOppExpanded(true); setExpanded(prev => new Set(prev).add(`opp:${ticker}`)); }
+    if (scanResult?.signals.some(s => s.ticker === ticker)) { setTab("opportunities"); setExpanded(prev => new Set(prev).add(`opp:${ticker}`)); }
     else if (watching.some(w => w.ticker === ticker)) { setTab("watching"); setExpanded(prev => new Set(prev).add(`watch:${ticker}`)); }
     else if (holdings.some(h => h.ticker === ticker)) { setTab("holdings"); setExpanded(prev => new Set(prev).add(`hold:${ticker}`)); }
     else { setTab("opportunities"); }
@@ -342,18 +341,6 @@ export default function Dashboard({
     setTab(t);
     window.history.replaceState(null, "", t === "opportunities" ? "/" : `/?tab=${t}`);
   };
-  // Opportunities starts collapsed to a compact ticker/price preview — expanding
-  // reveals the existing detailed cards unchanged. Navigating in from News (a
-  // specific ticker, or a sector filter) always force-opens it, since the row
-  // or filtered list being navigated to needs to actually be visible.
-  // The user's last expand/collapse choice is remembered, so the tab doesn't
-  // fold back to the preview every time they return to it.
-  const [oppExpanded, setOppExpanded] = useState(() => {
-    try { return localStorage.getItem(OPP_EXPANDED_KEY) === "1"; } catch { return false; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem(OPP_EXPANDED_KEY, oppExpanded ? "1" : "0"); } catch { /* private mode */ }
-  }, [oppExpanded]);
   // News page: ticker to filter the headline feed to (set when arriving from a card's catalyst strip)
   const [newsFilterTicker, setNewsFilterTicker] = useState<string | null>(null);
   // Buy Opportunities: sector to filter the list to (set when arriving from the News sector watch)
@@ -1028,7 +1015,7 @@ export default function Dashboard({
 
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line pt-[env(safe-area-inset-top)]">
-        <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between gap-2 py-2.5">
+        <div className="max-w-6xl mx-auto px-4 h-13 flex items-center justify-between gap-2 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2">
               <BrandMark />
@@ -1065,7 +1052,7 @@ export default function Dashboard({
       </header>
 
       {/* ── MAIN ── */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5">
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-3 sm:py-5">
 
         {/* ════ BUY OPPORTUNITIES ════ */}
         {tab === "opportunities" && (
@@ -1236,45 +1223,15 @@ export default function Dashboard({
               </div>
             )}
 
-            {/* Opportunities — starts as one compact ticker/price preview;
-                expanding reveals the existing detailed cards unchanged below. */}
+            {/* Desktop: a plain title over the picks (phones have their own title row above). */}
             {scanResult && !scanning && oppPreviewList.length > 0 && (
-              <div className="hidden sm:block card p-0 overflow-hidden mb-3">
-                <button
-                  onClick={() => setOppExpanded(v => !v)}
-                  aria-expanded={oppExpanded}
-                  className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left cursor-pointer"
-                >
-                  <span className="text-sm font-semibold text-ink">Opportunities</span>
-                  <span className="flex items-center gap-2 text-ink-3 shrink-0">
-                    <span className="text-[10px] num">
-                      {oppPreviewList.length} pick{oppPreviewList.length === 1 ? "" : "s"}
-                    </span>
-                    <ChevronDown
-                      size={15} strokeWidth={2.25}
-                      className={`transition-transform duration-200 ${oppExpanded ? "rotate-180" : ""}`}
-                      aria-hidden
-                    />
-                  </span>
-                </button>
-                {!oppExpanded && (
-                  oppPreviewList.length > 0 ? (
-                    <div className="px-4 pb-4 pt-0.5 border-t border-line divide-y divide-line">
-                      {oppPreviewList.map((item) => (
-                        <div key={item.ticker} className="flex items-center justify-between py-2.5">
-                          <span className="text-[13px] font-semibold text-ink">{item.ticker}</span>
-                          <span className="text-[13px] num text-ink-2">{item.price !== undefined ? item.price.toFixed(2) : "—"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="px-4 pb-4 pt-0.5 text-xs text-ink-3 border-t border-line">No opportunities from this scan.</p>
-                  )
-                )}
+              <div className="hidden sm:flex items-baseline justify-between gap-3 mb-2">
+                <h2 className="text-sm font-semibold text-ink">Opportunities</h2>
+                <span className="text-[10px] text-ink-3 num">{oppPreviewList.length} pick{oppPreviewList.length === 1 ? "" : "s"}</span>
               </div>
             )}
 
-            {scanResult && (oppExpanded || isPhone) && !scanning && <>
+            {scanResult && !scanning && <>
 
             {/* Sort */}
             {scanResult && scanResult.signals.length > 1 && (
@@ -1799,7 +1756,7 @@ export default function Dashboard({
 
       {/* ── FOOTER ── */}
       <footer className="border-t border-line">
-        <div className="max-w-5xl mx-auto px-4 py-2.5 flex justify-between items-center text-[10px] text-ink-3">
+        <div className="max-w-6xl mx-auto px-4 py-2.5 flex justify-between items-center text-[10px] text-ink-3">
           <span>{lastUpdated ? `Prices updated ${lastUpdated}` : "Connecting to PSX…"}</span>
           <span className="md:hidden"><PKTClock /></span>
           <span className="hidden md:inline">PSX Scanner · Data from dps.psx.com.pk · Not financial advice</span>

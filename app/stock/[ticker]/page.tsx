@@ -133,7 +133,7 @@ async function DeepDiveBody({ ticker }: { ticker: string }) {
   const plan = exitPlan(data.identity.currentPrice, data.risk.atr14 ?? null) ?? data.risk.exitPlan ?? null;
 
   return (
-    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-8">
+    <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-3 sm:py-8">
       <RecordResearchVisit ticker={data.identity.ticker} name={data.identity.companyName} />
       <DeepDiveHeader identity={data.identity} technical={data.technical} />
       <StockPriceChart series={data.technical.priceSeries} />

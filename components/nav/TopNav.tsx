@@ -68,7 +68,7 @@ export function NavRow({ active, counts, onTab }: {
     item.id === "deep-dive" && activeTicker && !pathname.startsWith("/stock/") ? `/stock/${activeTicker}` : item.href;
 
   return (
-    <nav className="hidden md:flex max-w-5xl mx-auto px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Primary">
+    <nav className="hidden md:flex max-w-6xl mx-auto px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Primary">
       {NAV_ITEMS.map((item) => {
         const isActive = item.id === active;
         const count = counts?.[item.id];
@@ -101,7 +101,7 @@ export function NavRow({ active, counts, onTab }: {
 export default function TopNav({ active }: { active: NavItem["id"] }) {
   return (
     <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line pt-[env(safe-area-inset-top)]">
-      <div className="max-w-5xl mx-auto px-4 h-13 flex items-center justify-between py-2.5">
+      <div className="max-w-6xl mx-auto px-4 h-13 flex items-center justify-between py-2.5">
         <Link href="/" className="flex items-center gap-2">
           <BrandMark />
           <span className="text-sm font-bold tracking-tight">PSX Scanner</span>

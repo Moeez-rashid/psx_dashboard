@@ -148,7 +148,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
 
   if (failed && !rows) {
     return (
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5">
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-3 sm:py-5">
         <EmptyState icon={RefreshCw} title="The screener couldn't load"
           description="PSX's data portal didn't answer. This usually clears within a few minutes."
           action={{ label: "Try again", icon: RefreshCw, onClick: load }} />
@@ -159,7 +159,7 @@ export default function ScreenerView({ initialSector = "" }: { initialSector?: s
   const shown = filtered.slice(0, limit);
 
   return (
-    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5 text-[13px]">
+    <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-3 sm:py-5 text-[13px]">
       <MarketsSwitch active="screener" />
       {/* Presets */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

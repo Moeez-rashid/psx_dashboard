@@ -141,7 +141,7 @@ export default function MarketView() {
 
   if (failed && !data) {
     return (
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5">
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-3 sm:py-5">
         <EmptyState
           icon={RefreshCw}
           title="PSX market data is unavailable right now"
@@ -160,7 +160,7 @@ export default function MarketView() {
   const others = (data?.indices ?? []).filter((i) => !HEADLINE.includes(i.code));
 
   return (
-    <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-3 sm:py-5 space-y-4 sm:space-y-6 text-[13px]">
+    <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-3 sm:py-5 space-y-4 sm:space-y-6 text-[13px]">
       <MarketsSwitch active="overview" />
 
       {/* ── Session status ── */}
