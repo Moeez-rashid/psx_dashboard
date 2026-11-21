@@ -7,7 +7,7 @@ import { ArrowLeft, SearchX } from "lucide-react";
  */
 export default function DeepDiveNotFound() {
   return (
-    <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 lg:px-8 py-8">
+    <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-8">
       <Link href="/" className="inline-flex items-center gap-1.5 text-[11px] text-ink-3 hover:text-ink transition-colors mb-8">
         <ArrowLeft size={13} strokeWidth={2} aria-hidden />
         Back to scanner

@@ -19,7 +19,7 @@ import { BrandMark, GlobalActions, NavRow } from "./nav/TopNav";
 import { COPY_SNAPSHOT_EVENT, OPEN_METRICS_EVENT, OPEN_SETTINGS_EVENT, isDashboardTab, type DashboardTab } from "@/lib/nav";
 import { publishDashboardTab, takeRequestedTab, takeSettingsRequest } from "@/lib/nav-state";
 import SegmentSwitch from "./nav/SegmentSwitch";
-import { LIST_CLASS, PICKS_LIST_CLASS } from "./ui/MobileRow";
+import { LIST_CLASS } from "./ui/MobileRow";
 import { useIsPhone } from "@/lib/use-media";
 import SignalsPulse from "./SignalsPulse";
 import ScanChanges from "./ScanChanges";
@@ -1028,7 +1028,7 @@ export default function Dashboard({
 
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b border-line pt-[env(safe-area-inset-top)]">
-        <div className="max-w-[1600px] mx-auto px-4 lg:px-8 h-13 flex items-center justify-between gap-2 py-2.5">
+        <div className="max-w-6xl mx-auto px-4 h-13 flex items-center justify-between gap-2 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2">
               <BrandMark />
@@ -1065,7 +1065,7 @@ export default function Dashboard({
       </header>
 
       {/* ── MAIN ── */}
-      <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 lg:px-8 py-3 sm:py-5">
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-3 sm:py-5">
 
         {/* ════ BUY OPPORTUNITIES ════ */}
         {tab === "opportunities" && (
@@ -1320,7 +1320,7 @@ export default function Dashboard({
                 No fabricated catalysts/risks here — StockDetailBody already shows the
                 full tech.reasons list, so there's nothing genuine to add in that slot. */}
             {scanResult && scanResult.signals.length === 0 && scanResult.technicalData.length > 0 && (
-              <div className={PICKS_LIST_CLASS}>
+              <div className={LIST_CLASS}>
                 {scanResult.technicalData.slice(0, 8).map((tech) => {
                   const liveQuote = prices[tech.symbol];
                   const key = `opp:${tech.symbol}`;
@@ -1359,7 +1359,7 @@ export default function Dashboard({
             )}
 
             {/* Signal rows — collapsed by default, expand inline */}
-            <div className={PICKS_LIST_CLASS}>
+            <div className={LIST_CLASS}>
               {scanResult && visibleOpps(scanResult.signals).map((sig) => {
                 const sigTech = scanResult.technicalData?.find(t => t.symbol === sig.ticker);
                 const liveQuote = prices[sig.ticker];
@@ -1799,7 +1799,7 @@ export default function Dashboard({
 
       {/* ── FOOTER ── */}
       <footer className="border-t border-line">
-        <div className="max-w-[1600px] mx-auto px-4 lg:px-8 py-2.5 flex justify-between items-center text-[10px] text-ink-3">
+        <div className="max-w-6xl mx-auto px-4 py-2.5 flex justify-between items-center text-[10px] text-ink-3">
           <span>{lastUpdated ? `Prices updated ${lastUpdated}` : "Connecting to PSX…"}</span>
           <span className="md:hidden"><PKTClock /></span>
           <span className="hidden md:inline">PSX Scanner · Data from dps.psx.com.pk · Not financial advice</span>
